@@ -300,6 +300,23 @@ for (const rt of RUNTIMES)
       expect(res.text).toContain('property="og:type" content="article"')
     })
 
+    it('reads a `>` inside a quoted value, and skips tags in comments and scripts', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.ts',
+          bundle: ssrBundle([
+            '<meta content="A > B" name="description">',
+            '<!-- <title>old</title> -->',
+            '<script>const t = \'<meta property="og:type" content="x">\'</script>',
+          ]),
+        },
+      })
+      const res = await app.get('/notes/1').expect(200)
+      expect(res.text.match(/name="description"/g)).toHaveLength(1)
+      expect(res.text).toContain('property="og:type" content="article"')
+      expect(res.text).toContain('<title data-inertia="">')
+    })
+
     it('answers /sitemap.xml with escaped, absolute URLs', async () => {
       const res = await (await makeApp()).get('/sitemap.xml').expect(200)
       expect(res.headers['content-type']).toMatch(/^application\/xml/)

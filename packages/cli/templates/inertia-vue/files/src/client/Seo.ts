@@ -1,5 +1,5 @@
-import { Head, usePage } from '@inertiajs/vue3'
-import { defineComponent, h, watchEffect } from 'vue'
+import { Head } from '@inertiajs/vue3'
+import { defineComponent, getCurrentInstance, h, watchEffect } from 'vue'
 import type { PageMeta } from '@forinda/kickjs-inertia'
 
 // Renders the meta a controller passes to inertia(..., { meta }), merged with
@@ -9,16 +9,19 @@ import type { PageMeta } from '@forinda/kickjs-inertia'
 // duplicated. A render function, not a .vue template: templates can't hold
 // the JSON-LD <script>.
 export const Seo = defineComponent(() => {
-  const page = usePage()
+  // `$page`, not usePage(): usePage() leaves out the page's `meta`. Read
+  // inside the render and the effect, so both follow each visit.
+  const app = getCurrentInstance()!.appContext.config.globalProperties
+  const pageMeta = () => (app.$page as { meta?: PageMeta }).meta
   // <html lang> sits outside the app; the first visit's HTML has it already.
   if (typeof document !== 'undefined') {
     watchEffect(() => {
-      const lang = (page as { meta?: PageMeta }).meta?.lang
+      const lang = pageMeta()?.lang
       if (lang) document.documentElement.lang = lang
     })
   }
   return () => {
-    const meta = (page as { meta?: PageMeta }).meta
+    const meta = pageMeta()
     if (!meta) return null
     const tags = [
       meta.description &&

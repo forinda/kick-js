@@ -80,6 +80,15 @@ export function registerInitCommand(program: Command): void {
         process.exitCode = 1
         return
       }
+      const CLIENTS = ['react', 'vue', 'svelte'] as const
+      type InertiaClient = (typeof CLIENTS)[number]
+      let client: InertiaClient | undefined = opts.client
+      if (client !== undefined && !CLIENTS.includes(client)) {
+        log.error(`Unknown --client '${String(client)}'. Use ${CLIENTS.join(', ')}.`)
+        outro('Aborted.')
+        process.exitCode = 1
+        return
+      }
 
       // `--yes` / `--non-interactive` swap every "would prompt" branch
       // for a sensible default. Explicit flags still override; the
@@ -179,27 +188,18 @@ export function registerInitCommand(program: Command): void {
       }
 
       // ── Inertia pages ─────────────────────────────────────────────
-      const CLIENTS = ['react', 'vue', 'svelte'] as const
-      let client: (typeof CLIENTS)[number] = 'react'
-      if (template === 'inertia') {
-        if (opts.client !== undefined) {
-          if (!CLIENTS.includes(opts.client)) {
-            log.error(`Unknown --client '${String(opts.client)}'. Use ${CLIENTS.join(', ')}.`)
-            outro('Aborted.')
-            return
-          }
-          client = opts.client
-        } else if (!yes) {
-          client = (await select({
-            message: 'Pages written in',
-            options: [
-              { value: 'react', label: 'React' },
-              { value: 'vue', label: 'Vue' },
-              { value: 'svelte', label: 'Svelte' },
-            ],
-          })) as (typeof CLIENTS)[number]
-        }
-      } else if (opts.client !== undefined) {
+      if (template === 'inertia' && client === undefined) {
+        client = yes
+          ? 'react'
+          : ((await select({
+              message: 'Pages written in',
+              options: [
+                { value: 'react', label: 'React' },
+                { value: 'vue', label: 'Vue' },
+                { value: 'svelte', label: 'Svelte' },
+              ],
+            })) as InertiaClient)
+      } else if (template !== 'inertia' && client !== undefined) {
         log.warn('--client applies to the inertia template only; ignoring it.')
       }
 

@@ -227,9 +227,14 @@ function tagKey(tag: string): string | null {
  * as one string.
  */
 export function dedupeHead(tags: string[], winners: string[]): string[] {
-  const opening = /<(?:title|meta|link|script)\b[^>]*>/gi
+  // Opening tags only, a `>` inside a quoted value included; comments and
+  // script contents are text, not tags.
+  const opening = /<(?:title|meta|link|script)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi
   const taken = new Set(
     winners
+      .map((t) =>
+        t.replace(/<!--[\s\S]*?-->/g, '').replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1'),
+      )
       .flatMap((t) => t.match(opening) ?? [])
       .map((t) => tagKey(t))
       .filter(Boolean),

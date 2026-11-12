@@ -99,13 +99,16 @@ const SCENARIOS = {
     args: ['--template', 'inertia', '--client', 'vue'],
     buildScript: true,
     get: ['/', '/posts'],
-    contains: { '/': 'data-server-rendered', '/posts': 'name="description"' },
+    // Seo.ts rendered the description: Vue's <Head> writes data-inertia last,
+    // the adapter's own copy writes it first.
+    contains: { '/': 'data-server-rendered', '/posts': 'data-inertia="description">' },
   },
   'inertia-svelte': {
     args: ['--template', 'inertia', '--client', 'svelte'],
     buildScript: true,
     get: ['/', '/posts'],
-    contains: { '/': 'data-server-rendered', '/posts': 'name="description"' },
+    // Seo.svelte rendered the description; the adapter's copy starts with data-inertia.
+    contains: { '/': 'data-server-rendered', '/posts': '<meta name="description"' },
   },
   fullstack: {
     args: [
