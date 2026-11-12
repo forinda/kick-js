@@ -18,8 +18,12 @@
     // <html lang> sits outside the app; the first visit's HTML has it already.
     if (meta?.lang) document.documentElement.lang = meta.lang
     // Tags the server wrote for a page it didn't render: this component's
-    // own replace them.
-    for (const tag of document.head.querySelectorAll('[data-inertia]')) tag.remove()
+    // own replace them. Svelte sets `document.title` on the existing
+    // <title>, so that one stays.
+    for (const tag of document.head.querySelectorAll('[data-inertia]')) {
+      if (tag.tagName === 'TITLE') tag.removeAttribute('data-inertia')
+      else tag.remove()
+    }
   })
 </script>
 

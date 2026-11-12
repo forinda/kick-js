@@ -227,16 +227,19 @@ function tagKey(tag: string): string | null {
  * as one string.
  */
 export function dedupeHead(tags: string[], winners: string[]): string[] {
-  // Opening tags only, a `>` inside a quoted value included; comments and
-  // script contents are text, not tags.
-  const opening = /<(?:title|meta|link|script)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi
+  // One left-to-right scan: a comment, a script (its body is text), or an
+  // opening tag. Quoted values are consumed whole, so a `>` or `<!--` inside
+  // one stays text.
+  const quoted = `(?:[^>"']|"[^"]*"|'[^']*')*>`
+  const scan = new RegExp(
+    `<!--[\\s\\S]*?-->|(<script\\b${quoted})[\\s\\S]*?</script\\s*>|<(?:title|meta|link)\\b${quoted}`,
+    'gi',
+  )
   const taken = new Set(
     winners
-      .map((t) =>
-        t.replace(/<!--[\s\S]*?-->/g, '').replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1'),
-      )
-      .flatMap((t) => t.match(opening) ?? [])
-      .map((t) => tagKey(t))
+      .flatMap((t) => [...t.matchAll(scan)])
+      .filter(([m]) => !m.startsWith('<!--'))
+      .map(([m, script]) => tagKey(script ?? m))
       .filter(Boolean),
   )
   return tags.filter((t) => !taken.has(tagKey(t)))

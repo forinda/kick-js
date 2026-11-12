@@ -317,6 +317,17 @@ for (const rt of RUNTIMES)
       expect(res.text).toContain('<title data-inertia="">')
     })
 
+    it('reads `<!--` inside a quoted value as text', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.ts',
+          bundle: ssrBundle(['<meta name="description" content="<!--"><!-- marker -->']),
+        },
+      })
+      const res = await app.get('/notes/1').expect(200)
+      expect(res.text.match(/name="description"/g)).toHaveLength(1)
+    })
+
     it('answers /sitemap.xml with escaped, absolute URLs', async () => {
       const res = await (await makeApp()).get('/sitemap.xml').expect(200)
       expect(res.headers['content-type']).toMatch(/^application\/xml/)
