@@ -1,5 +1,11 @@
 # @forinda/kickjs-inertia
 
+## 0.4.1
+
+### Patch Changes
+
+- [#1143](https://github.com/forinda/kick-js/pull/1143) [`7d6fe4c`](https://github.com/forinda/kick-js/commit/7d6fe4c278418cfd85407a57888ec9674a5e029d) Thanks [@forinda](https://github.com/forinda)! - A server-rendered head that arrives as one string — Svelte's `<svelte:head>` — now replaces the adapter's copy of every tag it sets, not only the first, so the HTML no longer carries two titles or descriptions.
+
 ## 0.4.0
 
 ### Minor Changes
