@@ -1,5 +1,11 @@
 # @forinda/kickjs-cli
 
+## 8.18.0
+
+### Minor Changes
+
+- [#1143](https://github.com/forinda/kick-js/pull/1143) [`7d6fe4c`](https://github.com/forinda/kick-js/commit/7d6fe4c278418cfd85407a57888ec9674a5e029d) Thanks [@forinda](https://github.com/forinda)! - `kick new --template inertia --client vue|svelte` scaffolds the Inertia app with Vue or Svelte 5 pages instead of React — the same routes, server-side rendering, SEO meta, forms and error page. React stays the default; the prompt asks when `--client` isn't passed.
+
 ## 8.17.4
 
 ### Patch Changes
