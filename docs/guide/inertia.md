@@ -35,10 +35,26 @@ vite.client.config.ts   # production builds of the pages
 
 ## Add it to an existing app
 
-```bash
+::: code-group
+
+```bash [React]
 pnpm add @forinda/kickjs-inertia @inertiajs/react react react-dom
 pnpm add -D @vitejs/plugin-react @types/react @types/react-dom
 ```
+
+```bash [Vue]
+pnpm add @forinda/kickjs-inertia @inertiajs/vue3 vue
+pnpm add -D @vitejs/plugin-vue
+```
+
+```bash [Svelte]
+pnpm add @forinda/kickjs-inertia @inertiajs/svelte svelte
+pnpm add -D @sveltejs/vite-plugin-svelte
+```
+
+:::
+
+The samples below show each framework in tabs. The server code is the same for all three. Vue and Svelte entries are `main.ts` and `ssr.ts`, not `.tsx`, so pass them to the adapter as `entry` and `ssr.entry`. `tsc` needs a module declaration for `*.vue` or `*.svelte` imports; the template ships one in `src/client/`.
 
 ### Wire the adapter
 
@@ -103,7 +119,9 @@ export class PagesModule implements AppModule {
 
 ### The browser entry
 
-```tsx
+::: code-group
+
+```tsx [React]
 // src/client/main.tsx
 import { createInertiaApp } from '@inertiajs/react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
@@ -123,6 +141,41 @@ createInertiaApp({
   },
 })
 ```
+
+```ts [Vue]
+// src/client/main.ts
+import { createInertiaApp } from '@inertiajs/vue3'
+import type { DefineComponent } from 'vue'
+
+const pages = import.meta.glob<DefineComponent>('./pages/**/*.vue')
+
+// No `setup`: Inertia hydrates server-rendered pages and mounts the rest.
+createInertiaApp({
+  resolve: (name) => {
+    const page = pages[`./pages/${name}.vue`]
+    if (!page) throw new Error(`No page component at src/client/pages/${name}.vue`)
+    return page()
+  },
+})
+```
+
+```ts [Svelte]
+// src/client/main.ts
+import { createInertiaApp, type ResolvedComponent } from '@inertiajs/svelte'
+
+const pages = import.meta.glob<ResolvedComponent>('./pages/**/*.svelte')
+
+// No `setup`: Inertia hydrates server-rendered pages and mounts the rest.
+createInertiaApp({
+  resolve: (name) => {
+    const page = pages[`./pages/${name}.svelte`]
+    if (!page) throw new Error(`No page component at src/client/pages/${name}.svelte`)
+    return page()
+  },
+})
+```
+
+:::
 
 ### The dev server
 
@@ -153,11 +206,13 @@ export default defineConfig({
 })
 ```
 
+For Vue or Svelte, swap `react()` for `vue()` (`@vitejs/plugin-vue`) or `svelte()` (`@sveltejs/vite-plugin-svelte`), and set `optimizeDeps: { entries: ['src/client/main.ts'] }`. The `include` list is React's; Vite finds the Vue and Svelte packages from the entry.
+
 Without the split, page edits still show up, but as a full page reload that loses component state.
 
 ### Keeping page loads fast
 
-- **Load pages lazily.** Without `{ eager: true }`, `import.meta.glob` gives each page its own chunk, which the browser fetches the first time someone visits it. With `eager: true`, every page is bundled into the first load. Inertia waits for the first page before hydrating, so server-rendered HTML hydrates the same way. `ssr.tsx` keeps `eager: true`, since the server downloads nothing.
+- **Load pages lazily.** Without `{ eager: true }`, `import.meta.glob` gives each page its own chunk, which the browser fetches the first time someone visits it. With `eager: true`, every page is bundled into the first load. Inertia waits for the first page before hydrating, so server-rendered HTML hydrates the same way. The SSR entry keeps `eager: true`, since the server downloads nothing.
 - **Let Vite pre-bundle dependencies.** In dev, Vite bundles each package the pages import into one file. Don't set `optimizeDeps.noDiscovery: true`: then Vite serves only the `include` list bundled, and every other package file by file. A page using `@tabler/icons-react` then makes thousands of requests. `@forinda/kickjs-vite` before 8.1.2 set it for you; on those versions, turn it back on for the pages:
 
   ```ts
@@ -219,11 +274,29 @@ The first visit gets HTML; every later visit from Inertia gets the same page as 
 
 On the page, wrap a deferred prop in Inertia's `<Deferred>`:
 
-```tsx
+::: code-group
+
+```tsx [React]
 <Deferred data="stats" fallback={<p>Loading stats…</p>}>
   <p>Total: {stats?.total}</p>
 </Deferred>
 ```
+
+```vue [Vue]
+<Deferred data="stats">
+  <template #fallback><p>Loading stats…</p></template>
+  <p>Total: {{ stats?.total }}</p>
+</Deferred>
+```
+
+```svelte [Svelte]
+<Deferred data="stats">
+  {#snippet fallback()}<p>Loading stats…</p>{/snippet}
+  <p>Total: {stats?.total}</p>
+</Deferred>
+```
+
+:::
 
 ### Data the client keeps
 
@@ -259,13 +332,31 @@ index(ctx: RequestContext) {
 }
 ```
 
-```tsx
+::: code-group
+
+```tsx [React]
 <InfiniteScroll data="posts">
   {posts.data.map((post) => (
     <PostRow key={post.id} post={post} />
   ))}
 </InfiniteScroll>
 ```
+
+```vue [Vue]
+<InfiniteScroll data="posts">
+  <PostRow v-for="post in posts.data" :key="post.id" :post="post" />
+</InfiniteScroll>
+```
+
+```svelte [Svelte]
+<InfiniteScroll data="posts">
+  {#each posts.data as post (post.id)}
+    <PostRow {post} />
+  {/each}
+</InfiniteScroll>
+```
+
+:::
 
 | Option     | Default  | What it does                                                             |
 | ---------- | -------- | ------------------------------------------------------------------------ |
@@ -278,7 +369,9 @@ index(ctx: RequestContext) {
 
 Declare the body schema on the route as usual. With `onError: inertiaErrorHandler()`, a failed check on an Inertia visit redirects back to the form, and the messages arrive as `props.errors` — which `useForm` exposes as `form.errors`:
 
-```tsx
+::: code-group
+
+```tsx [React]
 const form = useForm({ title: '' })
 
 <form onSubmit={(e) => { e.preventDefault(); form.post('/posts') }}>
@@ -286,6 +379,43 @@ const form = useForm({ title: '' })
   {form.errors.title && <p>{form.errors.title}</p>}
 </form>
 ```
+
+```vue [Vue]
+<script setup lang="ts">
+import { useForm } from '@inertiajs/vue3'
+
+const form = useForm({ title: '' })
+</script>
+
+<template>
+  <form @submit.prevent="form.post('/posts')">
+    <input v-model="form.title" />
+    <p v-if="form.errors.title">{{ form.errors.title }}</p>
+  </form>
+</template>
+```
+
+```svelte [Svelte]
+<script lang="ts">
+  import { useForm } from '@inertiajs/svelte'
+
+  const form = useForm({ title: '' })
+
+  function submit(event: SubmitEvent) {
+    event.preventDefault()
+    form.post('/posts')
+  }
+</script>
+
+<form onsubmit={submit}>
+  <input bind:value={form.title} />
+  {#if form.errors.title}<p>{form.errors.title}</p>{/if}
+</form>
+```
+
+:::
+
+React reads fields from `form.data` and writes them with `setData`. Vue's and Svelte's forms are reactive, so fields sit on the form itself.
 
 API requests to the same routes still get the usual 422 JSON.
 
@@ -303,7 +433,9 @@ create(ctx: RequestContext) {
 }
 ```
 
-```tsx
+::: code-group
+
+```tsx [React]
 const form = useForm('post', '/users', { name: '', email: '' })
 
 <input
@@ -313,6 +445,32 @@ const form = useForm('post', '/users', { name: '', email: '' })
 />
 {form.errors.email && <p>{form.errors.email}</p>}
 ```
+
+```vue [Vue]
+<script setup lang="ts">
+import { useForm } from '@inertiajs/vue3'
+
+const form = useForm('post', '/users', { name: '', email: '' })
+</script>
+
+<template>
+  <input v-model="form.email" @blur="form.validate('email')" />
+  <p v-if="form.errors.email">{{ form.errors.email }}</p>
+</template>
+```
+
+```svelte [Svelte]
+<script lang="ts">
+  import { useForm } from '@inertiajs/svelte'
+
+  const form = useForm('post', '/users', { name: '', email: '' })
+</script>
+
+<input bind:value={form.email} onblur={() => form.validate('email')} />
+{#if form.errors.email}<p>{form.errors.email}</p>{/if}
+```
+
+:::
 
 Each check reports only the fields the form has validated so far, so the user isn't shown errors for fields they haven't reached. `inertiaErrorHandler()` must be the app's `onError`.
 
@@ -366,7 +524,11 @@ async show(ctx: RequestContext) {
 
 Every value is escaped; JSON-LD is written into `<script type="application/ld+json">` with `<` escaped, so a value can't close the tag. `og:title`, `og:description` and `og:url` default to the title, description and canonical URL.
 
-On a client-side visit nothing re-renders the `<head>` by itself. The template's `src/client/Seo.tsx`, rendered by `Layout`, reads `usePage().meta` and renders Inertia's `<Head>` with `head-key`s that match the tags the adapter wrote, so the browser's title and tags follow the page instead of piling up.
+On a client-side visit nothing re-renders the `<head>` by itself. The template's `Seo` component, rendered by `Layout`, reads the page's `meta` and renders the tags again, so the browser's title and tags follow the page instead of piling up:
+
+- **React** (`Seo.tsx`): reads `usePage().meta` and renders Inertia's `<Head>` with `head-key`s that match the tags the adapter wrote.
+- **Vue** (`Seo.ts`): the same with Vue's `<Head>`. Vue's `usePage()` leaves `meta` out, so it reads the full page from `$page`.
+- **Svelte** (`Seo.svelte`): Inertia's Svelte client has no `<Head>`, so it renders the tags in `<svelte:head>` and removes the adapter's `data-inertia` tags once the page mounts.
 
 ### Other head tags: `h()`
 
@@ -391,15 +553,15 @@ return inertia(
 )
 ```
 
-`h()` takes `meta` and `link` only, and refuses `on*` attributes; values are escaped. A tag is identified by what it sets — a `meta`'s `name` / `property` / `http-equiv`, a `link`'s `rel` plus `hreflang` (or `href`) — so a page's tag replaces a default with the same one, and `Seo.tsx` swaps them on client-side visits. An `alternate` link's path is made absolute with `baseUrl`. `meta.head` in the adapter's defaults goes on every page.
+`h()` takes `meta` and `link` only, and refuses `on*` attributes; values are escaped. A tag is identified by what it sets — a `meta`'s `name` / `property` / `http-equiv`, a `link`'s `rel` plus `hreflang` (or `href`) — so a page's tag replaces a default with the same one, and the `Seo` component swaps them on client-side visits. An `alternate` link's path is made absolute with `baseUrl`. `meta.head` in the adapter's defaults goes on every page.
 
 ### Page language
 
-`meta.lang` sets `<html lang>` — `'en'` when unset. Put it in the defaults, or per page for a translated one (see the [i18n recipe](./i18n.md)); `Seo.tsx` updates the attribute on client-side visits.
+`meta.lang` sets `<html lang>` — `'en'` when unset. Put it in the defaults, or per page for a translated one (see the [i18n recipe](./i18n.md)); the `Seo` component updates the attribute on client-side visits.
 
 ### Server meta and `<Head>`
 
-A page can still use `<Head>` itself. When a server-rendered `<Head>` sets a tag — the `<title>`, a `<meta>` with the same `name` or `property`, the canonical `<link>`, JSON-LD — the adapter leaves out its own copy, so the first HTML never has two. Pick one source per tag for client-side visits too.
+A page can still use `<Head>` itself (`<svelte:head>` in Svelte). When a server-rendered `<Head>` sets a tag — the `<title>`, a `<meta>` with the same `name` or `property`, the canonical `<link>`, JSON-LD — the adapter leaves out its own copy, so the first HTML never has two. Pick one source per tag for client-side visits too.
 
 ### Defaults and the title template
 
@@ -471,9 +633,11 @@ export class SeoController {
 
 ## Server-side rendering
 
-Pass `ssr: { entry }` and give that file a default export that renders a page:
+Pass `ssr: { entry }` and give that file a default export that renders a page. React renders with `react-dom/server`, Vue with `createSSRApp` and `vue/server-renderer`, Svelte with `svelte/server`:
 
-```tsx
+::: code-group
+
+```tsx [React]
 // src/client/ssr.tsx
 import './app.css' // so dev can link the styles in server-rendered HTML
 import { createInertiaApp } from '@inertiajs/react'
@@ -490,10 +654,6 @@ export default (page: Page) =>
     setup: ({ App, props }) => <App {...props} />,
   })
 ```
-
-With Vue, render with `createSSRApp` and `vue/server-renderer`; with Svelte, `svelte/server`:
-
-::: code-group
 
 ```ts [Vue]
 // src/client/ssr.ts
@@ -542,7 +702,7 @@ In dev the entry is loaded through Vite. In production the adapter loads the bui
 
 ## Styling with Tailwind CSS
 
-The template's `src/client/app.css` is imported by both `main.tsx` and `ssr.tsx`, so whatever it compiles to reaches the browser and the server-rendered HTML. Tailwind v4 compiles it through its Vite plugin:
+The template's `src/client/app.css` is imported by both the browser entry and the SSR entry, so whatever it compiles to reaches the browser and the server-rendered HTML. Tailwind v4 compiles it through its Vite plugin:
 
 ```bash
 pnpm add -D tailwindcss @tailwindcss/vite
@@ -556,7 +716,7 @@ import tailwindcss from '@tailwindcss/vite'
 
   plugins: [
     { ...swc.vite({ exclude: [/node_modules/, client] }), config: undefined },
-    react(),
+    react(), // or vue() / svelte()
     tailwindcss(),
     kickjsVitePlugin({ entry: 'src/index.ts' }),
   ],
@@ -566,7 +726,7 @@ import tailwindcss from '@tailwindcss/vite'
 // vite.client.config.ts
 import tailwindcss from '@tailwindcss/vite'
 
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss()], // or vue() / svelte()
 ```
 
 Then make Tailwind the stylesheet:
@@ -578,9 +738,21 @@ Then make Tailwind the stylesheet:
 
 Classes work in any page or component:
 
-```tsx
+::: code-group
+
+```tsx [React]
 <h1 className="text-3xl font-bold text-sky-600">{title}</h1>
 ```
+
+```vue [Vue]
+<h1 class="text-3xl font-bold text-sky-600">{{ title }}</h1>
+```
+
+```svelte [Svelte]
+<h1 class="text-3xl font-bold text-sky-600">{title}</h1>
+```
+
+:::
 
 Nothing else changes. In dev, server-rendered pages link `app.css` and Vite serves it compiled, so they arrive styled. In production the built stylesheet is listed in the manifest and the adapter adds its `<link>`. Tailwind finds class names by scanning the project's files, skipping anything in `.gitignore`.
 
@@ -617,6 +789,8 @@ export default defineConfig(({ isSsrBuild }) => ({
   }
 }
 ```
+
+For Vue or Svelte, use `vue()` or `svelte()` in `plugins`, and `main.ts` and `ssr.ts` as the entries in the config and in the build script.
 
 The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. The content-hashed files it lists are sent with `Cache-Control: public, max-age=31536000, immutable` — a new build gives them new names; `public/` files keep the default. `compressAssets()` writes a `.br` and a `.gz` beside each built file; the adapter sends one of those to a browser that accepts it (see [Compressed static files](./middleware.md#compressed-static-files)). It skips the SSR build. Under `NODE_ENV` development or test a missing manifest is tolerated — pages render without their scripts and a warning says so, which is what lets tests run before the client is built. Anywhere else, including an unset `NODE_ENV`, it stops the app at startup.
 

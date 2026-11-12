@@ -5,14 +5,19 @@ server-driven pages rendered by React, Vue or Svelte, with server-side
 rendering, on Express, Fastify or h3 (v2).
 
 ```bash
-pnpm add @forinda/kickjs-inertia @inertiajs/react react react-dom
+pnpm add @forinda/kickjs-inertia @inertiajs/react react react-dom   # React
+pnpm add @forinda/kickjs-inertia @inertiajs/vue3 vue                # Vue
+pnpm add @forinda/kickjs-inertia @inertiajs/svelte svelte           # Svelte 5
 ```
 
 The fastest start is the template, which wires everything below:
 
 ```bash
-kick new my-app --template inertia
+kick new my-app --template inertia                   # React
+kick new my-app --template inertia --client vue      # or svelte
 ```
+
+The samples below use React. Vue and Svelte apps use `main.ts` and `ssr.ts` as entries; the [Inertia guide](https://kickjs.app/guide/inertia) shows every framework.
 
 ## Wiring
 
