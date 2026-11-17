@@ -77,7 +77,7 @@
     "@swc/core": "^1.16.22",
     "@types/node": "^26.6.6",
     "@types/supertest": "^7.2.1",
-    "supertest": "^7.3.1",
+    "supertest": "^7.3.2",
     "testcontainers": "12.2.1",
     "tus-js-client": "^4.3.1",
     "typescript": "^7.0.2",

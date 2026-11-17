@@ -68,7 +68,7 @@
     "h3": "2.0.8",
     "happy-dom": "^21.0.4",
     "reflect-metadata": "^0.2.2",
-    "supertest": "^7.3.1",
+    "supertest": "^7.3.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   },

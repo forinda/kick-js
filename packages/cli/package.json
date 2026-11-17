@@ -41,15 +41,15 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
-    "@clack/prompts": "^1.8.0",
+    "@clack/prompts": "^1.9.0",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-cli-kit": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "commander": "^15.1.0",
-    "glob": "^14.0.4",
+    "glob": "^14.0.6",
     "jiti": "^2.7.0",
-    "oxc-parser": "^0.157.0",
-    "oxfmt": "^0.77.0",
+    "oxc-parser": "^0.158.0",
+    "oxfmt": "^0.78.0",
     "picocolors": "^1.1.1",
     "pluralize": "^8.0.0"
   },
@@ -62,7 +62,7 @@
     "@typescript/typescript6": "^6.0.2",
     "pg": "^8.23.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6",
+    "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
   "publishConfig": {
