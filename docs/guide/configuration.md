@@ -270,6 +270,28 @@ const env = loadEnv(envSchema) // re-parsed with new PORT against fresh schema
 
 For the normal "edit `.env`, want the new value" flow, do nothing — `envWatchPlugin()` calls `reloadEnv()` for you and `ConfigService.get()` immediately returns the new value.
 
+## Which `.env` files load {#env-files}
+
+The mode is `NODE_ENV` (`development` when unset; always `test` under Vitest). Files are read from the working directory, highest precedence first:
+
+```
+.env.[mode].local  >  .env.[mode]  >  .env.local  >  .env
+```
+
+A variable already set in the shell, Docker or the platform beats every file. Under `test`, a `.env.test` or `.env.test.local` replaces the generic files instead of layering over them (see [Testing: environment](./testing/environment.md)).
+
+### Files somewhere else: `KICKJS_ENV_FILE`
+
+`KICKJS_ENV_FILE` replaces that lookup with your own list — comma-separated, highest precedence first. Relative paths resolve against the working directory; absolute paths are used as they are:
+
+```bash
+KICKJS_ENV_FILE=/etc/my-app/.env node dist/index.js                  # one file outside the project
+KICKJS_ENV_FILE=config/.env.production,config/.env node dist/index.js # override plus base
+KICKJS_ENV_FILE=off node dist/index.js                               # no files: env from the platform
+```
+
+`kick dev` reloads when any of these files changes — the listed ones, or the four above for the current mode.
+
 ## Secrets from files (`<KEY>_FILE`) {#secrets-from-files}
 
 Docker secrets, Kubernetes secret volumes and most secret managers mount secrets as files rather than environment variables. For any key your env schema declares, set `<KEY>_FILE` to the file's path and the value is read from it:

@@ -21,21 +21,20 @@ import type { Plugin } from 'vite'
  * ```
  */
 export function envWatchPlugin(): Plugin {
-  const envFiles = ['.env', '.env.local', '.env.development', '.env.production', '.env.test']
-
   return {
     name: 'kickjs-env-watch',
 
     configureServer(server) {
       const root = server.config.root
+      const envFiles = new Set(envFileCandidates().map((file) => path.resolve(root, file)))
 
       // Watched whether or not they exist yet: creating the first `.env`
       // (or deleting `.env.local`) reloads too, not only editing one.
-      for (const file of envFiles) server.watcher.add(path.resolve(root, file))
+      for (const file of envFiles) server.watcher.add(file)
 
       const onEnvFile = (event: string) => (changedPath: string) => {
         const basename = path.basename(changedPath)
-        if (envFiles.includes(basename)) {
+        if (envFiles.has(path.resolve(changedPath))) {
           server.config.logger.info(`  .env ${event} (${basename}), triggering reload...`, {
             timestamp: true,
           })
@@ -69,4 +68,23 @@ export function envWatchPlugin(): Plugin {
       server.watcher.on('unlink', onEnvFile('deleted'))
     },
   }
+}
+
+/**
+ * The files `@forinda/kickjs` may read for this dev server's mode: the ones
+ * `KICKJS_ENV_FILE` names, or `.env.[mode].local`, `.env.[mode]`,
+ * `.env.local` and `.env`. Kept here rather than imported, since this
+ * package supports kickjs versions without such an export.
+ */
+export function envFileCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
+  const explicit = env.KICKJS_ENV_FILE
+  if (explicit === 'off' || explicit === 'none') return []
+  if (explicit) {
+    return explicit
+      .split(',')
+      .map((file) => file.trim())
+      .filter(Boolean)
+  }
+  const mode = env.NODE_ENV ?? 'development'
+  return [`.env.${mode}.local`, `.env.${mode}`, '.env.local', '.env']
 }

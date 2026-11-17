@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const reloadEnv = vi.fn()
 vi.mock('@forinda/kickjs', () => ({ reloadEnv }))
-const { envWatchPlugin } = await import('../src/env-watch-plugin')
+const { envWatchPlugin, envFileCandidates } = await import('../src/env-watch-plugin')
 
 function devServer(root: string) {
   const handlers: Record<string, (file: string) => void> = {}
@@ -31,5 +31,33 @@ describe('envWatchPlugin', () => {
     expect(server.ws.send).toHaveBeenCalledTimes(3)
     handlers.change!(path.join(root, 'src/app.ts'))
     expect(server.ws.send).toHaveBeenCalledTimes(3)
+  })
+
+  it('watches the files KICKJS_ENV_FILE names, and the mode files', () => {
+    vi.stubEnv('KICKJS_ENV_FILE', 'config/.env.shared, /etc/app/.env')
+    try {
+      const root = '/app'
+      const { server, handlers } = devServer(root)
+      expect(server.watcher.add).toHaveBeenCalledWith(path.resolve(root, 'config/.env.shared'))
+      expect(server.watcher.add).toHaveBeenCalledWith('/etc/app/.env')
+      expect(server.watcher.add).not.toHaveBeenCalledWith(path.resolve(root, '.env'))
+      reloadEnv.mockClear()
+      handlers.change!('/etc/app/.env')
+      handlers.change!(path.join(root, '.env')) // not loaded, so not a reload
+      expect(reloadEnv).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('lists the files kickjs reads for a mode', () => {
+    expect(envFileCandidates({ NODE_ENV: 'development' })).toEqual([
+      '.env.development.local',
+      '.env.development',
+      '.env.local',
+      '.env',
+    ])
+    expect(envFileCandidates({})).toContain('.env.development.local')
+    expect(envFileCandidates({ KICKJS_ENV_FILE: 'off' })).toEqual([])
   })
 })
