@@ -5,10 +5,10 @@ const reloadEnv = vi.fn()
 vi.mock('@forinda/kickjs', () => ({ reloadEnv }))
 const { envWatchPlugin, envFileCandidates } = await import('../src/env-watch-plugin')
 
-function devServer(root: string) {
+function devServer(root: string, watch: { cwd?: string } = {}) {
   const handlers: Record<string, (file: string) => void> = {}
   const server = {
-    config: { root, logger: { info: vi.fn(), warn: vi.fn() } },
+    config: { root, server: { watch }, logger: { info: vi.fn(), warn: vi.fn() } },
     watcher: {
       add: vi.fn(),
       on: vi.fn((event: string, fn: (file: string) => void) => void (handlers[event] = fn)),
@@ -34,15 +34,16 @@ describe('envWatchPlugin', () => {
   })
 
   it('watches the files KICKJS_ENV_FILE names, and the mode files', () => {
-    vi.stubEnv('KICKJS_ENV_FILE', 'config/.env.shared, /etc/app/.env')
+    const outside = path.resolve('/etc/app/.env') // drive-qualified on Windows
+    vi.stubEnv('KICKJS_ENV_FILE', `config/.env.shared, ${outside}`)
     try {
       const root = process.cwd()
       const { server, handlers } = devServer('/vite-root/client')
       expect(server.watcher.add).toHaveBeenCalledWith(path.resolve(root, 'config/.env.shared'))
-      expect(server.watcher.add).toHaveBeenCalledWith('/etc/app/.env')
+      expect(server.watcher.add).toHaveBeenCalledWith(outside)
       expect(server.watcher.add).not.toHaveBeenCalledWith(path.resolve(root, '.env'))
       reloadEnv.mockClear()
-      handlers.change!('/etc/app/.env')
+      handlers.change!(outside)
       handlers.change!(path.join(root, '.env')) // not loaded, so not a reload
       expect(reloadEnv).toHaveBeenCalledTimes(1)
     } finally {
@@ -62,5 +63,12 @@ describe('envWatchPlugin', () => {
       '.env.test.local',
     )
     expect(envFileCandidates({ KICKJS_ENV_FILE: 'off' })).toEqual([])
+  })
+
+  it("reads a change path relative to the watcher's cwd", () => {
+    const { handlers } = devServer('/vite-root', { cwd: path.join(process.cwd(), 'client') })
+    reloadEnv.mockClear()
+    handlers.change!(path.join('..', '.env'))
+    expect(reloadEnv).toHaveBeenCalledTimes(1)
   })
 })

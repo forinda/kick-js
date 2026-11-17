@@ -35,7 +35,9 @@ export function envWatchPlugin(): Plugin {
 
       const onEnvFile = (event: string) => (changedPath: string) => {
         const basename = path.basename(changedPath)
-        if (envFiles.has(path.resolve(changedPath))) {
+        // Chokidar reports paths relative to its own `cwd` when one is set.
+        const watchCwd = server.config.server.watch?.cwd ?? ''
+        if (envFiles.has(path.resolve(watchCwd, changedPath))) {
           server.config.logger.info(`  .env ${event} (${basename}), triggering reload...`, {
             timestamp: true,
           })
