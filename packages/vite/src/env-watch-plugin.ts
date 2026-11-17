@@ -26,7 +26,8 @@ export function envWatchPlugin(): Plugin {
 
     configureServer(server) {
       const root = server.config.root
-      const envFiles = new Set(envFileCandidates().map((file) => path.resolve(root, file)))
+      // Against the working directory, as the loader reads them.
+      const envFiles = new Set(envFileCandidates().map((file) => path.resolve(file)))
 
       // Watched whether or not they exist yet: creating the first `.env`
       // (or deleting `.env.local`) reloads too, not only editing one.
@@ -85,6 +86,7 @@ export function envFileCandidates(env: NodeJS.ProcessEnv = process.env): string[
       .map((file) => file.trim())
       .filter(Boolean)
   }
-  const mode = env.NODE_ENV ?? 'development'
+  // A Vitest run is mode `test` whatever NODE_ENV says, as in the loader.
+  const mode = env.VITEST ? 'test' : (env.NODE_ENV ?? 'development')
   return [`.env.${mode}.local`, `.env.${mode}`, '.env.local', '.env']
 }

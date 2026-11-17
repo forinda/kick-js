@@ -278,7 +278,7 @@ The mode is `NODE_ENV` (`development` when unset; always `test` under Vitest). F
 .env.[mode].local  >  .env.[mode]  >  .env.local  >  .env
 ```
 
-A variable already set in the shell, Docker or the platform beats every file. Under `test`, a `.env.test` or `.env.test.local` replaces the generic files instead of layering over them (see [Testing: environment](./testing/environment.md)).
+At startup, a variable already set in the shell, Docker or the platform beats every file. A `kick dev` reload after a file edit (`reloadEnv()`) reads the files with override on, so there a file's value replaces one exported in the shell — restart the dev server to get the shell value back. Under `test`, a `.env.test` or `.env.test.local` replaces the generic files instead of layering over them (see [Testing: environment](./testing/environment.md)).
 
 ### Files somewhere else: `KICKJS_ENV_FILE`
 

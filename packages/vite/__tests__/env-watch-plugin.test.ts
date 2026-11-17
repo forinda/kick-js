@@ -22,8 +22,8 @@ function devServer(root: string) {
 
 describe('envWatchPlugin', () => {
   it('watches every env file, existing or not, and reloads on create, change and delete', () => {
-    const root = '/app-that-has-no-env-files'
-    const { server, handlers } = devServer(root)
+    const root = process.cwd() // where the loader reads them
+    const { server, handlers } = devServer('/vite-root')
     expect(server.watcher.add).toHaveBeenCalledWith(path.resolve(root, '.env'))
     expect(server.watcher.add).toHaveBeenCalledWith(path.resolve(root, '.env.local'))
     for (const event of ['add', 'change', 'unlink']) handlers[event]!(path.join(root, '.env'))
@@ -36,8 +36,8 @@ describe('envWatchPlugin', () => {
   it('watches the files KICKJS_ENV_FILE names, and the mode files', () => {
     vi.stubEnv('KICKJS_ENV_FILE', 'config/.env.shared, /etc/app/.env')
     try {
-      const root = '/app'
-      const { server, handlers } = devServer(root)
+      const root = process.cwd()
+      const { server, handlers } = devServer('/vite-root/client')
       expect(server.watcher.add).toHaveBeenCalledWith(path.resolve(root, 'config/.env.shared'))
       expect(server.watcher.add).toHaveBeenCalledWith('/etc/app/.env')
       expect(server.watcher.add).not.toHaveBeenCalledWith(path.resolve(root, '.env'))
@@ -58,6 +58,9 @@ describe('envWatchPlugin', () => {
       '.env',
     ])
     expect(envFileCandidates({})).toContain('.env.development.local')
+    expect(envFileCandidates({ NODE_ENV: 'development', VITEST: 'true' })[0]).toBe(
+      '.env.test.local',
+    )
     expect(envFileCandidates({ KICKJS_ENV_FILE: 'off' })).toEqual([])
   })
 })
