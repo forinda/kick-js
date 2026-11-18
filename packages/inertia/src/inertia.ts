@@ -38,6 +38,7 @@ export interface Page {
   meta?: PageMeta
 }
 
+/** Per-page options for {@link inertia}. */
 export interface PageOptions {
   /** Encrypt this page's history entry in the browser. */
   encryptHistory?: boolean
@@ -112,6 +113,7 @@ export function requestUrl(req: unknown): string {
   return r.originalUrl ?? r.url ?? '/'
 }
 
+/** True when the request carries `X-Inertia: true`, i.e. it is a client-side Inertia visit. */
 export function isInertiaRequest(ctx: RequestContext): boolean {
   return header(ctx, 'x-inertia') === 'true'
 }
@@ -132,6 +134,12 @@ export function flash(ctx: RequestContext, data: Record<string, unknown>): void 
   session.data[FLASH_KEY] = { ...(session.data[FLASH_KEY] as object), ...data }
 }
 
+/**
+ * Build the Inertia page object for `component`: merges shared props, applies partial-reload
+ * headers and prop wrappers, and attaches flashed data, validation errors and meta.
+ * {@link inertia} sends it; call this directly only to inspect or send the page yourself.
+ * Throws when `InertiaAdapter` is not installed.
+ */
 export async function buildPage(
   ctx: RequestContext,
   component: string,
@@ -267,6 +275,7 @@ export function inertia(
   }
 }
 
+/** Options for {@link redirect}. */
 export interface RedirectOptions {
   /**
    * Keep the `#fragment` of the URL the request was sent to — a form that

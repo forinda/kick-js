@@ -203,6 +203,20 @@ export function installDecoratorHooks(decoratorHooks: {
   Object.assign(hooks, decoratorHooks)
 }
 
+/**
+ * The DI container: holds bindings by token and builds instances on `resolve()`, honouring
+ * singleton, transient and request scopes. `Container.getInstance()` is the process-wide
+ * container the decorators register into; `Container.create()` gives an isolated one for tests.
+ *
+ * @example
+ * ```ts
+ * const container = Container.getInstance()
+ * container.register(UserService, UserService)
+ * const users = container.resolve(UserService)
+ * ```
+ *
+ * @see https://kickjs.app/guide/dependency-injection
+ */
 export class Container {
   private static instance: Container
   private registrations = new Map<any, Registration>()

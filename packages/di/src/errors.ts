@@ -15,6 +15,7 @@ export type DiErrorCode =
   /** A token bound normally after its `registerFallback` singleton was already resolved. */
   | 'KICK010'
 
+/** Error the container throws by default, carrying a stable {@link DiErrorCode} and the token or env key it concerns. */
 export class DiError extends Error {
   constructor(
     readonly code: DiErrorCode,
@@ -36,6 +37,7 @@ const MESSAGES: Record<DiErrorCode, (subject: string) => string> = {
     `Cannot bind "${s}": its fallback was already resolved, so code holding it would disagree with the new binding. Bind "${s}" before anything resolves it.`,
 }
 
+/** The default error factory: a {@link DiError} whose message starts with the code, e.g. `KICK001: No provider for X`. */
 export function diError(code: DiErrorCode, subject: string): Error {
   return new DiError(code, subject, `${code}: ${MESSAGES[code](subject)}`)
 }

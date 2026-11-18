@@ -227,6 +227,7 @@ export type TopologyContributorSource =
   | 'plugin'
   | 'global'
 
+/** One context contributor in a topology snapshot: its key, where it was registered, and what it depends on. */
 export interface TopologyContributorEntry {
   /** Contributor key — what it sets on `ctx.set(...)`. */
   key: string

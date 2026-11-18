@@ -44,6 +44,7 @@ export interface DoctorContext {
   runtime: AppRuntime
 }
 
+/** One line of `kick doctor` output. */
 export interface DoctorResult {
   /** Short label for the check (printed first). */
   name: string
@@ -54,6 +55,11 @@ export interface DoctorResult {
   fix?: string
 }
 
+/**
+ * A `kick doctor` check: returns one result, several, or `null` to print nothing.
+ *
+ * @see https://kickjs.app/guide/cli-commands#kick-doctor
+ */
 export type DoctorCheck = (
   ctx: DoctorContext,
 ) => DoctorResult | DoctorResult[] | null | Promise<DoctorResult | DoctorResult[] | null>

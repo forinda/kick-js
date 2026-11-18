@@ -421,6 +421,11 @@ export interface DeployConfig {
   include?: string[]
 }
 
+/**
+ * Shape of `kick.config.ts`; wrap it in `defineConfig()` for autocomplete.
+ *
+ * @see https://kickjs.app/guide/cli-commands#kick-config-ts-reference
+ */
 export interface KickConfig {
   /**
    * Project pattern — the module shape `kick g module` produces by default.
@@ -853,23 +858,6 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
 const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json']
 
 /**
- * Load `kick.config.*` starting from `startDir` and walking up toward
- * the filesystem root until a config file is found. Returns `null`
- * when no config exists anywhere on the way up.
- *
- * Walking up means adopters can run `kick <cmd>` from any subdirectory
- * (e.g. `src/modules/users/`) and still pick up the project's config —
- * before this change a nested-cwd invocation silently saw `null` and
- * fell back to framework defaults.
- *
- * TypeScript configs (`.ts`) are loaded via `jiti` when available;
- * `.js` / `.mjs` use native `import()`; `.json` uses `JSON.parse`. The
- * jiti import is dynamic + best-effort: if the dep is missing we
- * surface a warning telling the adopter how to install it, instead of
- * silently dropping the config (which is what the previous bare-catch
- * did).
- */
-/**
  * When the project can't resolve `@forinda/kickjs-cli` itself — a fresh
  * `kick new` before install, or a global `kick` in a project whose deps
  * aren't installed — map it to this CLI, so `import { defineConfig } from
@@ -889,6 +877,31 @@ function selfAlias(root: string): Record<string, string> {
   return entry ? { '@forinda/kickjs-cli': entry } : {}
 }
 
+/**
+ * Load `kick.config.*` starting from `startDir` and walking up toward
+ * the filesystem root until a config file is found. Returns `null`
+ * when no config exists anywhere on the way up.
+ *
+ * Walking up means adopters can run `kick <cmd>` from any subdirectory
+ * (e.g. `src/modules/users/`) and still pick up the project's config —
+ * before this change a nested-cwd invocation silently saw `null` and
+ * fell back to framework defaults.
+ *
+ * TypeScript configs (`.ts`) are loaded via `jiti` when available;
+ * `.js` / `.mjs` use native `import()`; `.json` uses `JSON.parse`. The
+ * jiti import is dynamic + best-effort: if the dep is missing we
+ * surface a warning telling the adopter how to install it, instead of
+ * silently dropping the config (which is what the previous bare-catch
+ * did).
+ *
+ * @example
+ * ```ts
+ * const config = await loadKickConfig(process.cwd())
+ * const modulesDir = config?.modules?.dir ?? 'src/modules'
+ * ```
+ *
+ * @see https://kickjs.app/guide/cli-commands#kick-config-ts-reference
+ */
 export async function loadKickConfig(startDir: string): Promise<KickConfig | null> {
   const { findProjectRoot } = await import('./utils/project-root')
   const root = findProjectRoot(startDir)

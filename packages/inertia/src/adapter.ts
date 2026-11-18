@@ -26,6 +26,11 @@ import {
 } from './html'
 import { dedupeHead, metaTags, type MetaDefaults } from './seo'
 
+/**
+ * Options for `InertiaAdapter`.
+ *
+ * @see https://kickjs.app/guide/inertia#wire-the-adapter
+ */
 export interface InertiaAdapterOptions {
   /**
    * The client entry, relative to the project root — the file that calls

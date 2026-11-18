@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from './inertia'
 
+/** What an {@link HtmlTemplate} receives to build the first-visit HTML. */
 export interface HtmlParts {
   /** Script and style tags for the client entry. Put inside `<head>`. */
   head: string
@@ -16,6 +17,7 @@ export interface HtmlParts {
   page: Page
 }
 
+/** Builds the first-visit HTML document; pass one as the adapter's `template` option. */
 export type HtmlTemplate = (parts: HtmlParts) => string
 
 const escapeHtml = (value: string): string =>

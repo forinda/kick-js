@@ -27,6 +27,7 @@
 import { createBusCore } from './in-memory'
 import type { KickDevtoolsEvent, KickEventBus, Unsubscribe } from './types'
 
+/** Options for {@link createBrowserBus}. */
 export interface BrowserBusOptions {
   /** BroadcastChannel name. Default `'kick-devtools'`. Pass `false` to disable. */
   channel?: string | false
@@ -48,6 +49,12 @@ interface TaggedEnvelope extends KickDevtoolsEvent {
   __kick_origin?: 'local' | 'broadcast' | 'ws'
 }
 
+/**
+ * Create a {@link KickEventBus} for the browser. Events fan out to other tabs over a
+ * BroadcastChannel (default name `'kick-devtools'`, `channel: false` turns it off), and
+ * server events arrive over a reconnecting WebSocket when `wsUrl` is set. Events received
+ * from either transport reach local subscribers but are not re-broadcast.
+ */
 export function createBrowserBus(opts: BrowserBusOptions = {}): KickEventBus {
   const core = createBusCore()
 

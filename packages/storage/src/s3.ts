@@ -13,6 +13,11 @@ import {
   type Body,
 } from './keys'
 
+/**
+ * Options for {@link s3Storage}: bucket, region or endpoint, and credentials.
+ *
+ * @see https://kickjs.app/guide/file-storage#cloudflare-r2-minio-and-other-s3-compatible-services
+ */
 export interface S3StorageOptions {
   bucket: string
   /** AWS region, e.g. `'eu-west-1'`. Cloudflare R2 takes `'auto'`. Default `'us-east-1'`. */
@@ -146,6 +151,11 @@ const ACLS: readonly string[] = [
 export const isS3Acl = (value: unknown): value is S3Acl =>
   typeof value === 'string' && ACLS.includes(value)
 
+/**
+ * Access keys returned by the `credentials` option of {@link s3Storage}.
+ *
+ * @see https://kickjs.app/guide/file-storage#iam-roles-instead-of-keys
+ */
 export interface S3Credentials {
   accessKeyId: string
   secretAccessKey: string

@@ -213,6 +213,11 @@ const PEER_HEALTHCHECK_TIMEOUT_MS = 1500
  */
 let snapshotInProgress = false
 
+/**
+ * Options for the DevTools adapter that serves the `/_debug` dashboard and endpoints.
+ *
+ * @see https://kickjs.app/guide/devtools#configuration
+ */
 export interface DevToolsOptions {
   /** Base path for debug endpoints (default: '/_debug') */
   basePath?: string

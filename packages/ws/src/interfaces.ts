@@ -7,13 +7,16 @@ type Constructor = new (...args: any[]) => any
 // String metadata keys (post-Symbol migration). Slash-delimited under
 // `kick/ws/` for consistency with other framework decorators and to keep
 // Reflect.metadata storage collision-safe.
+/** Metadata keys the WebSocket decorators write: the controller's namespace and its handler list. */
 export const WS_METADATA = {
   WS_CONTROLLER: 'kick/ws/controller',
   WS_HANDLERS: 'kick/ws/handlers',
 } as const
 
+/** Which socket event a WebSocket handler method answers. */
 export type WsHandlerType = 'connect' | 'disconnect' | 'message' | 'error'
 
+/** One handler method recorded by `@OnConnect`, `@OnDisconnect`, `@OnMessage` or `@OnError`. */
 export interface WsHandlerDefinition {
   type: WsHandlerType
   /** Event name — only for 'message' type */
@@ -32,6 +35,11 @@ export interface WsAuthenticatedUser {
   [key: string]: unknown
 }
 
+/**
+ * The `auth` option of the WebSocket adapters: resolves a user once per socket and rejects the socket without one.
+ *
+ * @see https://kickjs.app/guide/websockets#authenticated-handshake
+ */
 export interface WsAuthConfig {
   /**
    * Resolve a user from the upgrade request. Called once per socket, before
@@ -67,6 +75,11 @@ export interface WsAuthConfig {
   userRoomPrefix?: string
 }
 
+/**
+ * Options for `WsAdapter`.
+ *
+ * @see https://kickjs.app/guide/websockets#configuration
+ */
 export interface WsAdapterOptions {
   /** Base path for WebSocket upgrade (default: '/ws') */
   path?: string

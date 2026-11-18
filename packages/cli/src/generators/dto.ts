@@ -21,6 +21,12 @@ interface GenerateDtoOptions {
   schemaLib?: SchemaLib
 }
 
+/**
+ * Write `<name>.dto.ts` (the code behind `kick g dto`) against `schemaLib` (default `'zod'`)
+ * and return the paths written.
+ *
+ * @see https://kickjs.app/guide/generators#kick-g-dto
+ */
 export async function generateDto(options: GenerateDtoOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
   const outDir = resolveOutDir({

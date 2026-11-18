@@ -51,7 +51,9 @@ export type Unsubscribe = () => void
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface KickDevtoolsEventRegistry {}
 
+/** Event names declared on {@link KickDevtoolsEventRegistry}. */
 export type EventTypeKey = keyof KickDevtoolsEventRegistry & string
+/** Payload type registered for event `K` on {@link KickDevtoolsEventRegistry}. */
 export type EventPayload<K extends EventTypeKey> = KickDevtoolsEventRegistry[K]
 
 /**

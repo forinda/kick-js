@@ -13,6 +13,11 @@ interface GenerateControllerOptions {
   pluralize?: boolean
 }
 
+/**
+ * Write `<name>.controller.ts` (the code behind `kick g controller`) and return the paths written.
+ *
+ * @see https://kickjs.app/guide/generators#kick-g-controller
+ */
 export async function generateController(options: GenerateControllerOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
   const outDir = resolveOutDir({

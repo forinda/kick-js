@@ -13,6 +13,11 @@ interface GenerateServiceOptions {
   pluralize?: boolean
 }
 
+/**
+ * Write `<name>.service.ts` (the code behind `kick g service`) and return the paths written.
+ *
+ * @see https://kickjs.app/guide/generators#kick-g-service
+ */
 export async function generateService(options: GenerateServiceOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
   const outDir = resolveOutDir({

@@ -21,6 +21,12 @@ interface GenerateMiddlewareOptions {
   runtime?: KickConfig['runtime']
 }
 
+/**
+ * Write `<name>.middleware.ts` (the code behind `kick g middleware`) and return the paths written.
+ * The handler is typed with Express types only when `runtime` is `'express'`, otherwise with `node:http` types.
+ *
+ * @see https://kickjs.app/guide/generators#kick-g-middleware
+ */
 export async function generateMiddleware(options: GenerateMiddlewareOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
   // Explicit opt-in, not a fallback: an unset `runtime` means a hand-written or
