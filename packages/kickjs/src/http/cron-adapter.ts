@@ -105,6 +105,7 @@ function isCronProcess(): boolean {
  *
  * @example
  * ```ts
+ * // pnpm add croner — or pass `schedule`
  * bootstrap({ modules, adapters: [KickCronAdapter()] })
  * ```
  *
