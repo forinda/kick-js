@@ -48,7 +48,7 @@ export interface ViewAdapterOptions {
  *
  * Migrated to the `defineAdapter()` factory in v4 — call without `new`.
  * The pre-v4 `new ViewAdapter({...})` form is gone; see
- * https://kickjs.app/guide/migration-v3-to-v4#viewadapter-—-drop-the-new-keyword.
+ * https://kickjs.app/guide/migration-v3-to-v4#viewadapter-—-drop-the-new-keyword
  *
  * @example
  * ```ts

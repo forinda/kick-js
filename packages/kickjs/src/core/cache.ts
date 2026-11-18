@@ -184,14 +184,18 @@ const inFlight = new Map<string, Promise<unknown>>()
 
 /**
  * Caches a method's result for `ttl` seconds (default 60) in the
- * {@link CacheProvider}. The key is `method:Class` plus the arguments, or
- * `options.key` — a string, or a function of the arguments. Simultaneous
- * misses on one key share one call. `@CacheEvict(prefix)` clears entries.
+ * {@link CacheProvider}. The key is a prefix plus the JSON arguments
+ * (`method:Class:[42]`); a string `options.key` replaces the prefix, and a
+ * function of the arguments returns the whole key. Simultaneous misses on one
+ * key share one call. `@CacheEvict(prefix)` clears entries when the provider
+ * implements `delByPrefix`.
  *
  * @example
  * ```ts
  * `@Cacheable(300)`
- * findAll() { return this.repo.list() }
+ * findAll() {
+ *   return this.repo.list()
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/caching

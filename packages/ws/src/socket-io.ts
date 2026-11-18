@@ -167,7 +167,8 @@ const unwrap = (listener: Listener): Listener[] =>
 /**
  * Serves `@WsController` classes over Socket.IO on the app's HTTP server:
  * each controller is a namespace, `@OnMessage` handlers receive its events.
- * With `auth`, sockets authenticate on connect and join a per-user room.
+ * With `auth`, sockets authenticate on connect and join a per-user room
+ * (unless `auth.autoJoinUserRoom` is `false`).
  * Other options are passed to the Socket.IO `Server`.
  *
  * @example

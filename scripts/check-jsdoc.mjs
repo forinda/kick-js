@@ -5,16 +5,18 @@
  *    `spec §N`; see .agents/AGENTS.md) or a repo path such as
  *    `docs/guide/x.md`. Link the site instead: https://kickjs.app/guide/x
  * 2. Every public decorator and adapter (an exported PascalCase function,
- *    or a PascalCase const made by a call) has JSDoc with a
- *    https://kickjs.app link, which is what an editor shows on hover.
+ *    or a PascalCase const built by a `define*` / `create*` call) has its
+ *    own JSDoc with a https://kickjs.app/guide/… link, shown on hover.
  *
  * Usage: node scripts/check-jsdoc.mjs
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = resolve(import.meta.dirname, '..')
+// Not import.meta.dirname: the repo supports Node 20.0, which lacks it.
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PACKAGES = join(ROOT, 'packages')
 // Not libraries: the editor extension and its language server, and the
 // DevTools browser app.
@@ -28,10 +30,10 @@ const UNREACHABLE = [
     'links a repo path, not the site',
   ],
 ]
-// `export function Name(` or `export const Name = call(...)` — a decorator or
-// an adapter factory. An all-caps const (`DB_PRIMARY`) is a token, skipped.
+// `export function Name(` or `export const Name = defineX(...)` / `createX(...)`
+// — a decorator or an adapter factory. Other consts and all-caps tokens are skipped.
 const PUBLIC_FACTORY =
-  /^export (?:async )?function ([A-Z][A-Za-z0-9]*)\b|^export const ([A-Z][a-z][A-Za-z0-9]*)\s*(?::[^=]+)?=\s*[A-Za-z_.]+(?:<[^>]*>)?\(/
+  /^export (?:async )?function ([A-Z][A-Za-z0-9]*)\b|^export const ([A-Z][a-z][A-Za-z0-9]*)\s*(?::[^=]+)?=\s*(?:define|create)[A-Z]\w*(?:<[^>]*>)?\(/
 
 function* sourceFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -43,15 +45,20 @@ function* sourceFiles(dir) {
   }
 }
 
-/** The JSDoc block directly above `line` (blank lines and decorators allowed), or ''. */
+/**
+ * The comment block directly above `line` (blank and `//` lines allowed) when
+ * it is JSDoc (`/**`), or ''. Never reaches past it to an earlier declaration's.
+ */
 function docAbove(lines, line) {
   let i = line - 1
   while (i >= 0 && (lines[i].trim() === '' || lines[i].trim().startsWith('//'))) i--
   if (i < 0 || !lines[i].trim().endsWith('*/')) return ''
   const end = i
-  while (i >= 0 && !lines[i].trim().startsWith('/**')) i--
-  return i < 0 ? '' : lines.slice(i, end + 1).join('\n')
+  while (i >= 0 && !lines[i].trim().startsWith('/*')) i--
+  return i >= 0 && lines[i].trim().startsWith('/**') ? lines.slice(i, end + 1).join('\n') : ''
 }
+
+const GUIDE_LINK = /https:\/\/kickjs\.app\/(?:guide|api)\/[\w-]/
 
 const problems = []
 for (const pkg of readdirSync(PACKAGES)) {
@@ -59,8 +66,9 @@ for (const pkg of readdirSync(PACKAGES)) {
   let files
   try {
     files = [...sourceFiles(join(PACKAGES, pkg, 'src'))]
-  } catch {
-    continue
+  } catch (err) {
+    if (err.code === 'ENOENT' && err.path === join(PACKAGES, pkg, 'src')) continue // no sources
+    throw err // an unreadable tree must fail, not pass a partial scan
   }
   for (const file of files) {
     const rel = relative(ROOT, file)
@@ -77,8 +85,10 @@ for (const pkg of readdirSync(PACKAGES)) {
       seen.add(name)
       const doc = docAbove(lines, i)
       if (!doc) problems.push(`${rel}:${i + 1}: ${name} has no JSDoc`)
-      else if (!doc.includes('https://kickjs.app/')) {
-        problems.push(`${rel}:${i + 1}: ${name}'s JSDoc has no https://kickjs.app link (@see)`)
+      else if (!GUIDE_LINK.test(doc)) {
+        problems.push(
+          `${rel}:${i + 1}: ${name}'s JSDoc has no https://kickjs.app/guide link (@see)`,
+        )
       }
     })
   }

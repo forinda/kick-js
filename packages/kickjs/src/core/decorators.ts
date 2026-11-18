@@ -36,7 +36,7 @@ export {
  * source of truth for where routes mount. The legacy
  * `@Controller('/path')` parameter was removed in v4; if your code
  * still passes a string, see
- * https://kickjs.app/guide/migration-v3-to-v4#controller-—-drop-the-path-argument.
+ * https://kickjs.app/guide/migration-v3-to-v4#controller-—-drop-the-path-argument
  */
 export function Controller(): ClassDecorator {
   return (target: any) => {
@@ -167,7 +167,9 @@ function createRouteDecorator(method: string) {
  * @example
  * ```ts
  * `@Get('/:id', { params: z.object({ id: z.string() }) })`
- * show(ctx: RequestContext) { … }
+ * show(ctx: RequestContext) {
+ *   // …
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/controllers#route-decorators
@@ -176,12 +178,15 @@ export const Get = createRouteDecorator('GET')
 /**
  * Routes `POST` requests at `path` (default `'/'`, under the module's mount)
  * to this method. A `body` schema in `validation` is checked before the
- * handler runs; a failure answers `422` with the field errors.
+ * handler runs; a failure skips the handler and, by default, answers `422`
+ * with the field errors (`bootstrap({ validationError })` changes that).
  *
  * @example
  * ```ts
  * `@Post('/', { body: createTaskSchema })`
- * create(ctx: RequestContext) { … }
+ * create(ctx: RequestContext) {
+ *   // …
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/controllers#route-decorators
@@ -195,7 +200,9 @@ export const Post = createRouteDecorator('POST')
  * @example
  * ```ts
  * `@Put('/:id', { body: replaceTaskSchema })`
- * replace(ctx: RequestContext) { … }
+ * replace(ctx: RequestContext) {
+ *   // …
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/controllers#route-decorators
@@ -208,7 +215,9 @@ export const Put = createRouteDecorator('PUT')
  * @example
  * ```ts
  * `@Delete('/:id')`
- * remove(ctx: RequestContext) { … }
+ * remove(ctx: RequestContext) {
+ *   // …
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/controllers#route-decorators
@@ -222,7 +231,9 @@ export const Delete = createRouteDecorator('DELETE')
  * @example
  * ```ts
  * `@Patch('/:id', { body: updateTaskSchema })`
- * update(ctx: RequestContext) { … }
+ * update(ctx: RequestContext) {
+ *   // …
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/controllers#route-decorators

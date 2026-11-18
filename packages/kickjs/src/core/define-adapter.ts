@@ -60,7 +60,7 @@ const composeName = (base: string, scope: string): string => `${base}:${scope}`
 
 /**
  * Build an {@link AppAdapter} factory from a typed definition. See
- * https://kickjs.app/guide/adapters for migration guidance — most first-party
+ * https://kickjs.app/guide/migration-v3-to-v4 for migration guidance — most first-party
  * adapter packages collapse to a single `defineAdapter()` call after this
  * lands.
  *
