@@ -69,6 +69,11 @@ export type CronScheduler = (
   tick: () => void,
 ) => CronSchedule
 
+/**
+ * Options for {@link KickCronAdapter}.
+ *
+ * @see https://kickjs.app/guide/cron
+ */
 export interface CronAdapterOptions {
   /** Off for processes that should run no jobs (replicas, one-off scripts). Default `true`. */
   enabled?: boolean

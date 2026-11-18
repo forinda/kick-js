@@ -18,6 +18,11 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
+/**
+ * Options for {@link createSigner}.
+ *
+ * @see https://kickjs.app/guide/passwords-and-tokens
+ */
 export interface SignerOptions {
   /**
    * The signing secret. Pass a list to rotate: the first signs, every one
@@ -32,6 +37,7 @@ export interface SignerOptions {
   salt: string
 }
 
+/** Options for {@link Signer.verify}. */
 export interface VerifyOptions {
   /** Reject tokens older than this, in milliseconds. */
   maxAge?: number
@@ -42,6 +48,11 @@ export type SignedCheck<T> =
   | { ok: true; value: T; issuedAt: Date }
   | { ok: false; reason: 'invalid' | 'expired' }
 
+/**
+ * Signs values into tamper-proof tokens and verifies them. Create one per purpose with {@link createSigner}.
+ *
+ * @see https://kickjs.app/guide/passwords-and-tokens
+ */
 export interface Signer {
   /** Sign a JSON-serialisable value: `payload.timestamp.signature`, URL-safe. */
   sign(value: unknown): string

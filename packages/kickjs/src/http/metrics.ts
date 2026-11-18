@@ -10,6 +10,11 @@ import type { ResponseInfo } from '../core/observers'
 import { matchesBearer } from '../core/web-crypto'
 import type { RequestContext } from './context'
 
+/**
+ * Options for {@link metricsAdapter}.
+ *
+ * @see https://kickjs.app/guide/deployment#metrics
+ */
 export interface MetricsOptions {
   /** Where to serve the metrics. Default `/metrics`. */
   path?: string

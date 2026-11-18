@@ -19,12 +19,18 @@ import {
  */
 export type QueryRejectReason = 'field-not-allowed' | 'unknown-operator' | 'truncated'
 
+/** A filter, sort or search the parser dropped or truncated, passed to `onReject`. */
 export interface QueryRejection {
   kind: 'filter' | 'sort' | 'search'
   field: string
   reason: QueryRejectReason
 }
 
+/**
+ * Per-call limits for {@link parseQuery}, overriding the global defaults, plus an `onReject` hook.
+ *
+ * @see https://kickjs.app/guide/query-parsing
+ */
 export interface ParseQueryOptions {
   /** Hard cap on `limit`. Default: global (100, override via {@link setQueryParsingDefaults}). */
   maxLimit?: number

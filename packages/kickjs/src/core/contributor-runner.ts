@@ -5,6 +5,7 @@ import type { ContributorPipeline } from './contributor-pipeline'
 import { matchesFlagTest, type RouteFlags } from './route-flag'
 import type { MatchedRoute } from '../http/runtime'
 
+/** Inputs for running a contributor pipeline against one execution context. */
 export interface RunContributorsOptions {
   /** Pre-built, validated, topo-sorted pipeline. */
   pipeline: ContributorPipeline

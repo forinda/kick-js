@@ -8,7 +8,9 @@
  */
 
 export const FLASH_KEY = '__inertia_flash'
+/** Session key holding a failed form's field errors for the next page. */
 export const FORM_ERRORS_KEY = '__inertia_errors'
+/** Session key holding the values a failed form submitted, to refill the form. */
 export const OLD_INPUT_KEY = '__kick_old'
 /** The last full page this session rendered: where a failed form goes back to. */
 export const PREVIOUS_URL_KEY = '__inertia_previous'

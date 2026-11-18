@@ -121,6 +121,19 @@ function defineHttpContextDecoratorImpl<
   return defineContextDecorator<K, D, P, RequestContext>(spec)
 }
 
+/**
+ * `defineContextDecorator` with the resolver's context typed as `RequestContext`, so `resolve` can read `ctx.req`, `ctx.headers` and `ctx.params` without generics. Use `.withParams<P>()()` for a parameterised decorator.
+ *
+ * @example
+ * ```ts
+ * const LoadTenant = defineHttpContextDecorator({
+ *   key: 'tenant',
+ *   resolve: (ctx) => ({ id: ctx.req.headers['x-tenant-id'] as string }),
+ * })
+ * ```
+ *
+ * @see https://kickjs.app/guide/context-decorators
+ */
 export const defineHttpContextDecorator: DefineHttpContextDecoratorFn = Object.freeze(
   Object.assign(defineHttpContextDecoratorImpl, {
     withParams: <P extends Record<string, unknown>>(): DefineHttpContextDecoratorWithParams<P> => {

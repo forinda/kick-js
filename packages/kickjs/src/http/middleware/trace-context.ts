@@ -16,6 +16,11 @@ export const TRACEPARENT_HEADER = 'traceparent'
 /** Regex for a valid W3C traceparent: {version}-{trace-id}-{parent-id}-{flags} */
 const TRACEPARENT_RE = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/
 
+/**
+ * Options for {@link traceContext}.
+ *
+ * @see https://kickjs.app/guide/middleware
+ */
 export interface TraceContextOptions {
   /**
    * When true, respond with a `traceresponse` header containing the trace ID.

@@ -69,6 +69,7 @@ export function assertRouteUnique(
   registry.set(key, owner)
 }
 
+/** Options for building a controller's route table: extra contributors and module-level route flags. */
 export interface BuildRoutesOptions {
   /**
    * Extra contributors to merge into the per-route pipeline at their declared

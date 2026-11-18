@@ -3,6 +3,11 @@ import { Logger, defineAdapter } from '../../core'
 
 const log = Logger.for('ViewEngine')
 
+/**
+ * Options for {@link ViewAdapter}.
+ *
+ * @see https://kickjs.app/guide/view-engines
+ */
 export interface ViewAdapterOptions {
   /**
    * Template engine — pass the engine module or a render function.

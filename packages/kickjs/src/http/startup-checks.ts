@@ -29,6 +29,7 @@ export interface CheckContext {
   production: boolean
 }
 
+/** A check run at boot against the app's options and mounted routes. Create one with {@link defineCheck} and pass it in `bootstrap({ checks })`. */
 export interface StartupCheck {
   /** Names the check in logs; its messages carry their own IDs. */
   name: string

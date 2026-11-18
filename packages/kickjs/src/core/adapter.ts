@@ -93,6 +93,11 @@ export interface AdapterMiddleware {
 /** The Node server behind the app — see `ApplicationOptions.server`. */
 export type KickServer = http.Server | https.Server | http2.Http2SecureServer | http2.Http2Server
 
+/**
+ * What adapter lifecycle hooks receive: the HTTP surface, the engine app, the DI container and, after start, the server.
+ *
+ * @see https://kickjs.app/guide/adapters
+ */
 export interface AdapterContext {
   /**
    * Engine-agnostic HTTP surface — the supported way to add routes, mounts,

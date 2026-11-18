@@ -131,6 +131,11 @@ export function getCacheProvider(): CacheProvider {
 
 // ── Cache Options ───────────────────────────────────────────────────────
 
+/**
+ * Options for {@link Cacheable}.
+ *
+ * @see https://kickjs.app/guide/caching
+ */
 export interface CacheOptions {
   /** Time-to-live in seconds (default: 60) */
   ttl?: number

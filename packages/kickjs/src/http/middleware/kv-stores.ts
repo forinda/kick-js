@@ -30,6 +30,11 @@ function kvTtlSeconds(ms: number): number {
   return Math.max(60, Math.ceil(ms / 1000))
 }
 
+/**
+ * Options for {@link KvRateLimitStore}.
+ *
+ * @see https://kickjs.app/guide/edge-deployment
+ */
 export interface KvRateLimitStoreOptions {
   /** Window length in ms — must match the `windowMs` given to the limiter. */
   windowMs: number
@@ -101,6 +106,11 @@ export class KvRateLimitStore implements RateLimitStore {
   }
 }
 
+/**
+ * Options for {@link KvSessionStore}.
+ *
+ * @see https://kickjs.app/guide/edge-deployment
+ */
 export interface KvSessionStoreOptions {
   /** Key prefix in the KV namespace (default `'sess:'`). */
   prefix?: string

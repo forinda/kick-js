@@ -42,6 +42,9 @@ function compile(path: string): RegExp {
   return new RegExp(`^${source}/?$`)
 }
 
+/**
+ * Route flags by method and path, for middleware that runs before route matching. Each mounted route is added at boot; `lookup(method, pathname)` returns the flags of the first matching route, or an empty map. One table per Application; middleware gets it through {@link bindRoutePolicy}.
+ */
 export class RoutePolicyTable {
   /** Bucketed by method: an incoming request only scans its own verb. */
   private readonly byMethod = new Map<string, PolicyEntry[]>()

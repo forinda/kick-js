@@ -9,6 +9,11 @@ import type { RequestContext } from '../context'
 import type { RateLimitStore } from './rate-limit'
 import { BoundedCounters } from './bounded-counters'
 
+/**
+ * Options for {@link rateLimitGuard}.
+ *
+ * @see https://kickjs.app/guide/rate-limiting
+ */
 export interface RateLimitGuardOptions {
   /** Maximum number of requests per window (default: 100). */
   max?: number

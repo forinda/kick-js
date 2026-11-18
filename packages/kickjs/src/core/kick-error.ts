@@ -1,3 +1,19 @@
+/** The fields of a {@link KickError}. */
+export interface KickErrorInit {
+  /** Short stable identifier (e.g. `KICK001`, `NO_PROVIDER`). */
+  code: string
+  /** One-line headline. */
+  summary: string
+  /** Multi-line explanation of why this happened. */
+  cause?: string
+  /** Multi-line actionable fix — show exact code if possible. */
+  fix?: string
+  /** Absolute URL to the docs page that covers this error. */
+  docsUrl?: string
+  /** Arbitrary structured fields for log consumers / debug tooling. */
+  context?: Record<string, unknown>
+}
+
 /**
  * Structured framework error with code, cause, and actionable fix hint.
  *
@@ -14,22 +30,9 @@
  * Per-error factories live in `kick-errors.ts` — those are the public
  * entry points framework code uses. `KickError` is exported so adopters
  * can build their own structured errors using the same shape.
+ *
+ * @see https://kickjs.app/guide/error-handling
  */
-export interface KickErrorInit {
-  /** Short stable identifier (e.g. `KICK001`, `NO_PROVIDER`). */
-  code: string
-  /** One-line headline. */
-  summary: string
-  /** Multi-line explanation of why this happened. */
-  cause?: string
-  /** Multi-line actionable fix — show exact code if possible. */
-  fix?: string
-  /** Absolute URL to the docs page that covers this error. */
-  docsUrl?: string
-  /** Arbitrary structured fields for log consumers / debug tooling. */
-  context?: Record<string, unknown>
-}
-
 export class KickError extends Error {
   public readonly code: string
   public readonly summary: string
@@ -87,6 +90,7 @@ const c = {
 
 // ── Formatter ─────────────────────────────────────────────────────────
 
+/** Options for {@link formatKickError}. */
 export interface FormatKickErrorOptions {
   /**
    * Render ANSI colour codes. Defaults to TTY detection (`NO_COLOR` /

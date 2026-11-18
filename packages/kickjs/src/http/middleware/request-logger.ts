@@ -40,6 +40,11 @@ function pathnameOf(url: string | undefined): string {
 }
 import { createLogger } from '../../core'
 
+/**
+ * Options for {@link requestLogger}.
+ *
+ * @see https://kickjs.app/guide/logging
+ */
 export interface RequestLoggerOptions {
   /** Logger name (default: 'HTTP') */
   name?: string

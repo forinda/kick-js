@@ -5,6 +5,11 @@ import type { ConnectMiddleware } from '../runtime'
 
 const log = Logger.for('SpaAdapter')
 
+/**
+ * Options for {@link SpaAdapter}.
+ *
+ * @see https://kickjs.app/guide/spa
+ */
 export interface SpaAdapterOptions {
   /**
    * Directory containing the built SPA files (index.html, assets, etc.)

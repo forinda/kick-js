@@ -26,6 +26,11 @@ export type ErrorSource =
   | 'job'
   | (string & {})
 
+/**
+ * Where an error came from, passed to every observer's `onError`.
+ *
+ * @see https://kickjs.app/guide/observability
+ */
 export interface ErrorInfo {
   source: ErrorSource
   requestId?: string
@@ -40,6 +45,11 @@ export interface ErrorInfo {
   context?: Record<string, unknown>
 }
 
+/**
+ * One finished response, passed to every observer's `onResponse`.
+ *
+ * @see https://kickjs.app/guide/observability
+ */
 export interface ResponseInfo {
   method: string
   path: string

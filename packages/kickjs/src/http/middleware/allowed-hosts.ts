@@ -7,6 +7,11 @@ import { HOST_GRAMMAR, parseHttpUrl } from '../host'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 import { sendJson } from './respond'
 
+/**
+ * Options for {@link allowedHosts}.
+ *
+ * @see https://kickjs.app/guide/security-headers
+ */
 export interface AllowedHostsOptions {
   /**
    * Hosts this app answers for. `'example.com'` matches exactly;

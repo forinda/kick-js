@@ -108,6 +108,7 @@ export interface RouteContributor {
   overrides: ReadonlyArray<{ source: ContributorSource; label?: string }>
 }
 
+/** Per-route data a runtime keeps alongside the handler: controller, handler name, contributors, validation, upload config and flags. */
 export interface RouteMeta {
   /**
    * Owning controller class — for DI resolution and adapter introspection.
@@ -175,6 +176,7 @@ const matchedRoutes = new WeakMap<RouteEntry, MatchedRoute>()
 
 const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
 
+/** The route a request matched, as `ctx.route`: method, declared path, full pattern, controller, handler and flags. */
 export interface MatchedRoute {
   readonly method: RouteMethod
   /** Path as declared on the handler, e.g. `/:id`. */
@@ -228,6 +230,7 @@ export function stringifyJson(data: unknown): string {
   }
 }
 
+/** The engine-neutral response object that runtimes, `onError` and `onNotFound` write to. */
 export interface RuntimeResponse {
   status(code: number): RuntimeResponse
   json(data: unknown): RuntimeResponse

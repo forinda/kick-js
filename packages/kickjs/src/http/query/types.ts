@@ -12,6 +12,7 @@ export type FilterOperator =
   | 'starts'
   | 'ends'
 
+/** Every operator `?filter=field:op:value` accepts; a filter with any other operator is dropped. */
 export const FILTER_OPERATORS = new Set<string>([
   'eq',
   'neq',
@@ -26,17 +27,20 @@ export const FILTER_OPERATORS = new Set<string>([
   'ends',
 ])
 
+/** One parsed `?filter=field:operator:value`. */
 export interface FilterItem {
   field: string
   operator: FilterOperator
   value: string
 }
 
+/** One parsed `?sort=field:direction`. */
 export interface SortItem {
   field: string
   direction: 'asc' | 'desc'
 }
 
+/** Parsed pagination: `page`, `limit`, and the `offset` they give. */
 export interface PaginationParams {
   page: number
   limit: number
