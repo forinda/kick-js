@@ -39,6 +39,11 @@ export interface RelationMorphOne<
   morph: MorphSpec
 }
 
+/**
+ * A one-to-many relation from `many()`: many-to-many with `through`, polymorphic with `morph`.
+ *
+ * @see https://kickjs.app/guide/database/relations
+ */
 export interface RelationMany<
   TTarget extends TableDecl<string, Record<string, ColumnBuilder>> = TableDecl<
     string,
@@ -105,10 +110,20 @@ export interface MorphToSpec<
   targets: TTargets
 }
 
+/**
+ * The junction table of a many-to-many: the table, or the table with its foreign-key columns to each side.
+ *
+ * @see https://kickjs.app/guide/database/relations#many-to-many-many-through-a-junction-table
+ */
 export type ThroughSpec =
   | TableDecl<string, Record<string, ColumnBuilder>>
   | { table: TableDecl<string, Record<string, ColumnBuilder>>; from: ColumnRef[]; to: ColumnRef[] }
 
+/**
+ * Any relation `relations()` can declare.
+ *
+ * @see https://kickjs.app/guide/database/relations
+ */
 export type Relation = RelationOne | RelationMorphOne | RelationMorphTo | RelationMany
 
 /**

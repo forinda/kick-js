@@ -23,6 +23,11 @@ export interface FakeContext {
 /** A column's value: fixed, or computed per row. */
 export type FakeOverride = unknown | ((ctx: FakeContext) => unknown)
 
+/**
+ * Options for `fakeRows()`: how many rows, the seed, and values for chosen columns.
+ *
+ * @see https://kickjs.app/guide/database/cli#generated-sample-data
+ */
 export interface FakeRowsOptions {
   count: number
   /** The same seed gives the same rows. Default `1`. */
@@ -33,6 +38,11 @@ export interface FakeRowsOptions {
   refs?: Record<string, readonly unknown[]>
 }
 
+/**
+ * Options for `seedFake()`: rows per table, the seed, and values for chosen columns.
+ *
+ * @see https://kickjs.app/guide/database/cli#generated-sample-data
+ */
 export interface SeedFakeOptions {
   /** How many rows per table, by table name (as `db.insertInto` takes it). */
   counts: Record<string, number>

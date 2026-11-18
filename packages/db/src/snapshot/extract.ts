@@ -68,6 +68,13 @@ function isPgEnum(v: unknown): v is { enumName: string; values: readonly string[
   return typeof f.enumName === 'string' && Array.isArray(f.values)
 }
 
+/**
+ * Builds a `SchemaSnapshot` from a schema module's exports: tables, views,
+ * Postgres enums and roles, and relations. Names are the database's (after
+ * `casing` and `.colName()`) unless `keys` is set.
+ *
+ * @see https://kickjs.app/guide/database/concepts
+ */
 export function extractSnapshot(
   schema: Record<string, unknown>,
   dialect: Dialect,

@@ -1,3 +1,4 @@
+/** The SQL dialect a schema snapshot is written for. */
 export type Dialect = 'postgres' | 'sqlite' | 'mysql'
 
 /** The foreign-key actions, in the snapshot's spelling. */
@@ -8,8 +9,10 @@ export const FK_ACTION_NAMES = [
   'set_default',
   'no_action',
 ] as const
+/** A foreign key's `ON DELETE` / `ON UPDATE` action, in the snapshot's spelling. */
 export type FkAction = (typeof FK_ACTION_NAMES)[number]
 
+/** A column in a schema snapshot. */
 export interface ColumnSnapshot {
   name: string
   type: string
@@ -37,6 +40,7 @@ export interface ColumnSnapshot {
   colName?: string
 }
 
+/** An index in a schema snapshot. */
 export interface IndexSnapshot {
   name: string
   /** Key parts in order: a column name, or an SQL expression wrapped in parentheses. */
@@ -54,6 +58,7 @@ export interface IndexSnapshot {
   concurrently?: boolean
 }
 
+/** A foreign-key constraint in a schema snapshot. */
 export interface ForeignKeySnapshot {
   name: string
   columns: string[]
@@ -63,11 +68,13 @@ export interface ForeignKeySnapshot {
   onUpdate: FkAction
 }
 
+/** A `CHECK` constraint in a schema snapshot: its name and SQL expression. */
 export interface CheckSnapshot {
   name: string
   expression: string
 }
 
+/** A table in a schema snapshot: columns, indexes, constraints, comment and row-level security. */
 export interface TableSnapshot {
   /**
    * Bare table name, unqualified. The schema (when any) lives in
@@ -194,6 +201,12 @@ export interface ViewSnapshot {
   columns?: Record<string, ColumnSnapshot>
 }
 
+/**
+ * A JSON-serializable description of a whole schema. `diff()` compares two of
+ * them, and each migration stores the one it leaves the database in (`snapshot.json`).
+ *
+ * @see https://kickjs.app/guide/database/concepts
+ */
 export interface SchemaSnapshot {
   version: 1
   dialect: Dialect

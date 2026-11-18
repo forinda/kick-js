@@ -20,6 +20,11 @@ import { ColumnBuilder, type GeneratedBrand, type NotNullBrand } from './dsl/col
  */
 export type TenancyStrategy = 'column' | 'rls' | 'schema' | 'database'
 
+/**
+ * Options for `defineTenancy()`.
+ *
+ * @see https://kickjs.app/guide/database/tenancy
+ */
 export interface TenancyOptions {
   strategy: TenancyStrategy
   /**
@@ -84,6 +89,11 @@ export interface TenancyOptions {
   roleCheck?: 'error' | 'warn' | 'off'
 }
 
+/**
+ * What `onBypass` receives for each `bypass()`: the reason, the strategy, and where it was called.
+ *
+ * @see https://kickjs.app/guide/database/tenancy#cross-tenant-work-bypass
+ */
 export interface BypassInfo {
   reason: string
   strategy: TenancyStrategy
@@ -91,6 +101,11 @@ export interface BypassInfo {
   stack: string | undefined
 }
 
+/**
+ * Options for `tenancy.bypass()`.
+ *
+ * @see https://kickjs.app/guide/database/tenancy#cross-tenant-work-bypass
+ */
 export interface BypassOptions {
   /** Why — passed to `onBypass`, for the audit log. */
   reason: string
@@ -98,6 +113,11 @@ export interface BypassOptions {
   allowInRequest?: boolean
 }
 
+/**
+ * A tenancy made by `defineTenancy()`: pass it to `createDbClient({ tenancy })` and to `tenantKey()` columns.
+ *
+ * @see https://kickjs.app/guide/database/tenancy
+ */
 export interface Tenancy extends Readonly<
   Required<Pick<TenancyOptions, 'strategy' | 'setting' | 'schemaFor' | 'binding' | 'roleCheck'>>
 > {

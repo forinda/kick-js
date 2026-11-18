@@ -1,3 +1,8 @@
+/**
+ * Base class for kick/db errors. `code` is a stable string to match on instead of the message.
+ *
+ * @see https://kickjs.app/guide/database/errors
+ */
 export class KickDbError extends Error {
   readonly code: string
 

@@ -7,6 +7,11 @@ import { resolveSelfRefs } from './self-ref'
 
 export type { ColumnRef }
 
+/**
+ * A table declared with `table()`: its name, columns, indexes and constraints.
+ *
+ * @see https://kickjs.app/guide/database/schema
+ */
 export interface TableDecl<
   TName extends string = string,
   C extends Record<string, ColumnBuilder> = Record<string, ColumnBuilder>,

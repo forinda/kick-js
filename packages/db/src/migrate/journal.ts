@@ -6,6 +6,7 @@ import path from 'node:path'
 import type { Dialect } from '../snapshot/types'
 import { codeMigrationFile } from './code-migration'
 
+/** One migration in `_journal.json`: its id, name (`tag`), recorded hash and creation time. */
 export interface JournalEntry {
   id: string
   tag: string
@@ -13,6 +14,7 @@ export interface JournalEntry {
   createdAt: string
 }
 
+/** The contents of a migrations folder's `_journal.json`. */
 export interface Journal {
   version: 1
   dialect: Dialect
@@ -21,6 +23,7 @@ export interface Journal {
 
 const FILE = '_journal.json'
 
+/** Reads a migrations folder's `_journal.json`; a folder without one gives an empty journal. */
 export async function readJournal(migrationsDir: string, dialect: Dialect): Promise<Journal> {
   const file = path.join(migrationsDir, FILE)
   return parseJournal(existsSync(file) ? await readFile(file, 'utf8') : undefined, dialect)
@@ -36,6 +39,7 @@ export function parseJournal(text: string | undefined, dialect: Dialect): Journa
   return raw
 }
 
+/** Adds an entry to a migrations folder's `_journal.json` and writes it back. */
 export async function appendJournalEntry(
   migrationsDir: string,
   dialect: Dialect,
@@ -47,6 +51,10 @@ export async function appendJournalEntry(
   await writeFile(file, JSON.stringify(j, null, 2) + '\n', 'utf8')
 }
 
+/**
+ * The hash of a migration folder's `up.sql`, `down.sql` and `snapshot.json`, plus
+ * its `migration.ts` when it has one: `sha256:<hex>`.
+ */
 export async function computeMigrationHash(migrationDir: string): Promise<string> {
   const code = codeMigrationFile(migrationDir)
   return hashMigration(
@@ -66,6 +74,7 @@ export function hashMigration(up: string, down: string, snapshot: string, code?:
   return `sha256:${h.digest('hex')}`
 }
 
+/** True when a migration folder's current hash equals `expected`. */
 export async function verifyMigrationHash(
   migrationDir: string,
   expected: string,

@@ -17,6 +17,11 @@ import type { KickDbClient } from './types'
 
 type Row = Record<string, unknown>
 
+/**
+ * Options for `db.upsert()`.
+ *
+ * @see https://kickjs.app/guide/database/queries#upsert-and-find-or-create
+ */
 export interface UpsertOptions<DB, T extends keyof DB & string> extends InsertManyOptions {
   /**
    * The row — or rows — to insert. Many rows are split into statements that
@@ -52,6 +57,11 @@ type PresentKeys<W> = { [K in keyof W]-?: {} extends Pick<W, K> ? never : K }[ke
 type CreateRest<DB, T extends keyof DB, W> = Omit<Insertable<DB[T]>, PresentKeys<W>> &
   Partial<Insertable<DB[T]>>
 
+/**
+ * Options for `db.findOrCreate()`: the unique key to look up, and the rest of the row to create.
+ *
+ * @see https://kickjs.app/guide/database/queries#upsert-and-find-or-create
+ */
 export type FindOrCreateOptions<
   DB,
   T extends keyof DB & string,

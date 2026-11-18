@@ -1,19 +1,36 @@
 import { KickDbError } from '../errors'
 
+/**
+ * Base class for errors from the migration runner.
+ *
+ * @see https://kickjs.app/guide/database/errors#migrations
+ */
 export class MigrationError extends KickDbError {}
 
+/**
+ * Another process holds the migration lock (`code: 'migration_lock_held'`).
+ *
+ * @see https://kickjs.app/guide/database/migration-recovery#a-stuck-lock
+ */
 export class MigrationLockError extends MigrationError {
   constructor(message: string) {
     super('migration_lock_held', message)
   }
 }
 
+/** What a drift check found, by name: what the live database added, removed or changed. */
 export interface SchemaDiffSummary {
   added: string[]
   removed: string[]
   changed: string[]
 }
 
+/**
+ * The live database differs from the snapshot of the last applied migration
+ * (`code: 'migration_drift'`). `diff` lists what differs.
+ *
+ * @see https://kickjs.app/guide/database/migration-recovery#drift
+ */
 export class MigrationDriftError extends MigrationError {
   readonly diff: SchemaDiffSummary
 
@@ -41,6 +58,12 @@ export class MigrationFailedError extends MigrationError {
   }
 }
 
+/**
+ * A reviewed migration's files changed after review (`code: 'migration_hash_mismatch'`).
+ * `expected` is the recorded hash, `actual` the files' current one.
+ *
+ * @see https://kickjs.app/guide/database/migration-recovery#hash-mismatch
+ */
 export class MigrationHashError extends MigrationError {
   readonly id: string
   readonly expected: string
@@ -54,6 +77,12 @@ export class MigrationHashError extends MigrationError {
   }
 }
 
+/**
+ * A migration not marked reviewed was about to run while `requireReviewed` is on
+ * (`code: 'migration_unreviewed'`). Run `kick db migrate review <id>` first.
+ *
+ * @see https://kickjs.app/guide/database/migration-recovery#unreviewed-migration
+ */
 export class UnreviewedMigrationError extends MigrationError {
   readonly id: string
 

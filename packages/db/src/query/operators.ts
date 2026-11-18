@@ -85,11 +85,17 @@ function binary(name: string, op: string) {
   }
 }
 
+/** `left = right`. */
 export const eq = binary('eq', '=')
+/** `left <> right`. */
 export const ne = binary('ne', '<>')
+/** `left > right`. */
 export const gt = binary('gt', '>')
+/** `left >= right`. */
 export const gte = binary('gte', '>=')
+/** `left < right`. */
 export const lt = binary('lt', '<')
+/** `left <= right`. */
 export const lte = binary('lte', '<=')
 
 function likeOp(name: string, op: string) {
@@ -101,14 +107,17 @@ function likeOp(name: string, op: string) {
 
 /** `left LIKE pattern` — escape user input with `escapeLike()`. */
 export const like = likeOp('like', 'like')
+/** `left NOT LIKE pattern`. */
 export const notLike = likeOp('notLike', 'not like')
 /** Case-insensitive `LIKE` (Postgres). */
 export const ilike = likeOp('ilike', 'ilike')
 
+/** `operand IS NULL`. */
 export const isNull = (operand: Ref | ColumnRef): Condition => {
   assertRef('isNull', operand)
   return sql<SqlBool>`${toSql(operand)} is null`
 }
+/** `operand IS NOT NULL`. */
 export const isNotNull = (operand: Ref | ColumnRef): Condition => {
   assertRef('isNotNull', operand)
   return sql<SqlBool>`${toSql(operand)} is not null`
@@ -162,9 +171,11 @@ function combine(
   return sql<SqlBool>`(${sql.join(present, sql.raw(` ${op} `))})`
 }
 
+/** `NOT (condition)`. */
 export const not = (condition: Expression<SqlBool>): Condition => sql<SqlBool>`not (${condition})`
 
 /** `EXISTS (subquery)` — pass a Kysely select; it brings its own parentheses. */
 export const exists = (subquery: Expression<unknown>): Condition => sql<SqlBool>`exists ${subquery}`
+/** `NOT EXISTS (subquery)`. */
 export const notExists = (subquery: Expression<unknown>): Condition =>
   sql<SqlBool>`not exists ${subquery}`

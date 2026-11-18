@@ -1,6 +1,8 @@
 import type { Dialect } from '../snapshot/types'
 
+/** The default name of the table applied migrations are recorded in. */
 export const KICK_MIGRATIONS_TABLE = 'kick_migrations'
+/** The default name of the migration lock table. */
 export const KICK_LOCK_TABLE = 'kick_migrations_lock'
 /** The lock table that goes with a migrations table. */
 export function lockTableName(table: string): string {
@@ -27,6 +29,10 @@ function bareName(name: string): string {
   return name.slice(name.lastIndexOf('.') + 1)
 }
 
+/**
+ * The dialect's `CREATE TABLE IF NOT EXISTS` for the migrations table and its
+ * `batch` index. On Postgres a schema-qualified name also creates the schema.
+ */
 export function migrationsTableDdl(
   dialect: Dialect,
   table: string = KICK_MIGRATIONS_TABLE,
@@ -68,6 +74,10 @@ export function migrationsTableDdl(
   }
 }
 
+/**
+ * The dialect's `CREATE TABLE IF NOT EXISTS` for the lock table that goes with
+ * `table`, and the insert of its single row.
+ */
 export function lockTableDdl(dialect: Dialect, table: string = KICK_MIGRATIONS_TABLE): string {
   const L = quoteTable(dialect, lockTableName(table))
   switch (dialect) {

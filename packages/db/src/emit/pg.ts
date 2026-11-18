@@ -4,6 +4,7 @@ import { primaryKeyOf, snapshotTableName } from '../snapshot/name'
 import { quoteIdent, quoteLiteral, allowsExpressionDefault, isFunctionCall } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
 
+/** Renders a change set as Postgres DDL, one change after another. */
 export function emitPg(changes: ChangeSet): string {
   return changes.map(emitChange).join('\n')
 }

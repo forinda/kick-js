@@ -24,34 +24,40 @@ export interface CreateSchema {
   schema: string
 }
 
+/** Create a table. */
 export interface CreateTable {
   kind: 'createTable'
   table: TableSnapshot
 }
 
+/** Drop a table. */
 export interface DropTable {
   kind: 'dropTable'
   table: TableSnapshot
 }
 
+/** Rename a table. */
 export interface RenameTable {
   kind: 'renameTable'
   from: string
   to: string
 }
 
+/** Add a column to a table. */
 export interface AddColumn {
   kind: 'addColumn'
   table: string
   column: ColumnSnapshot
 }
 
+/** Drop a column from a table. */
 export interface DropColumn {
   kind: 'dropColumn'
   table: string
   column: ColumnSnapshot
 }
 
+/** Rename a column. */
 export interface RenameColumn {
   kind: 'renameColumn'
   table: string
@@ -59,6 +65,7 @@ export interface RenameColumn {
   to: string
 }
 
+/** Change a column's definition; `before` and `after` are the whole column. */
 export interface AlterColumn {
   kind: 'alterColumn'
   table: string
@@ -67,35 +74,41 @@ export interface AlterColumn {
   after: ColumnSnapshot
 }
 
+/** Create an index. */
 export interface AddIndex {
   kind: 'addIndex'
   table: string
   index: IndexSnapshot
 }
 
+/** Drop an index. */
 export interface DropIndex {
   kind: 'dropIndex'
   table: string
   index: IndexSnapshot
 }
 
+/** Add a foreign-key constraint. */
 export interface AddForeignKey {
   kind: 'addForeignKey'
   table: string
   fk: ForeignKeySnapshot
 }
 
+/** Drop a foreign-key constraint. */
 export interface DropForeignKey {
   kind: 'dropForeignKey'
   table: string
   fk: ForeignKeySnapshot
 }
 
+/** Create a Postgres enum type. */
 export interface CreateEnum {
   kind: 'createEnum'
   enum: EnumSnapshot
 }
 
+/** Drop a Postgres enum type. */
 export interface DropEnum {
   kind: 'dropEnum'
   enum: EnumSnapshot
@@ -169,12 +182,14 @@ export interface AlterPrimaryKey {
   after: PrimaryKeyShape
 }
 
+/** Add a `CHECK` constraint. */
 export interface AddCheck {
   kind: 'addCheck'
   table: string
   check: CheckSnapshot
 }
 
+/** Drop a `CHECK` constraint. */
 export interface DropCheck {
   kind: 'dropCheck'
   table: string
@@ -204,12 +219,14 @@ export interface SetRowLevelSecurity {
   to: { force?: true } | null
 }
 
+/** Create a row-level security policy (Postgres). */
 export interface CreatePolicy {
   kind: 'createPolicy'
   table: string
   policy: PolicySnapshot
 }
 
+/** Drop a row-level security policy (Postgres). */
 export interface DropPolicy {
   kind: 'dropPolicy'
   table: string
@@ -248,6 +265,7 @@ export interface SetColumnComment {
   to: string | null
 }
 
+/** One schema change `diff()` produces; `kind` says which. */
 export type Change =
   | CreateSchema
   | CreateTable
@@ -278,4 +296,5 @@ export type Change =
   | CreatePolicy
   | DropPolicy
 
+/** The changes between two snapshots, in the order they apply. */
 export type ChangeSet = Change[]

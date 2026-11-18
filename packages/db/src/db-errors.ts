@@ -16,6 +16,7 @@
  */
 import { KickDbError } from './errors'
 
+/** The dialect a `DatabaseError` came from. */
 export type DbDialect = 'postgres' | 'mysql' | 'sqlite'
 
 /** What the database reported, parsed. */

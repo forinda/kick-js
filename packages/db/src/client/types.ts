@@ -10,6 +10,11 @@ import type {
 import type { RegisteredDB } from './register'
 import type { QueryNamespace } from '../query/types'
 
+/**
+ * Payload of the `query` event: a query that ran, with its duration.
+ *
+ * @see https://kickjs.app/guide/database/events-plugins#lifecycle-events
+ */
 export interface QueryEvent {
   sql: string
   parameters: readonly unknown[]
@@ -20,6 +25,11 @@ export interface QueryEvent {
   txId?: string
 }
 
+/**
+ * Payload of the `queryError` event: a query that failed.
+ *
+ * @see https://kickjs.app/guide/database/events-plugins#lifecycle-events
+ */
 export interface QueryErrorEvent {
   sql: string
   parameters: readonly unknown[]
@@ -30,6 +40,12 @@ export interface QueryErrorEvent {
   txId?: string
 }
 
+/**
+ * Payload of the `beforeQuery` event, fired before a query runs; listeners may
+ * rewrite `sql` and `parameters`.
+ *
+ * @see https://kickjs.app/guide/database/events-plugins#lifecycle-events
+ */
 export interface BeforeQueryEvent {
   /** Mutable — listeners may rewrite sql / parameters before execution. */
   sql: string
@@ -38,10 +54,12 @@ export interface BeforeQueryEvent {
   readonly queryId?: string
 }
 
+/** Payload of the `transactionStart` and `transactionCommit` events. */
 export interface TransactionEvent {
   isolation?: 'serializable' | 'repeatable read' | 'read committed' | 'read uncommitted'
 }
 
+/** Payload of the `transactionRollback` event: the error that rolled it back. */
 export interface TransactionRollbackEvent extends TransactionEvent {
   error: unknown
 }
@@ -55,7 +73,6 @@ export interface TransactionRetryEvent extends TransactionEvent {
   delayMs: number
 }
 
-/** Options for `transaction(opts, fn)`. */
 /** A transaction from `startTransaction()`: a client, and the way to finish it. */
 export type ManualTransaction<DB> = KickDbClient<DB> & {
   /** Commit, then run its `afterCommit` hooks. */
@@ -63,6 +80,7 @@ export type ManualTransaction<DB> = KickDbClient<DB> & {
   rollback(): Promise<void>
 }
 
+/** Options for `transaction(opts, fn)`. */
 export interface TransactionOptions extends TransactionEvent {
   /**
    * What to do when a transaction is already open on this call chain:
@@ -131,8 +149,19 @@ export interface ReadRoute {
   replicas: number
 }
 
+/**
+ * Picks where a read outside a transaction goes: `'primary'`, a replica's
+ * index, or `undefined` for the default (replicas in turn).
+ *
+ * @see https://kickjs.app/guide/database/pooling#read-replicas
+ */
 export type ReadRouter = (read: ReadRoute) => 'primary' | number | undefined
 
+/**
+ * The client's lifecycle events by name, with their payloads: what `db.on(name, fn)` takes.
+ *
+ * @see https://kickjs.app/guide/database/events-plugins#lifecycle-events
+ */
 export interface KickDbClientEvents {
   beforeQuery: BeforeQueryEvent
   query: QueryEvent
@@ -358,6 +387,11 @@ export interface KickDbClient<DB = RegisteredDB> {
   destroy(): Promise<void>
 }
 
+/**
+ * Options for `createDbClient()`.
+ *
+ * @see https://kickjs.app/guide/database/
+ */
 export interface CreateDbClientOptions<TSchema, _DB = unknown> {
   /** Schema record — only used for type inference (M2-S1 tightens). */
   schema: TSchema
