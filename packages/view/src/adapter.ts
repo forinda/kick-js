@@ -89,21 +89,12 @@ export function viewsMiddleware(
   }
 }
 
+/** Options for `KickView`: the `createViews` options, or a views instance to reuse. */
 export interface KickViewOptions extends ViewsOptions {
   /** A views instance to use — share it with error pages and emails. */
   views?: Views
 }
 
-/**
- * The `.kick` view engine for `bootstrap({ adapters })`.
- *
- * ```ts
- * const views = createViews({ layout: 'layouts/main' })
- * bootstrap({ modules, adapters: [KickView({ views })] })
- * // in a controller
- * await ctx.render('users/show', { user })
- * ```
- */
 /**
  * Re-check templates on every render only in development: NODE_ENV is
  * `development`, or the views come from `kick dev` (the virtual module hands
@@ -124,6 +115,8 @@ export function kickViewDev(options: KickViewOptions, nodeEnv: string | undefine
  * import kickViews from 'virtual:kick-views'
  *
  * bootstrap({ modules, adapters: [KickView({ ...kickViews })] })
+ * // in a controller
+ * await ctx.render('users/show', { user })
  * ```
  *
  * @see https://kickjs.app/guide/views

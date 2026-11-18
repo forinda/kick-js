@@ -12,8 +12,10 @@ import type * as View from '@forinda/kickjs-view'
 import { pipeDeclarations, type PipeDeclaration } from './pipes'
 import { toRange } from './positions'
 
+/** The `@forinda/kickjs-view` module the server checks templates with. */
 export type ViewModule = typeof View
 
+/** Where a workspace's templates, pipes and validators live, and how to read them. */
 export interface WorkspaceOptions {
   root: string
   /** Absolute. */
@@ -45,6 +47,10 @@ interface Entry {
   layouts: Set<string>
 }
 
+/**
+ * The editor's view of an app's templates: every `.kick` file under the views folder (an open
+ * buffer wins over the file on disk), with diagnostics from the same `parse` and `check` the runtime uses.
+ */
 export class Workspace {
   private readonly entries = new Map<string, Entry>()
   private readonly cache = new Map<string, Diagnostic[]>()

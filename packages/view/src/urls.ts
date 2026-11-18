@@ -15,6 +15,7 @@ export const URL_ATTRS: ReadonlySet<string> = new Set([
   'srcset',
 ])
 
+/** Whether `attr` on `tag` holds a URL, so its value is scheme-checked when rendered (`data` counts only on `<object>`). */
 export function isUrlAttr(tag: string, attr: string): boolean {
   const name = attr.toLowerCase()
   return URL_ATTRS.has(name) || (name === 'data' && tag.toLowerCase() === 'object')

@@ -27,6 +27,7 @@ import { BUILTIN_PIPES, type PipeEnv } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
 import { render, RenderError, type Pipe } from './render/render'
 
+/** Where `createViews` reads template sources from. */
 export interface Loader {
   /** Every template name (`users/show`, `components/user-card`). */
   list(): Promise<string[]>
@@ -51,6 +52,7 @@ export interface ViewsBundle {
   }
 }
 
+/** Per-render options: layout, locale and time zone. */
 export interface RenderOptions {
   /** A layout for this render, or `false` for none at all (htmx and other partial responses). */
   layout?: boolean | string
@@ -64,6 +66,7 @@ export interface ShareContext {
   get(key: string): unknown
 }
 
+/** Options for `createViews` and `KickView`. */
 export interface ViewsOptions {
   /** Default `src/views`. */
   viewsDir?: string
@@ -114,6 +117,7 @@ export interface ViewsOptions {
   clientDir?: string
 }
 
+/** A views instance: renders templates and serves component client scripts. */
 export interface Views {
   render(name: string, data?: object, opts?: RenderOptions & { ctx?: unknown }): Promise<string>
   /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
@@ -126,6 +130,7 @@ export interface Views {
   has(name: string): Promise<boolean>
 }
 
+/** A loader over a build's bundle; throws when the bundle's format version doesn't match this runtime. */
 export function bundleLoader(bundle: ViewsBundle): Loader {
   if (bundle.v !== AST_FORMAT_VERSION) {
     throw new Error(`views bundle format v${bundle.v}, this runtime reads v${AST_FORMAT_VERSION}`)
@@ -186,6 +191,19 @@ function fileLoaders(): Promise<FileLoaderModule> {
   return fileLoaderModule()
 }
 
+/**
+ * Creates a views instance: templates from a loader or a build's bundle, checked on first use
+ * and cached, rendered with the app's pipes and shared data. Use it directly to render
+ * outside a request (emails, tests), or pass it to `KickView({ views })`.
+ *
+ * @example
+ * ```ts
+ * const views = createViews({ layout: 'layouts/main' })
+ * const html = await views.render('emails/welcome', { user })
+ * ```
+ *
+ * @see https://kickjs.app/guide/views
+ */
 export function createViews(options: ViewsOptions = {}): Views {
   const bundle = options.bundle ?? undefined
   // `kick dev` hands over `bundle: null`: the sources change under us there.

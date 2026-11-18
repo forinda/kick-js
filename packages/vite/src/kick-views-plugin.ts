@@ -11,6 +11,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Plugin } from 'vite'
 
+/** Options for `kickViewsPlugin`. */
 export interface KickViewsPluginOptions {
   /** Default `src/views`. */
   viewsDir?: string
@@ -52,6 +53,13 @@ async function kickFiles(dir: string): Promise<string[]> {
     .toSorted()
 }
 
+/**
+ * Provides `virtual:kick-views`: the app's `.kick` templates checked at build time and shipped
+ * as data, so a broken template fails the build. Under `serve` the bundle is `null` and component
+ * scripts are served through Vite. Included in `kickjsVitePlugin()` unless `views: false`.
+ *
+ * @see https://kickjs.app/guide/views
+ */
 export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let viewsDir = ''
   let pipesFile = ''

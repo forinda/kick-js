@@ -19,6 +19,7 @@ import { parseExpression } from './expression'
 
 export type { Attr, Element, Node, TemplateAst } from '../ast'
 
+/** What `parse` returns: the template AST and any diagnostics. */
 export interface ParseResult {
   ast: TemplateAst
   diagnostics: Diagnostic[]

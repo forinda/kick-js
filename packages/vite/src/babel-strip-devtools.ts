@@ -41,6 +41,7 @@ import * as babel from '@babel/core'
 const DEVTOOLS_KIT_RE = /^@forinda\/kickjs-devtools-kit(\/.*)?$/
 const DEVTOOLS_EVENTS_RE = /(^|\/)devtools-events(\.[a-z]+)?$/
 
+/** Options for `stripDevtoolsCode`. */
 export interface StripDevtoolsOptions {
   /**
    * When `false`, skips files that don't import devtools-kit. The
@@ -53,6 +54,7 @@ export interface StripDevtoolsOptions {
   fastReject?: boolean
 }
 
+/** What `stripDevtoolsCode` returns. */
 export interface StripResult {
   /** Transformed source. Returns the original `code` when nothing was stripped. */
   code: string

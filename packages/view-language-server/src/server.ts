@@ -101,6 +101,12 @@ export function watchPatterns(root: string, pipesFile: string, validatorsFile?: 
   return patterns
 }
 
+/**
+ * Starts the `.kick` language server on the connection the editor opened (the transport
+ * comes from the command-line arguments, such as `--stdio`).
+ *
+ * @see https://kickjs.app/guide/view-editors
+ */
 export function startServer(): void {
   const connection = createConnection()
   const server = createServer(connection)

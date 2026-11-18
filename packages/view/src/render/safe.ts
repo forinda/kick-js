@@ -36,6 +36,7 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": '&#39;',
 }
 
+/** Escapes `&`, `<`, `>`, `"` and `'` for HTML text and attribute values. */
 export const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]!)
 
 const SAFE_SCHEMES = new Set(['http', 'https', 'mailto', 'tel'])

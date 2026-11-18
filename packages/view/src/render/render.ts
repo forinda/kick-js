@@ -17,8 +17,10 @@ import {
 } from './safe'
 import { decodeEntities } from '../entities'
 
+/** A pipe: takes the piped value and the pipe's arguments, returns the new value. */
 export type Pipe = (value: unknown, ...args: unknown[]) => unknown
 
+/** What a render needs besides the data: locale, pipes, how to resolve layouts and components. */
 export interface RenderEnv {
   locale: string
   timeZone: string
@@ -39,6 +41,7 @@ export interface RenderEnv {
   validation?(): void
 }
 
+/** Thrown when a render fails; `diagnostic` has the template, position and message. */
 export class RenderError extends Error {
   constructor(readonly diagnostic: Diagnostic) {
     const { file, span, message } = diagnostic

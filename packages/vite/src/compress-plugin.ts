@@ -28,6 +28,7 @@ const COMPRESSIBLE = new Set([
   'wasm',
 ])
 
+/** Options for `compressAssets` and `compressDirectory`. */
 export interface CompressAssetsOptions {
   /** Smallest file to compress, in bytes. Default 1024 — below that, headers outweigh the saving. */
   threshold?: number
