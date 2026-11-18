@@ -12,6 +12,7 @@ export interface StartupStep {
   ms: number
 }
 
+/** What `app.getStartupTimeline()` returns: total boot time and each timed step, in milliseconds. */
 export interface StartupTimelineSnapshot {
   totalMs: number
   steps: readonly StartupStep[]

@@ -187,6 +187,11 @@ export function batch<T>(fn: () => T): T {
 /** Marks refs, computed refs and `toRef()` views, for {@link isRef}. */
 const REF = Symbol.for('kickjs.ref')
 
+/**
+ * A reactive value made by `ref()`. Reading `.value` tracks it; writing it notifies watchers and computed values.
+ *
+ * @see https://kickjs.app/guide/reactivity
+ */
 export interface Ref<T = any> {
   value: T
   /**
@@ -203,6 +208,7 @@ export interface Ref<T = any> {
   toJSON(): T
 }
 
+/** Options for `ref()`. */
 export interface RefOptions {
   /**
    * Make an object value deeply reactive: `r.value.count++` and
@@ -283,6 +289,11 @@ export function ref<T>(initialValue: T, options: RefOptions = {}): Ref<T> {
 
 // ── computed() ───────────────────────────────────────────────────────────
 
+/**
+ * A read-only value made by `computed()`, recomputed when its sources change.
+ *
+ * @see https://kickjs.app/guide/reactivity
+ */
 export interface ComputedRef<T = any> {
   readonly value: T
   /**
@@ -366,6 +377,7 @@ export function computed<T>(getter: () => T): ComputedRef<T> {
 
 // ── watch() ──────────────────────────────────────────────────────────────
 
+/** Options for `watch()`. */
 export interface WatchOptions {
   /** Run the callback immediately with the current value (default: false) */
   immediate?: boolean
@@ -440,23 +452,6 @@ export function watch<T>(
 
 // ── reactive() ───────────────────────────────────────────────────────────
 
-/**
- * Create a deeply reactive proxy around an object or array. Property reads
- * are tracked, writes and deletes trigger watchers and computed
- * recalculations, and so do key additions and removals for code that
- * iterates the keys (`Object.keys`, `for…in`, `in`). Nested objects and
- * arrays are reactive too.
- * @example
- * ```ts
- * const state = reactive({ users: 0, errors: 0 })
- * const errorRate = computed(() =>
- *   state.users > 0 ? state.errors / state.users : 0
- * )
- * state.users = 100
- * state.errors = 5
- * console.log(errorRate.value) // 0.05
- * ```
- */
 // Memoize proxies per target: repeated reads of the same nested object must
 // return the SAME proxy — otherwise every access allocates a fresh Proxy and
 // referential identity breaks (`state.nested !== state.nested`).
@@ -477,6 +472,25 @@ const ARRAY_MUTATORS = new Set([
   'copyWithin',
 ])
 
+/**
+ * Create a deeply reactive proxy around an object or array. Property reads
+ * are tracked, writes and deletes trigger watchers and computed
+ * recalculations, and so do key additions and removals for code that
+ * iterates the keys (`Object.keys`, `for…in`, `in`). Nested objects and
+ * arrays are reactive too.
+ * @example
+ * ```ts
+ * const state = reactive({ users: 0, errors: 0 })
+ * const errorRate = computed(() =>
+ *   state.users > 0 ? state.errors / state.users : 0
+ * )
+ * state.users = 100
+ * state.errors = 5
+ * console.log(errorRate.value) // 0.05
+ * ```
+ *
+ * @see https://kickjs.app/guide/reactivity
+ */
 export function reactive<T extends object>(target: T): T {
   if (proxies.has(target)) return target
   const existing = proxyCache.get(target)

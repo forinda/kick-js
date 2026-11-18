@@ -11,12 +11,22 @@ import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../cli
 import { registerDisposable } from '../../core/disposables'
 import { BoundedCounters } from './bounded-counters'
 
+/**
+ * Where rate-limit counters live. Implement it to share counts across instances (Redis, KV).
+ *
+ * @see https://kickjs.app/guide/rate-limiting
+ */
 export interface RateLimitStore {
   increment(key: string): Promise<{ totalHits: number; resetTime: Date }>
   decrement(key: string): Promise<void>
   reset(key: string): Promise<void>
 }
 
+/**
+ * Options for {@link rateLimit}.
+ *
+ * @see https://kickjs.app/guide/rate-limiting
+ */
 export interface RateLimitOptions {
   /** Maximum number of requests per window (default: 100) */
   max?: number

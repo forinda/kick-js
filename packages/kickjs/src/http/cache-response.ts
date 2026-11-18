@@ -19,6 +19,11 @@ import type { RequestContext } from './context'
 import { applyHandlerResult } from './reply'
 import { stringifyJson, type RuntimeResponse } from './runtime'
 
+/**
+ * Options for {@link CacheResponse}.
+ *
+ * @see https://kickjs.app/guide/caching#caching-whole-responses
+ */
 export interface CacheResponseOptions {
   /** Seconds a stored response is served as fresh. */
   maxAge: number

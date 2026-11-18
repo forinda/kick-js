@@ -15,6 +15,7 @@ import { errorHandler } from './error-handler'
 
 const log = createLogger('Forms')
 
+/** An error handler in the shape `bootstrap({ onError })` takes; what {@link formErrorHandler} returns and wraps. */
 export type FormErrorHandler = (
   err: any,
   req: any,
@@ -27,6 +28,11 @@ interface SessionLike {
   save(): Promise<void>
 }
 
+/**
+ * Options for {@link formErrorHandler}.
+ *
+ * @see https://kickjs.app/guide/views
+ */
 export interface FormErrorHandlerOptions {
   /** Where to go back to when the `Referer` is missing or another site's. Default `'/'`. */
   fallbackUrl?: string

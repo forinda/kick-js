@@ -4,6 +4,11 @@ import type {
   ConnectNext as NextFunction,
 } from '../connect'
 
+/**
+ * Options for {@link breachPadding}.
+ *
+ * @see https://kickjs.app/guide/middleware
+ */
 export interface BreachPaddingOptions {
   /**
    * Padding added to each compressed response is 0 to `maxBytes - 1` bytes,

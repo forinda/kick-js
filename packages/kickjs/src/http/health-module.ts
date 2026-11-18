@@ -56,6 +56,7 @@ export interface HealthProbe {
   checks(): Promise<HealthCheckResult[]>
 }
 
+/** DI token for the {@link HealthProbe} that {@link HealthController} reads. */
 export const HEALTH_PROBE = createToken<HealthProbe>('kick/Health/probe')
 
 /** Config for {@link healthModule}. */
@@ -145,6 +146,11 @@ export function createHealthChecks(
   }
 }
 
+/**
+ * Serves `GET /health/live` and `GET /health/ready`. Liveness stays 200 while the app drains; readiness answers 503 while starting or draining, or when any adapter's `onHealthCheck()` is not `up`.
+ *
+ * @see https://kickjs.app/guide/deployment#behind-a-load-balancer-or-on-kubernetes
+ */
 @Controller()
 export class HealthController {
   constructor(private readonly probe: HealthProbe) {}

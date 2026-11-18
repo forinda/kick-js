@@ -33,6 +33,11 @@ export interface SessionData {
   [key: string]: unknown
 }
 
+/**
+ * Where server-side session data lives. Implement it to keep sessions in a shared store; `touch` is optional.
+ *
+ * @see https://kickjs.app/guide/sessions
+ */
 export interface SessionStore {
   get(sid: string): Promise<SessionData | null>
   set(sid: string, data: SessionData, maxAge: number): Promise<void>
@@ -40,6 +45,11 @@ export interface SessionStore {
   touch?(sid: string, maxAge: number): Promise<void>
 }
 
+/**
+ * The session on a request, set by {@link session}: its ID, data, and methods to regenerate, destroy or save it.
+ *
+ * @see https://kickjs.app/guide/sessions
+ */
 export interface Session {
   id: string
   data: SessionData
@@ -48,6 +58,11 @@ export interface Session {
   save(): Promise<void>
 }
 
+/**
+ * Options for {@link session}.
+ *
+ * @see https://kickjs.app/guide/sessions
+ */
 export interface SessionOptions {
   /**
    * Secret that signs the session cookie — or, with `store: 'cookie'`,

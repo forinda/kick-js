@@ -61,6 +61,7 @@ export interface ContributorPipeline {
   readonly keys: ReadonlySet<string>
 }
 
+/** Options for building a contributor pipeline; `route` labels its error messages. */
 export interface BuildPipelineOptions {
   /** Optional route identifier surfaced in diagnostic errors (e.g., 'GET /projects/:id'). */
   route?: string

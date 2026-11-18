@@ -1,23 +1,6 @@
-/**
- * Circuit Breaker pattern for external service calls.
- *
- * Protects your application from cascading failures when downstream
- * services are unhealthy by short-circuiting requests after a
- * configurable failure threshold.
- *
- * @example
- * ```ts
- * const breaker = new CircuitBreaker('payment-api', {
- *   failureThreshold: 5,
- *   resetTimeout: 30_000,
- * })
- *
- * const result = await breaker.execute(() => fetch('https://payment.example.com/charge'))
- * ```
- */
-
 export type CircuitBreakerState = 'closed' | 'open' | 'half_open'
 
+/** Options for {@link CircuitBreaker}. */
 export interface CircuitBreakerOptions {
   /** Number of consecutive failures before the circuit opens. */
   failureThreshold: number
@@ -27,6 +10,7 @@ export interface CircuitBreakerOptions {
   halfOpenMax?: number
 }
 
+/** What {@link CircuitBreaker.getStats} returns. */
 export interface CircuitBreakerStats {
   failures: number
   successes: number
@@ -44,6 +28,25 @@ export class CircuitOpenError extends Error {
   }
 }
 
+/**
+ * Circuit Breaker pattern for external service calls.
+ *
+ * Protects your application from cascading failures when downstream
+ * services are unhealthy by short-circuiting requests after a
+ * configurable failure threshold.
+ *
+ * @example
+ * ```ts
+ * const breaker = new CircuitBreaker('payment-api', {
+ *   failureThreshold: 5,
+ *   resetTimeout: 30_000,
+ * })
+ *
+ * const result = await breaker.execute(() => fetch('https://payment.example.com/charge'))
+ * ```
+ *
+ * @see https://kickjs.app/guide/middleware
+ */
 export class CircuitBreaker {
   private state: CircuitBreakerState = 'closed'
   private failures = 0

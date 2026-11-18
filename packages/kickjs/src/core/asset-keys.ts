@@ -21,8 +21,10 @@
 // order preserved) so callers can iterate without re-sorting. Sort
 // in the caller if a stable manifest order is needed.
 
+/** How asset keys are made from file paths: `'strip'` drops the extension, `'with-extension'` keeps it, `'auto'` keeps it only when two files would share a key. */
 export type AssetKeyStrategy = 'auto' | 'strip' | 'with-extension'
 
+/** One file's source-relative path and its manifest key. */
 export interface AssetKeyPair {
   /** Source-relative path the file was discovered at. */
   rel: string
@@ -30,6 +32,7 @@ export interface AssetKeyPair {
   key: string
 }
 
+/** Options for `groupAssetKeys()`. */
 export interface GroupAssetKeysOptions {
   /**
    * Strategy applied to this namespace. Default `'auto'`.
@@ -41,6 +44,7 @@ export interface GroupAssetKeysOptions {
   strategy?: AssetKeyStrategy
 }
 
+/** What `groupAssetKeys()` returns: the path/key pairs, and how many key collisions `'auto'` resolved by keeping extensions. */
 export interface GroupAssetKeysResult {
   pairs: AssetKeyPair[]
   /**

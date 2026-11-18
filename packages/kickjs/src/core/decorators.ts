@@ -122,6 +122,7 @@ export function Asset<K extends string>(assetKey: AssetKeyArg<K>): PropertyDecor
 
 // ── HTTP Route Decorators ───────────────────────────────────────────────
 
+/** A route as a route decorator records it: method, path, handler name and validation schemas. */
 export interface RouteDefinition {
   method: string
   path: string
@@ -241,6 +242,11 @@ export const Patch = createRouteDecorator('PATCH')
 
 // ── Query Params Decorator ─────────────────────────────────────────────
 
+/**
+ * Fields a route lets clients filter, sort and search on, for `@ApiQueryParams`.
+ *
+ * @see https://kickjs.app/guide/query-parsing
+ */
 export interface ApiQueryParamsConfig {
   /** Fields that can be used in filter queries (e.g., `?filter=status:eq:active`) */
   filterable?: string[]
@@ -392,6 +398,11 @@ export interface BaseUploadOptions {
   }) => string
 }
 
+/**
+ * Options for {@link FileUpload}: single file, many files, or fields only.
+ *
+ * @see https://kickjs.app/guide/file-uploads
+ */
 export interface FileUploadConfig extends BaseUploadOptions {
   mode: 'single' | 'array' | 'none'
   /**

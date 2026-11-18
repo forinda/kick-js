@@ -31,6 +31,7 @@ export type UrlForArgs<N> =
     ? [params?: ParamsOf<N> | PositionalParams, query?: UrlQuery]
     : [params: ParamsOf<N> | PositionalParams, query?: UrlQuery]
 
+/** Query values `urlFor()` appends to a route URL. An array value repeats the key once per item. */
 export type UrlQuery = Record<string, string | number | boolean | Array<string | number>>
 
 /** Builds route URLs by name — what `ROUTE_URLS` resolves to. */

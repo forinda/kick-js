@@ -4,6 +4,7 @@ import type {
   ConnectNext as NextFunction,
 } from '../connect'
 
+/** Header the request ID is read from and echoed in: `x-request-id`. */
 export const REQUEST_ID_HEADER = 'x-request-id'
 
 /**

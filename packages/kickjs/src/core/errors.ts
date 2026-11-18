@@ -45,6 +45,7 @@ export const HttpStatus = {
   GATEWAY_TIMEOUT: 504,
 } as const
 
+/** Any status code in {@link HttpStatus}. */
 export type HttpStatusCode = (typeof HttpStatus)[keyof typeof HttpStatus]
 
 /**
