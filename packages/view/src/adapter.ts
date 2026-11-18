@@ -115,12 +115,15 @@ export function kickViewDev(options: KickViewOptions, nodeEnv: string | undefine
 
 /**
  * Adds KickJS views to the app: `ctx.render(name, data)` renders
- * `src/views/<name>.kick` on every runtime. In development templates are
- * read from disk; otherwise they come from the bundle `kick build` writes.
+ * `src/views/<name>.kick` on every runtime. Pass `...kickViews` from
+ * `virtual:kick-views` so a build renders from its bundle; without a bundle
+ * or `loader`, templates are read from disk (Node only).
  *
  * @example
  * ```ts
- * bootstrap({ modules, adapters: [KickView()] })
+ * import kickViews from 'virtual:kick-views'
+ *
+ * bootstrap({ modules, adapters: [KickView({ ...kickViews })] })
  * ```
  *
  * @see https://kickjs.app/guide/views

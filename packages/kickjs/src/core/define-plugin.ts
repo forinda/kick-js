@@ -10,7 +10,7 @@ export interface DefinePluginOptions<TConfig> {
   /** Stable identity used for logging, `dependsOn` lookups, and `.scoped()` namespacing. */
   name: string
 
-  /** Optional plugin version — surfaced to DevTools and `kick add` compatibility checks. */
+  /** Optional plugin version, recorded on the factory's `definition`. */
   version?: string
 
   /**

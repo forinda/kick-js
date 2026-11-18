@@ -76,14 +76,18 @@ const PERSONAL = ['authorization', 'proxy-authorization', 'x-api-key', 'cookie']
 /**
  * Caches a route's whole response for `maxAge` seconds, answers `304` on a
  * matching ETag, and with `swr` serves a stale copy while one request
- * rebuilds it. Only `200` responses are stored. Requests that identify the
- * caller skip the cache unless the header is listed in `varies`.
+ * rebuilds it. Only `200` responses are stored. With the default or a string
+ * key, requests that identify the caller skip the cache unless the header is
+ * listed in `varies`; a `key` function skips that check, so it must include
+ * the user or tenant when the response depends on them.
  *
  * @example
  * ```ts
  * `@CacheResponse({ maxAge: 60, swr: 300, varies: ['accept-language'] })`
  * `@Get('/')`
- * list(ctx: RequestContext) { … }
+ * list(ctx: RequestContext) {
+ *   // …
+ * }
  * ```
  *
  * @see https://kickjs.app/guide/caching
