@@ -1,6 +1,6 @@
 /**
  * Read the names a pipes file exports, without running it — so the build
- * and the editor agree with the runtime on which pipes exist (spec §7).
+ * and the editor agree with the runtime on which pipes exist.
  * Only top-level `export const|let|var|function` and `export { a, b as c }`
  * of local names; anything that needs another module to resolve is refused.
  */
@@ -76,7 +76,7 @@ function braceNames(
   return { names, end: close < 0 ? src.length : close + 1 }
 }
 
-/** The names a pipes file exports (spec §7). */
+/** The names a pipes file exports. */
 export function readPipeExports(
   source: string,
   file: string,

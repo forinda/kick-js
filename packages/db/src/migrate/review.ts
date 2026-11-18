@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { computeMigrationHash } from './journal'
 import type { Journal } from './journal'
 
+/** What `reviewMigration()` did. */
 export interface ReviewResult {
   id: string
   /** True when the migration was already reviewed — its hash is re-recorded. */

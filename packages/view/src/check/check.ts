@@ -1,7 +1,7 @@
 /**
  * `check`: turn a parsed template into a checked one — names resolved,
  * pipes, components, slots and layouts verified, and every interpolation's
- * context enforced (spec §4). What passes here is safe to render.
+ * context enforced. What passes here is safe to render.
  */
 import { FORM_GLOBALS, SECRET_FIELD } from '../form-state'
 import { parseValidate, VALIDATORS_TAG } from '../validators'
@@ -34,6 +34,7 @@ import { optimize } from './optimize'
 
 export type { CheckedTemplate } from '../ast'
 
+/** What `check` returns: `template` is absent when any diagnostic is an error. */
 export interface CheckResult {
   template?: CheckedTemplate
   diagnostics: Diagnostic[]

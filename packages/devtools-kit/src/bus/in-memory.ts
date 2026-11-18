@@ -91,6 +91,10 @@ export function createBusCore(): BusCore {
   return { on, onAny, dispatch }
 }
 
+/**
+ * Create a {@link KickEventBus} with no transport: `emit()` stamps the event with `Date.now()`
+ * and delivers it to this bus's own subscribers only.
+ */
 export function createInMemoryBus(): KickEventBus {
   const core = createBusCore()
   return {

@@ -678,7 +678,7 @@ export class RequestContext<
    * decorator fails the build. `TKeys` stays `string` (no narrowing) for
    * a plain `RequestContext` and for any route typegen couldn't prove
    * complete; there this is a runtime guarantee only.
-   * See `architecture.md` §20.14.
+   * See https://kickjs.app/guide/context-decorators
    *
    * `null` counts as present; only `undefined` (or a missing entry)
    * throws. A contributor that deliberately resolves to `null` is

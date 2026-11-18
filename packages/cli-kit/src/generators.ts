@@ -1,5 +1,5 @@
 /**
- * Plugin generator API per architecture.md §21.2.3 — lets first-party
+ * Plugin generator API per https://kickjs.app/guide/plugin-generators — lets first-party
  * AND third-party packages ship `kick g <name>` scaffolders the same
  * way the framework's built-in generators do.
  *

@@ -6,8 +6,19 @@ import type { MigrationAdapter } from './migrate/adapter'
 import type { DriftBehavior, DriftIgnore } from './migrate/drift'
 import type { MigrationsLocation } from './migrate/source'
 
+/**
+ * What `kickDbAdapter` does about pending migrations on boot: throw
+ * (`'fail-if-pending'`, the default), apply them (`'apply'`), or boot anyway (`'ignore'`).
+ *
+ * @see https://kickjs.app/guide/database/migrations#boot-time-policy
+ */
 export type MigrationsOnBoot = 'fail-if-pending' | 'apply' | 'ignore'
 
+/**
+ * Options for `kickDbAdapter()`.
+ *
+ * @see https://kickjs.app/guide/database/migrations#boot-time-policy
+ */
 export interface KickDbAdapterConfig {
   /** The driver-bound MigrationAdapter — pgAdapter() in @forinda/kickjs-db/pg, etc. */
   migrationAdapter: MigrationAdapter

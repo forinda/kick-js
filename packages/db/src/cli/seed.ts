@@ -15,6 +15,11 @@ import { KickDbError } from '../errors'
 
 const SEED_FILE = /\.(?:[cm]?[jt]s)$/
 
+/**
+ * What `runSeeds()` ran.
+ *
+ * @see https://kickjs.app/guide/database/cli#seed
+ */
 export interface SeedResult {
   /** The seed files run, in order. */
   ran: string[]

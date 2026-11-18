@@ -52,6 +52,8 @@ export interface QueueAdapterExtensions {
  *   ],
  * })
  * ```
+ *
+ * @see https://kickjs.app/guide/jobs
  */
 export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExtensions>({
   name: 'QueueAdapter',
@@ -88,7 +90,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
       getQueueNames,
       getQueueStats,
 
-      // ── DevTools introspection (architecture.md §23) ─────────────
+      // ── DevTools introspection ─────────────
       // Cheap snapshot — counts only, no Redis round trip. The full
       // per-queue stats are still served via the existing
       // `/_debug/queues` endpoint for adopters who need them.

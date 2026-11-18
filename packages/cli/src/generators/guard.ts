@@ -13,6 +13,11 @@ interface GenerateGuardOptions {
   pluralize?: boolean
 }
 
+/**
+ * Write `<name>.guard.ts` (the code behind `kick g guard`) and return the paths written.
+ *
+ * @see https://kickjs.app/guide/generators#kick-g-guard
+ */
 export async function generateGuard(options: GenerateGuardOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
   const outDir = resolveOutDir({

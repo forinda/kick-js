@@ -206,6 +206,10 @@ function wrapsWhole(sql: string): boolean {
   return false
 }
 
+/**
+ * What a drift check does on drift: throw (`'error'`), log (`'warn'`), or skip
+ * the check (`'ignore'`).
+ */
 export type DriftBehavior = 'error' | 'warn' | 'ignore'
 
 /**
@@ -234,10 +238,18 @@ function withoutIgnored(snap: SchemaSnapshot, ignore: DriftIgnore): SchemaSnapsh
   return { ...snap, tables }
 }
 
+/** Where drift warnings go. `console` by default. */
 export interface DriftLogger {
   warn: (message: string) => void
 }
 
+/**
+ * Compares a live snapshot with the one migrations expect. Under `'error'` it
+ * throws `MigrationDriftError` on any difference, under `'warn'` it logs it, and
+ * under `'ignore'` it does nothing. `ignore` leaves matching tables and indexes out.
+ *
+ * @see https://kickjs.app/guide/database/migration-recovery#drift
+ */
 export async function checkDrift(
   liveSnapshot: SchemaSnapshot,
   expectedSnapshot: SchemaSnapshot,

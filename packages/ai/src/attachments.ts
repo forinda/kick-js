@@ -114,12 +114,14 @@ export function resolvePart(part: ContentPart): ResolvedPart {
   )
 }
 
+/** The fields of an uploaded file (`ctx.file`) that {@link attachmentFromFile} reads. */
 export interface UploadedFileForAi {
   buffer: Uint8Array
   mimetype: string
   originalname?: string
 }
 
+/** Options for {@link attachmentFromFile}. */
 export interface AttachmentFromFileOptions {
   /**
    * Normalize a file the model can't read inline (xlsx, docx, …) with a

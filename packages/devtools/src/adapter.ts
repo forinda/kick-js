@@ -213,6 +213,11 @@ const PEER_HEALTHCHECK_TIMEOUT_MS = 1500
  */
 let snapshotInProgress = false
 
+/**
+ * Options for the DevTools adapter that serves the `/_debug` dashboard and endpoints.
+ *
+ * @see https://kickjs.app/guide/devtools#configuration
+ */
 export interface DevToolsOptions {
   /** Base path for debug endpoints (default: '/_debug') */
   basePath?: string
@@ -261,7 +266,7 @@ export interface DevToolsOptions {
 
   /**
    * Tuning for the runtime sampler that powers `/_debug/runtime` and
-   * the upcoming Memory tab (architecture.md §23). Defaults to
+   * the upcoming Memory tab (https://kickjs.app/guide/devtools). Defaults to
    * 1-second polling with a 60-sample (~1 minute) ring buffer.
    *
    * Set `runtime.enabled = false` to skip starting the sampler — the
@@ -317,6 +322,8 @@ export interface DevToolsAdapterExtensions {
   readonly memoryAnalyzer: MemoryAnalyzer | null
 }
 
+let generatedSecret: string | undefined
+
 /**
  * DevToolsAdapter — Vue-style reactive introspection for KickJS applications.
  *
@@ -343,9 +350,9 @@ export interface DevToolsAdapterExtensions {
  *   ],
  * })
  * ```
+ *
+ * @see https://kickjs.app/guide/devtools
  */
-let generatedSecret: string | undefined
-
 export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExtensions>({
   name: 'DevToolsAdapter',
   defaults: {
@@ -544,7 +551,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
     /**
      * Find the dashboard's public directory. Prefers the new Solid SPA
-     * (public/spa/, shipped from PR 4 of §23); falls back to the legacy
+     * (public/spa/); falls back to the legacy
      * Vue+Tailwind dashboard (public/devtools/) for environments that
      * haven't run `pnpm --filter @forinda/kickjs-devtools build:spa`.
      */
@@ -608,7 +615,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       runtimeSampler,
       memoryAnalyzer,
 
-      // ── DevTools introspection (architecture.md §23) ─────────────
+      // ── DevTools introspection ─────────────
       // Cheap snapshot — counters + flags only. Anything that requires
       // a container walk or DB hit belongs in the per-endpoint RPCs
       // (`/_debug/container`, `/_debug/graph`), not here.
@@ -864,7 +871,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
-        // ── Tier-1 runtime monitoring (architecture.md §23) ─────────
+        // ── Tier-1 runtime monitoring ─────────
         // Returns the latest RuntimeSnapshot + a composite MemoryHealth
         // computed from the sampler's ring buffer. Returns 404 when the
         // sampler is disabled so adopters can distinguish "off" from
@@ -896,10 +903,10 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
-        // ── SSE: live runtime snapshots (architecture.md §23) ───────
+        // ── SSE: live runtime snapshots ───────
         // Pushes the latest RuntimeSnapshot every `intervalMs`. SSE
         // (not WebSocket) avoids the http.Server `upgrade`-event
-        // coordination cost — see devtools-flows.md §3 for rationale.
+        // coordination cost.
         router.get('/runtime/stream', (ctx: RequestContext) => {
           if (!runtimeSampler) {
             ctx.json({ error: 'runtime sampler disabled' }, 404)
@@ -920,7 +927,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
-        // ── SSE: memory health composite (architecture.md §23) ──────
+        // ── SSE: memory health composite ──────
         router.get('/memory/stream', (ctx: RequestContext) => {
           if (!runtimeSampler || !memoryAnalyzer) {
             ctx.json({ error: 'runtime sampler disabled' }, 404)
@@ -943,7 +950,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
-        // ── Heap snapshot — Tier 3 monitoring (architecture.md §23) ─
+        // ── Heap snapshot — Tier 3 monitoring ─
         // POST /_debug/memory/snapshot — captures a V8 heap snapshot
         // and streams the resulting .heapsnapshot file back as
         // application/json with Content-Disposition. Snapshot capture
@@ -1015,7 +1022,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           }
         })
 
-        // ── Force GC — Tier 3 monitoring (architecture.md §23) ──────
+        // ── Force GC — Tier 3 monitoring ──────
         // POST /_debug/memory/gc — calls `global.gc()` if Node was
         // started with --expose-gc, returning before/after heap size
         // so the panel can show how much was reclaimed. Useful for
@@ -1059,7 +1066,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           ctx.json({ before, after, reclaimedBytes, elapsedMs })
         })
 
-        // ── Custom-tab discovery (architecture.md §23) ──────────────
+        // ── Custom-tab discovery ──────────────
         // Walks every plugin/adapter `devtoolsTabs?()` contribution
         // and serves the deduped + validated list. The SPA fetches
         // this once at boot to render dynamic tabs after the four
@@ -1148,7 +1155,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           ctx.json(r.body, r.status)
         })
 
-        // ── Topology RPC (architecture.md §23) ──────────────────────
+        // ── Topology RPC ──────────────────────
         // Aggregates plugins + adapters + contributors + DI tokens
         // into one snapshot; calls each primitive's introspect() in
         // parallel with a per-call timeout so a misbehaving adapter

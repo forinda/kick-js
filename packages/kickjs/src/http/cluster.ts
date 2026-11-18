@@ -6,6 +6,7 @@ import { reactive, ref } from '../core/reactivity'
 
 const log = createLogger('Cluster')
 
+/** Options for {@link setupClusterPrimary}: worker count, shutdown timeout and restart limits. */
 export interface ClusterOptions {
   /** Number of worker processes (default: os.cpus().length) */
   workers?: number

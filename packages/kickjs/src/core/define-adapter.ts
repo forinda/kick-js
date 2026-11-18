@@ -3,7 +3,7 @@ import type { BuildContext } from './define-plugin'
 
 /**
  * Options passed to {@link defineAdapter}. Mirrors {@link DefinePluginOptions}
- * exactly — see `architecture.md` §21.3.4 for the definePlugin/defineAdapter
+ * exactly — see https://kickjs.app/guide/adapters for the definePlugin/defineAdapter
  * symmetry rationale.
  *
  * The optional `TExtra` generic lets an adapter ship public methods
@@ -60,7 +60,7 @@ const composeName = (base: string, scope: string): string => `${base}:${scope}`
 
 /**
  * Build an {@link AppAdapter} factory from a typed definition. See
- * `architecture.md` §21.3.4 for migration guidance — most first-party
+ * https://kickjs.app/guide/migration-v3-to-v4 for migration guidance — most first-party
  * adapter packages collapse to a single `defineAdapter()` call after this
  * lands.
  *

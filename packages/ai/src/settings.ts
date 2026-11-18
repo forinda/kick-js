@@ -80,7 +80,11 @@ function fields<T>(spec: Record<string, Field>): KickSchema<T> {
   }
 }
 
-/** `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_DEFAULT_CHAT_MODEL`, … */
+/**
+ * `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_DEFAULT_CHAT_MODEL`, …
+ *
+ * @see https://kickjs.app/guide/ai
+ */
 export const OpenAISettings = defineSettings(
   'OPENAI',
   fields<{
@@ -98,7 +102,11 @@ export const OpenAISettings = defineSettings(
   }),
 )
 
-/** `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_CHAT_MODEL`, … */
+/**
+ * `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_CHAT_MODEL`, …
+ *
+ * @see https://kickjs.app/guide/ai
+ */
 export const AnthropicSettings = defineSettings(
   'ANTHROPIC',
   fields<{

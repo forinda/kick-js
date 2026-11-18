@@ -13,6 +13,11 @@ import type { RequestContext } from '../context'
 import { isProduction } from '../../core/is-production'
 import { canonicalHost, parseHttpUrl } from '../host'
 
+/**
+ * Options for {@link csrf}.
+ *
+ * @see https://kickjs.app/guide/csrf
+ */
 export interface CsrfOptions {
   /** Cookie name for the CSRF token (default: '_csrf') */
   cookie?: string
@@ -254,6 +259,11 @@ export function csrf(options: CsrfOptions = {}) {
   }
 }
 
+/**
+ * Options for {@link csrfGuard}: the {@link csrf} options plus route-flag exemptions.
+ *
+ * @see https://kickjs.app/guide/csrf
+ */
 export interface CsrfGuardOptions extends CsrfOptions {
   /**
    * Skip the token check on routes carrying a route flag — a name, a list of

@@ -216,6 +216,7 @@ export interface ConfigOrigins {
   sections: Array<{ prefix: string; optional?: true; vars: VarOrigin[] }>
 }
 
+/** Options for `bootstrap()` and `new Application()`: modules, middleware, adapters, plugins, runtime and server settings. */
 export interface ApplicationOptions {
   /**
    * Feature modules to load. Accepts both class form
@@ -410,7 +411,7 @@ export interface ApplicationOptions {
    * `@forinda/kickjs/fastify`) or a custom engine driver. Defaults to
    * {@link expressRuntime}. The engine-native escape hatches
    * (`getRuntimeApp()`, `AdapterContext.app`) follow the active runtime via the
-   * registry (`ActiveRuntime`, spec §4.3b) — Express by default, or the augmented
+   * registry (`ActiveRuntime`) — Express by default, or the augmented
    * engine once the `kick/runtime` typegen output is present.
    */
   /**
@@ -806,6 +807,15 @@ export interface ManagementOptions {
   tls?: tls.SecureContextOptions & tls.TlsOptions
 }
 
+/**
+ * A KickJS app: loads modules, adapters and plugins into the DI container,
+ * mounts their routes on the HTTP runtime, and runs the lifecycle
+ * (`setup`, `start`, `rebuild`, `shutdown`). `bootstrap()`,
+ * `createHandler()` and `createTestApp()` create one; construct it directly
+ * when you drive the lifecycle yourself.
+ *
+ * @see https://kickjs.app/guide/lifecycle
+ */
 export class Application {
   private app: unknown
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
@@ -2412,7 +2422,7 @@ export class Application {
 
   /**
    * Get registered plugins — used by DevToolsAdapter for topology
-   * introspection (architecture.md §23). Read-only; returns the
+   * introspection (https://kickjs.app/guide/devtools). Read-only; returns the
    * already-sorted plugin list (post-`dependsOn` topo-sort).
    */
   getPlugins(): readonly KickPlugin[] {

@@ -119,7 +119,7 @@ export function defineModule<TConfig = Record<string, unknown>, TExtra = unknown
   if (options === null || typeof options !== 'object') {
     throw new TypeError(
       'defineModule: options must be an object literal. ' +
-        'See architecture.md §21 for the spec shape.',
+        'See https://kickjs.app/guide/modules#definemodule for the spec shape.',
     )
   }
   if (typeof options.name !== 'string' || options.name.length === 0) {

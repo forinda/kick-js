@@ -45,6 +45,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # JSDoc links reach the site, and decorators and adapters link it.
+      - run: pnpm lint:jsdoc
 
   lint-tokens:
     name: Token convention lint (kick-lint)

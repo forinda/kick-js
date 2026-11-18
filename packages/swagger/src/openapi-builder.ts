@@ -39,6 +39,7 @@ const warnedBodyOnReadMethod = new Set<string>()
  */
 const EXPRESS_PARAM_RE = /:([A-Za-z_][A-Za-z0-9_]*)/g
 
+/** The spec's `info` block. */
 export interface OpenAPIInfo {
   title: string
   version: string
@@ -68,6 +69,11 @@ export interface SecurityResolverContext {
   handlerName: string
 }
 
+/**
+ * Options that shape the generated OpenAPI spec: info, servers and security.
+ *
+ * @see https://kickjs.app/guide/swagger#configuration-options
+ */
 export interface SwaggerOptions {
   info?: Partial<OpenAPIInfo>
   servers?: { url: string; description?: string }[]

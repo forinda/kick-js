@@ -26,6 +26,11 @@ import {
 } from './html'
 import { dedupeHead, metaTags, type MetaDefaults } from './seo'
 
+/**
+ * Options for `InertiaAdapter`.
+ *
+ * @see https://kickjs.app/guide/inertia#wire-the-adapter
+ */
 export interface InertiaAdapterOptions {
   /**
    * The client entry, relative to the project root — the file that calls
@@ -184,6 +189,23 @@ function safeDecode(path: string): string {
 
 type NodeMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
+/**
+ * Serves Inertia pages: controllers return `inertia(component, props)`, the
+ * first visit gets HTML and later ones JSON. Wires Vite in dev, the build
+ * manifest and assets in production, server-side rendering with `ssr`, and
+ * the page meta, sitemap and error page helpers.
+ *
+ * @example
+ * ```ts
+ * InertiaAdapter({
+ *   entry: 'src/client/main.tsx',
+ *   ssr: { entry: 'src/client/ssr.tsx' },
+ *   errorPage: 'Error',
+ * })
+ * ```
+ *
+ * @see https://kickjs.app/guide/inertia
+ */
 export const InertiaAdapter = defineAdapter<ResolvedOptions>({
   name: 'InertiaAdapter',
   defaults: {

@@ -26,7 +26,7 @@ export class RelationalQueryUnknownRelationError extends KickDbError {
 
 /**
  * Thrown at compile time when a `with` clause nests deeper than
- * `maxDepth` (spec §7 R-3, default 5). Catches infinite specs on
+ * `maxDepth` (default 5). Catches infinite specs on
  * self-referencing tables before any SQL is built.
  */
 export class RelationalQueryDepthError extends KickDbError {
@@ -45,7 +45,7 @@ export class RelationalQueryDepthError extends KickDbError {
 
 /**
  * Thrown at compile time when a relation name collides with a
- * literal column on the same table (spec §7 R-5). Forces the schema
+ * literal column on the same table. Forces the schema
  * author to rename one of them so the LATERAL alias stays
  * unambiguous.
  */

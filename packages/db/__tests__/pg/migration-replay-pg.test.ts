@@ -1,5 +1,5 @@
 /**
- * Architecture-spec §13 hardening — migration replay against real PG.
+ * Hardening — migration replay against real PG.
  *
  * For every fixture (`from`, `to`) pair, exercises the full
  * diff → emit → execute → introspect cycle three times:

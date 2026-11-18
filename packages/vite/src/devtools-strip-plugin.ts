@@ -15,6 +15,7 @@ import type { Plugin } from 'vite'
 import { stripDevtoolsCode } from './babel-strip-devtools'
 import { resolveDevtoolsFlag, type DevtoolsFlagOptions } from './devtools-flag-plugin'
 
+/** Options for `devtoolsStripPlugin`. */
 export interface DevtoolsStripOptions {
   /**
    * Force enable / disable. Default: on for `vite build` when the devtools flag is off.

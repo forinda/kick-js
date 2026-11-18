@@ -14,6 +14,11 @@ import { migrationFolders, type MigrationFolder, type MigrationsLocation } from 
 import type { MigrationAdapter } from './adapter'
 import type { SchemaSnapshot } from '../snapshot/types'
 
+/**
+ * Options for the migration runner (`migrateLatest()`, `migrateUp()`, `migrateDown()`, ...).
+ *
+ * @see https://kickjs.app/guide/database/migrations#running-migrations-from-code
+ */
 export interface RunnerOptions {
   adapter: MigrationAdapter
   /**
@@ -46,6 +51,7 @@ export interface RunnerOptions {
   confirmEnumDrop?: boolean
 }
 
+/** What a forward run applied: the migration ids, and their batch (`null` when none ran). */
 export interface AppliedSummary {
   applied: string[]
   batch: number | null
@@ -364,6 +370,13 @@ async function maybeCheckDrift(opts: RunnerOptions): Promise<void> {
   await checkDrift(live, expected, behavior, opts.log, opts.driftIgnore)
 }
 
+/**
+ * Applies every pending migration as one batch, under the migration lock.
+ * Checks drift first, and refuses unreviewed or edited migrations as
+ * `requireReviewed` says.
+ *
+ * @see https://kickjs.app/guide/database/migrations#running-migrations-from-code
+ */
 export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary> {
   await opts.adapter.ensureMigrationTables()
   return withLock(opts, async () => {
@@ -399,6 +412,7 @@ export async function migrateUp(opts: RunnerOptions & { to?: string }): Promise<
   })
 }
 
+/** What `migrateDown()` reversed. */
 export interface ReversedSummary {
   /** The last migration reversed, or null when there was none. */
   reversed: string | null
@@ -467,11 +481,13 @@ export async function migrateDown(opts: RunnerOptions & { to?: string }): Promis
   })
 }
 
+/** What `migrateRollback()` reversed: the migration ids, and the batch. */
 export interface RollbackSummary {
   reversed: string[]
   batch: number | null
 }
 
+/** One migration as `migrateStatus()` reports it: its state, batch and review state. */
 export interface StatusEntry {
   id: string
   tag: string
@@ -482,6 +498,13 @@ export interface StatusEntry {
   reviewed: boolean
 }
 
+/**
+ * Lists every migration in the journal(s) with its state (applied or pending),
+ * batch, applied time and review state. Creates the migrations tables if they
+ * are missing; changes nothing else.
+ *
+ * @see https://kickjs.app/guide/database/cli#migrate-status
+ */
 export async function migrateStatus(
   opts: Pick<RunnerOptions, 'adapter' | 'migrationsDir'>,
 ): Promise<StatusEntry[]> {

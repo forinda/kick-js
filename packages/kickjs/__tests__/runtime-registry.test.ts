@@ -3,7 +3,7 @@ import type { Express } from 'express'
 import type { ActiveRuntime, ExpressRuntimeTypes } from '../src/index'
 
 // Compile-time assertions: with no `KickRuntimeRegister` augmentation present,
-// the active runtime resolves to the Express type map (spec §4.3b default).
+// the active runtime resolves to the Express type map (the default).
 // `pnpm typecheck` (tsgo) fails to compile these lines if the conditional type
 // or its default ever regresses. The runtime `expect`s just give the assertions
 // a home in the test runner.

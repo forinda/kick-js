@@ -77,6 +77,8 @@ import { devtoolsFlagPlugin } from './devtools-flag-plugin'
 import { devtoolsStripPlugin } from './devtools-strip-plugin'
 import { kickjsTypegenPlugin } from './typegen-plugin'
 
+export { kickViewsPlugin, type KickViewsPluginOptions } from './kick-views-plugin'
+
 /**
  * Create the KickJS Vite plugin array.
  *
@@ -102,9 +104,9 @@ import { kickjsTypegenPlugin } from './typegen-plugin'
  *   ],
  * })
  * ```
+ *
+ * @see https://kickjs.app/guide/hmr
  */
-export { kickViewsPlugin, type KickViewsPluginOptions } from './kick-views-plugin'
-
 export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
   const entry = options.entry ?? 'src/index.ts'
 

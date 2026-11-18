@@ -1,6 +1,11 @@
 import type { MigrationAdapter } from './adapter'
 import { migrateLatest, type AppliedSummary, type RunnerOptions } from './runner'
 
+/**
+ * Options for `migrateTenants()`: the runner options, plus the tenants and an adapter per tenant.
+ *
+ * @see https://kickjs.app/guide/database/tenancy#migrations-per-tenant
+ */
 export interface MigrateTenantsOptions extends Omit<RunnerOptions, 'adapter'> {
   /** The tenants to migrate, or a function returning them (read from the central database). */
   tenants: readonly string[] | (() => readonly string[] | Promise<readonly string[]>)
@@ -18,6 +23,7 @@ export interface MigrateTenantsOptions extends Omit<RunnerOptions, 'adapter'> {
   onTenant?: (result: TenantMigrationResult) => void
 }
 
+/** How one tenant's migration went: its summary, or the error. */
 export interface TenantMigrationResult {
   tenant: string
   /** What was applied, when it succeeded. */
@@ -25,6 +31,7 @@ export interface TenantMigrationResult {
   error?: unknown
 }
 
+/** What `migrateTenants()` returns: each tenant's result, and the ones that failed. */
 export interface MigrateTenantsResult {
   results: TenantMigrationResult[]
   /** The tenants whose migration failed. */

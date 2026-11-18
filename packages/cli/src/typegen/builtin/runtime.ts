@@ -1,6 +1,6 @@
 // kick/runtime typegen plugin.
 //
-// Emits the `KickRuntimeRegister` augmentation (spec §4.3b) that flips the
+// Emits the `KickRuntimeRegister` augmentation that flips the
 // runtime-typed escape hatches — `AdapterContext.app`, `getRuntimeApp()`, and
 // (once the driver layer lands) `ctx.req.raw` / `ctx.res.raw` — to the configured
 // engine's native types. Reads `runtime` from kick.config — Express when unset,

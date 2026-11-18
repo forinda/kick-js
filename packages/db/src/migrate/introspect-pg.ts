@@ -78,6 +78,12 @@ interface FkRow {
   update_rule: string
 }
 
+/**
+ * Reads a live Postgres schema into a `SchemaSnapshot`. Skips the migration
+ * tracking tables unless `excludeTables` says otherwise.
+ *
+ * @see https://kickjs.app/guide/database/migrations#introspection
+ */
 export async function introspectPg(
   client: PgQueryRunner,
   opts: IntrospectPgOptions = {},

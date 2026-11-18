@@ -6,6 +6,11 @@ import type { DriftBehavior, DriftIgnore } from '../migrate/drift'
 
 export type MigrationAdapterFactory = () => MigrationAdapter | Promise<MigrationAdapter>
 
+/**
+ * The `db` block of `kick.config.ts`: where the schema and migrations live, the dialect, and how to connect.
+ *
+ * @see https://kickjs.app/guide/database/cli#config-fields
+ */
 export interface DbConfig {
   schemaPath: string
   migrationsDir: string
@@ -64,6 +69,14 @@ export interface TenantsConfig {
   concurrency?: number
 }
 
+/**
+ * Loads a config file and returns part of its `db` block with defaults filled
+ * in: `schemaPath` (`src/db/schema.ts`), `migrationsDir` (`db/migrations`),
+ * `seedsDir` (`db/seeds`), `dialect` (Postgres) and `connectionString`
+ * (`DATABASE_URL`), plus `adapter`, `driftCheck` and `driftIgnore` as given.
+ * Other fields (`casing`, `migrationsTable`, `migrationsDirs`, `tenants`) are
+ * not copied.
+ */
 export async function resolveDbConfig(opts: { configPath: string }): Promise<DbConfig> {
   const abs = path.resolve(opts.configPath)
   const mod = await import(pathToFileURL(abs).href)

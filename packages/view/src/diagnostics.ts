@@ -5,11 +5,13 @@ export interface Pos {
   column: number
 }
 
+/** A source range in a template, start and end. */
 export interface Span {
   start: Pos
   end: Pos
 }
 
+/** An error or warning from parsing, checking or rendering a template. */
 export interface Diagnostic {
   file: string
   span: Span

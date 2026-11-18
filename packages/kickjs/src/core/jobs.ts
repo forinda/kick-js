@@ -57,7 +57,11 @@ export interface JobLike<Data = unknown> {
  */
 const jobClasses = new Map<string, Function>()
 
-/** Mark a class as handling jobs on `queue`. The class is a DI singleton. */
+/**
+ * Mark a class as handling jobs on `queue`. The class is a DI singleton.
+ *
+ * @see https://kickjs.app/guide/jobs
+ */
 export function Job(queue: string): ClassDecorator {
   return (target) => {
     Service()(target)
@@ -66,7 +70,11 @@ export function Job(queue: string): ClassDecorator {
   }
 }
 
-/** Mark a method as handling `jobName` — or, without a name, every job its queue gets. */
+/**
+ * Mark a method as handling `jobName` — or, without a name, every job its queue gets.
+ *
+ * @see https://kickjs.app/guide/jobs
+ */
 export function Process(jobName?: string): MethodDecorator {
   return (target, propertyKey) => {
     pushClassMeta<ProcessDefinition>(JOB_META.PROCESS, target.constructor, {

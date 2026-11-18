@@ -7,7 +7,7 @@ import {
 
 /**
  * Where a contributor was registered, ordered by precedence
- * (lower index wins). Mirrors `architecture.md` §20.4.
+ * (lower index wins). See https://kickjs.app/guide/context-decorators
  *
  * Levels (highest → lowest precedence):
  * - `'method'` — `@LoadX` on a controller method.
@@ -61,6 +61,7 @@ export interface ContributorPipeline {
   readonly keys: ReadonlySet<string>
 }
 
+/** Options for building a contributor pipeline; `route` labels its error messages. */
 export interface BuildPipelineOptions {
   /** Optional route identifier surfaced in diagnostic errors (e.g., 'GET /projects/:id'). */
   route?: string

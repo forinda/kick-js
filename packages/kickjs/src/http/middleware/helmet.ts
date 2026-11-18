@@ -7,6 +7,11 @@ import type {
 /** Brand identifying a `helmet()` handler, so auto-injection can stand down. */
 export const HELMET_MIDDLEWARE = Symbol.for('kick/http/helmet')
 
+/**
+ * Options for {@link helmet}: which security headers to set, and their values.
+ *
+ * @see https://kickjs.app/guide/security-headers
+ */
 export interface HelmetOptions {
   /** Set Content-Security-Policy header (default: self-only policy) */
   contentSecurityPolicy?: boolean | Record<string, string[]>

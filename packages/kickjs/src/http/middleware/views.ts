@@ -3,6 +3,11 @@ import { Logger, defineAdapter } from '../../core'
 
 const log = Logger.for('ViewEngine')
 
+/**
+ * Options for {@link ViewAdapter}.
+ *
+ * @see https://kickjs.app/guide/view-engines
+ */
 export interface ViewAdapterOptions {
   /**
    * Template engine — pass the engine module or a render function.
@@ -43,7 +48,7 @@ export interface ViewAdapterOptions {
  *
  * Migrated to the `defineAdapter()` factory in v4 — call without `new`.
  * The pre-v4 `new ViewAdapter({...})` form is gone; see
- * `docs/guide/migration-v3-to-v4.md` for the rename.
+ * https://kickjs.app/guide/migration-v3-to-v4#viewadapter-—-drop-the-new-keyword
  *
  * @example
  * ```ts

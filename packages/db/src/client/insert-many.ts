@@ -15,6 +15,7 @@ type Row = Record<string, unknown>
 /** Bind parameters per statement, by dialect. */
 export const MAX_PARAMS = { postgres: 65_535, mysql: 65_535, sqlite: 32_766 } as const
 
+/** Options for `db.insertMany()`: the parameter limit per statement, and atomicity. */
 export interface InsertManyOptions {
   /**
    * Bind parameters one statement may use. Default the dialect's limit; set it

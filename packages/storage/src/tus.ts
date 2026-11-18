@@ -750,6 +750,8 @@ export function createTusHandler(
  * global middleware (so `cors()`, rate limits and `csrf()` apply — a browser
  * client sends the CSRF header through tus-js-client's `headers`). Sweeps
  * expired uploads hourly.
+ *
+ * @see https://kickjs.app/guide/file-storage
  */
 export const TusAdapter = defineAdapter<TusOptions>({
   name: 'TusAdapter',

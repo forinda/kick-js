@@ -81,7 +81,7 @@ type Row<T extends keyof FixtureDB & string, O extends FindManyOptions<FixtureDB
   O
 >
 
-describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
+describe('FindManyRow — expectTypeOf matrix', () => {
   it('T-1-deep-many — users.findMany({ with: { posts: true } })', () => {
     type R = Row<'users', { with: { posts: true } }>
     expectTypeOf<R>().toMatchTypeOf<FixtureDB['users'] & { posts: FixtureDB['posts'][] }>()

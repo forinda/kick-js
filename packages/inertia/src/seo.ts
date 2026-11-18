@@ -253,6 +253,11 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 
+/**
+ * One `<url>` of a sitemap.
+ *
+ * @see https://kickjs.app/guide/inertia#sitemap-and-robots-txt
+ */
 export interface SitemapEntry {
   /** A full URL, or a path made absolute with `baseUrl`. */
   loc: string
@@ -307,6 +312,7 @@ export function sitemap(
   }
 }
 
+/** Options for {@link robots} and {@link robotsTxt}. */
 export interface RobotsOptions {
   /** Default `'*'`. */
   userAgent?: string

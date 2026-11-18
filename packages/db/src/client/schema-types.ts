@@ -75,6 +75,12 @@ type TableOf<V> = V extends { __isTable: true }
     ? T
     : never
 
+/**
+ * The Kysely database type for a schema module: one entry per table, keyed by
+ * its (schema-qualified) name, with each column's TypeScript type.
+ *
+ * @see https://kickjs.app/guide/db-schema-types
+ */
 export type SchemaToTypes<S> = {
   [K in keyof S as [TableOf<S[K]>] extends [never] ? never : TableKey<TableOf<S[K]>>]: TableOf<
     S[K]

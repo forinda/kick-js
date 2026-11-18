@@ -159,7 +159,7 @@ export interface KickPlugin {
    * Use when a plugin wants to ship a typed contributor without standing
    * up an accompanying adapter. For full coverage of the precedence
    * matrix (method > class > module > adapter > global) see
-   * `docs/guide/context-decorators.md`.
+   * https://kickjs.app/guide/context-decorators.
    *
    * @example
    * ```ts
@@ -220,7 +220,7 @@ export interface KickPlugin {
   shutdown?(): void | Promise<void>
 
   /**
-   * Optional DevTools introspection hook (architecture.md §23). Returns
+   * Optional DevTools introspection hook (https://kickjs.app/guide/devtools). Returns
    * a snapshot describing this plugin's current state, metrics, and DI
    * tokens. DevTools awaits the result, so async work is fine — but keep
    * the implementation cheap (counters + flags, no DB round trips) since
@@ -235,7 +235,7 @@ export interface KickPlugin {
   introspect?(): IntrospectionSnapshot | Promise<IntrospectionSnapshot>
 
   /**
-   * Optional DevTools tabs this plugin contributes (architecture.md §23).
+   * Optional DevTools tabs this plugin contributes.
    * Same shape as {@link AppAdapter.devtoolsTabs}; the kit's
    * `DevtoolsTabDescriptor` types it for plugin authors.
    */

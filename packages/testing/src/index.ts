@@ -109,6 +109,22 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
 }
 
 /**
+ * Normalize every accepted `overrides` shape to `[token, value]` pairs.
+ *
+ * An array or Map keeps the token's identity, which is what the container
+ * matches on; an object literal is limited to string and symbol keys by the
+ * language itself.
+ */
+function overrideEntries(
+  overrides: NonNullable<CreateTestAppOptions['overrides']>,
+): Array<[unknown, unknown]> {
+  if (Array.isArray(overrides)) return overrides.map(([token, value]) => [token, value])
+  if (overrides instanceof Map) return [...overrides.entries()]
+  const record = overrides as Record<symbol | string, unknown>
+  return Reflect.ownKeys(record).map((key) => [key, record[key as never]])
+}
+
+/**
  * Create an Application instance configured for testing.
  * Resets the DI container, registers modules, applies overrides,
  * and returns the Application, which drives whichever runtime is configured.
@@ -133,23 +149,9 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
  * const { app } = await createTestApp({ modules: [UserModule], runtime: fastifyRuntime() })
  * const res = await request(app.handle.bind(app)).get('/api/v1/users')
  * ```
- */
-/**
- * Normalize every accepted `overrides` shape to `[token, value]` pairs.
  *
- * An array or Map keeps the token's identity, which is what the container
- * matches on; an object literal is limited to string and symbol keys by the
- * language itself.
+ * @see https://kickjs.app/guide/testing
  */
-function overrideEntries(
-  overrides: NonNullable<CreateTestAppOptions['overrides']>,
-): Array<[unknown, unknown]> {
-  if (Array.isArray(overrides)) return overrides.map(([token, value]) => [token, value])
-  if (overrides instanceof Map) return [...overrides.entries()]
-  const record = overrides as Record<symbol | string, unknown>
-  return Reflect.ownKeys(record).map((key) => [key, record[key as never]])
-}
-
 export async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
   /**
@@ -347,7 +349,7 @@ export interface RunContributorResult<K extends string> {
 /**
  * Run a single context contributor in isolation against a fake
  * {@link ExecutionContext}. Skips the container, the topo-sort, and the
- * §20.9 error matrix — calls `decorator.registration.resolve(ctx, deps)`
+ * Contributor error matrix — calls `decorator.registration.resolve(ctx, deps)`
  * directly so unit tests can assert pure resolve behaviour.
  *
  * Errors thrown by `resolve()` propagate so tests can `expect(...).rejects`
@@ -414,7 +416,7 @@ export async function runContributor<
   return { value: value as MetaValue<K>, ctx, meta }
 }
 
-// ── Plugin unit-test harness (architecture.md §21.3.2) ──────────────────
+// ── Plugin unit-test harness ──────────────────
 
 /**
  * Options for {@link createTestPlugin}.
@@ -436,8 +438,7 @@ export interface CreateTestPluginOptions {
 }
 
 /**
- * Result of {@link createTestPlugin}. Mirrors the spec sketch in
- * `architecture.md` §21.3.2 — `.container`, lifecycle invokers, and a
+ * Result of {@link createTestPlugin}: `.container`, lifecycle invokers, and a
  * `runContributors()` helper that builds a one-plugin pipeline against a
  * fake `ExecutionContext`.
  */

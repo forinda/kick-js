@@ -179,7 +179,7 @@ function tokenize(src: string): Token[] {
   return out
 }
 
-// Binding powers, lowest first (spec §3): pipe, ternary, ??, ||, &&, equality,
+// Binding powers, lowest first: pipe, ternary, ??, ||, &&, equality,
 // relational, additive, unary, member.
 const BP = { pipe: 1, ternary: 2, nullish: 3, or: 4, and: 5, eq: 6, rel: 7, add: 8, unary: 9 }
 

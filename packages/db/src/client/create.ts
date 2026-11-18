@@ -54,6 +54,26 @@ type KickEventBus = NonNullable<CreateDbClientOptions<unknown, unknown>['bus']>
 /** The DevTools adapter's process-wide bus slot (shared via `Symbol.for`; see devtools-kit). */
 const ACTIVE_DEVTOOLS_BUS = Symbol.for('kickjs.devtools.bus')
 
+/**
+ * Creates the typed database client for a schema and a Kysely dialect. Row
+ * types come from `schema`; options add read replicas, tenancy, lifecycle
+ * events and extra Kysely plugins.
+ *
+ * @example
+ * ```ts
+ * import Database from 'better-sqlite3'
+ * import { createDbClient } from '@forinda/kickjs-db'
+ * import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
+ * import * as schema from './schema'
+ *
+ * export const db = createDbClient({
+ *   schema,
+ *   dialect: sqliteDialect({ database: new Database('dev.db') }),
+ * })
+ * ```
+ *
+ * @see https://kickjs.app/guide/database/
+ */
 export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   opts: CreateDbClientOptions<TSchema, DB>,
 ): KickDbClient<DB> {

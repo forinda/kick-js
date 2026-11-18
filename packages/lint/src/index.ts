@@ -55,6 +55,7 @@ const SKIP_DIRS = new Set([
   'coverage',
 ])
 
+/** Options for {@link runLint}. */
 export interface LintOptions {
   /** Root directory to walk. Required. */
   cwd: string
@@ -76,6 +77,7 @@ export interface LintOptions {
   filenames?: ReadonlySet<string>
 }
 
+/** What {@link runLint} returns: every violation found and how many files were checked. */
 export interface LintResult {
   violations: Violation[]
   filesScanned: number

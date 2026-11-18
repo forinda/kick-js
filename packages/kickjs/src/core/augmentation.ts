@@ -2,8 +2,7 @@
  * The canonical `KickJsPluginRegistry` interface that `kick typegen`
  * augments, for typed `dependsOn` between plugins and adapters.
  *
- * See `architecture.md` §21.2.1 (typegen for `dependsOn`) and §21.3.3
- * (standardized augmentation registry) for the design rationale.
+ * See https://kickjs.app/guide/plugins#plugin-ordering-dependson for `dependsOn`.
  *
  * @module @forinda/kickjs/core/augmentation
  */

@@ -131,6 +131,11 @@ export function getCacheProvider(): CacheProvider {
 
 // ── Cache Options ───────────────────────────────────────────────────────
 
+/**
+ * Options for {@link Cacheable}.
+ *
+ * @see https://kickjs.app/guide/caching
+ */
 export interface CacheOptions {
   /** Time-to-live in seconds (default: 60) */
   ttl?: number
@@ -177,6 +182,24 @@ function isCachedNull(value: unknown): boolean {
  */
 const inFlight = new Map<string, Promise<unknown>>()
 
+/**
+ * Caches a method's result for `ttl` seconds (default 60) in the
+ * {@link CacheProvider}. The key is a prefix plus the JSON arguments
+ * (`method:Class:[42]`); a string `options.key` replaces the prefix, and a
+ * function of the arguments returns the whole key. Simultaneous misses on one
+ * key share one call. `@CacheEvict(prefix)` clears entries when the provider
+ * implements `delByPrefix`.
+ *
+ * @example
+ * ```ts
+ * `@Cacheable(300)`
+ * findAll() {
+ *   return this.repo.list()
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/caching
+ */
 export function Cacheable(
   ttl?: number,
   options?: { key?: string | ((...args: any[]) => string) },
@@ -243,6 +266,8 @@ let warnedNoDelByPrefix = false
  *
  * @param key - Cache key prefix to evict (matches the @Cacheable key), or a
  *   function of the method's arguments that returns it — e.g. `(id) => "product:" + id`.
+ *
+ * @see https://kickjs.app/guide/caching
  */
 export function CacheEvict(key: string | ((...args: any[]) => string)): MethodDecorator {
   return (_target, _propertyKey, descriptor: PropertyDescriptor) => {

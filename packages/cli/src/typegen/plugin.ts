@@ -29,6 +29,7 @@ export interface TypegenLogger {
   error(msg: string): void
 }
 
+/** What the typegen runner passes to each plugin's `generate()`. */
 export interface TypegenContext {
   cwd: string
   config: KickConfig
@@ -70,6 +71,11 @@ export interface TypegenContext {
   watch?: boolean
 }
 
+/**
+ * A typegen plugin: owns one file under `.kickjs/types/` and returns its source from `generate()`.
+ *
+ * @see https://kickjs.app/guide/typegen
+ */
 export interface TypegenPlugin {
   /** Stable id — used as filename: `.kickjs/types/${id}<outExtension>` (slashes → `__`). */
   id: string
@@ -97,6 +103,7 @@ export interface TypegenPlugin {
   generate(ctx: TypegenContext): Promise<string | null>
 }
 
+/** Outcome of one plugin in a typegen pass. */
 export interface TypegenPluginResult {
   id: string
   status: 'written' | 'unchanged' | 'skipped' | 'error' | 'drifted'

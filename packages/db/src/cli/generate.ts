@@ -48,6 +48,7 @@ export function emitDdl(
   }
 }
 
+/** Options for `generate()`. */
 export interface GenerateOptions {
   name: string
   config: DbConfig
@@ -101,6 +102,7 @@ export interface GenerateOptions {
   onCallShapedDefault?: (column: { table: string; column: string; value: string }) => void
 }
 
+/** What `generate()` did: whether it wrote a migration, where, and how many changes it holds. */
 export interface GenerateResult {
   status: 'created' | 'no-changes'
   migrationDir?: string
@@ -108,6 +110,14 @@ export interface GenerateResult {
   empty?: boolean
 }
 
+/**
+ * Writes a migration for the changes between the last migration's snapshot
+ * and the schema: what `kick db generate` runs. Each concurrent index change
+ * gets a migration of its own. With `empty` or `typescript`, writes an empty
+ * migration that carries the snapshot over.
+ *
+ * @see https://kickjs.app/guide/database/migrations#generating-a-migration
+ */
 export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const migrationsAbs = path.resolve(opts.cwd, opts.config.migrationsDir)
   const { snapshot: prev, id: previousId } = await readLatestSnapshotEntry(

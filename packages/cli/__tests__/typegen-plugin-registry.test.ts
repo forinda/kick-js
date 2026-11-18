@@ -1,5 +1,5 @@
 /**
- * Tests for B-6 (architecture.md §21.2.1 + §21.3.3): plugin/adapter
+ * Tests for B-6: plugin/adapter
  * registry typegen.
  *
  * Mixes unit tests against the scanner + generator helpers with one

@@ -33,6 +33,11 @@ function getSwaggerUiDistPath(): string {
  */
 export type UIRenderer = (specUrl: string, title?: string, assetsPath?: string) => string
 
+/**
+ * Options for `SwaggerAdapter`: the spec options plus where the docs, ReDoc and JSON spec are served.
+ *
+ * @see https://kickjs.app/guide/swagger#configuration-options
+ */
 export interface SwaggerAdapterOptions extends SwaggerOptions {
   /** Path to serve Swagger UI (default: '/docs') */
   docsPath?: string
@@ -92,6 +97,8 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
  *   GET /docs         — Swagger UI (local assets, no CDN)
  *   GET /redoc        — ReDoc (CDN — no local package available)
  *   GET /openapi.json — Raw OpenAPI 3.0.3 spec
+ *
+ * @see https://kickjs.app/guide/swagger
  */
 export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
   name: 'SwaggerAdapter',

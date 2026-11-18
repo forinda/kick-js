@@ -35,8 +35,8 @@ export {
  * Route prefixes are defined by the module's `routes().path` — the single
  * source of truth for where routes mount. The legacy
  * `@Controller('/path')` parameter was removed in v4; if your code
- * still passes a string, see `docs/guide/migration-v3-to-v4.md` for
- * the rename map.
+ * still passes a string, see
+ * https://kickjs.app/guide/migration-v3-to-v4#controller-—-drop-the-path-argument
  */
 export function Controller(): ClassDecorator {
   return (target: any) => {
@@ -111,6 +111,8 @@ type AssetKeyArg<K extends string> = [AssetKey] extends [never] ? K : K & AssetK
  *   }
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/asset-manager
  */
 export function Asset<K extends string>(assetKey: AssetKeyArg<K>): PropertyDecorator {
   return (target, propertyKey) => {
@@ -120,6 +122,7 @@ export function Asset<K extends string>(assetKey: AssetKeyArg<K>): PropertyDecor
 
 // ── HTTP Route Decorators ───────────────────────────────────────────────
 
+/** A route as a route decorator records it: method, path, handler name and validation schemas. */
 export interface RouteDefinition {
   method: string
   path: string
@@ -156,14 +159,94 @@ function createRouteDecorator(method: string) {
   }
 }
 
+/**
+ * Routes `GET` requests at `path` (default `'/'`, under the module's mount)
+ * to this method. `validation` takes `body` / `query` / `params` schemas
+ * (Zod, Valibot, Yup or any Standard Schema) and a declared `response`.
+ *
+ * @example
+ * ```ts
+ * `@Get('/:id', { params: z.object({ id: z.string() }) })`
+ * show(ctx: RequestContext) {
+ *   // …
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/controllers#route-decorators
+ */
 export const Get = createRouteDecorator('GET')
+/**
+ * Routes `POST` requests at `path` (default `'/'`, under the module's mount)
+ * to this method. A `body` schema in `validation` is checked before the
+ * handler runs; a failure skips the handler and, by default, answers `422`
+ * with the field errors (`bootstrap({ validationError })` changes that).
+ *
+ * @example
+ * ```ts
+ * `@Post('/', { body: createTaskSchema })`
+ * create(ctx: RequestContext) {
+ *   // …
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/controllers#route-decorators
+ */
 export const Post = createRouteDecorator('POST')
+/**
+ * Routes `PUT` requests at `path` (default `'/'`, under the module's mount)
+ * to this method — replacing a resource. Takes the same `validation`
+ * schemas as {@link Post}.
+ *
+ * @example
+ * ```ts
+ * `@Put('/:id', { body: replaceTaskSchema })`
+ * replace(ctx: RequestContext) {
+ *   // …
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/controllers#route-decorators
+ */
 export const Put = createRouteDecorator('PUT')
+/**
+ * Routes `DELETE` requests at `path` (default `'/'`, under the module's mount)
+ * to this method. `ctx.noContent()` answers `204`.
+ *
+ * @example
+ * ```ts
+ * `@Delete('/:id')`
+ * remove(ctx: RequestContext) {
+ *   // …
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/controllers#route-decorators
+ */
 export const Delete = createRouteDecorator('DELETE')
+/**
+ * Routes `PATCH` requests at `path` (default `'/'`, under the module's mount)
+ * to this method — a partial update. Takes the same `validation` schemas
+ * as {@link Post}.
+ *
+ * @example
+ * ```ts
+ * `@Patch('/:id', { body: updateTaskSchema })`
+ * update(ctx: RequestContext) {
+ *   // …
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/controllers#route-decorators
+ */
 export const Patch = createRouteDecorator('PATCH')
 
 // ── Query Params Decorator ─────────────────────────────────────────────
 
+/**
+ * Fields a route lets clients filter, sort and search on, for `@ApiQueryParams`.
+ *
+ * @see https://kickjs.app/guide/query-parsing
+ */
 export interface ApiQueryParamsConfig {
   /** Fields that can be used in filter queries (e.g., `?filter=status:eq:active`) */
   filterable?: string[]
@@ -222,6 +305,8 @@ export function normalizeApiQueryParamsConfig(
  * // Column-object-based (Drizzle)
  * @ApiQueryParams(TASK_QUERY_CONFIG)
  * ```
+ *
+ * @see https://kickjs.app/guide/middleware
  */
 export function ApiQueryParams(
   config: ApiQueryParamsConfig | ColumnApiQueryParamsConfig,
@@ -255,7 +340,11 @@ export function ApiQueryParams(
  */
 export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => unknown
 
-/** Attach middleware handlers to a class or method */
+/**
+ * Attach middleware handlers to a class or method
+ *
+ * @see https://kickjs.app/guide/middleware
+ */
 export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
@@ -309,15 +398,26 @@ export interface BaseUploadOptions {
   }) => string
 }
 
+/**
+ * Options for {@link FileUpload}: single file, many files, or fields only.
+ *
+ * @see https://kickjs.app/guide/file-uploads
+ */
 export interface FileUploadConfig extends BaseUploadOptions {
   mode: 'single' | 'array' | 'none'
-  /** Form field name (default: 'file') */
+  /**
+   * Form field name (default: 'file')
+   */
   fieldName?: string
   /** Max files for array mode (default: 10) */
   maxCount?: number
 }
 
-/** Configure file upload handling for a controller method */
+/**
+ * Configure file upload handling for a controller method
+ *
+ * @see https://kickjs.app/guide/file-uploads
+ */
 export function FileUpload(config: FileUploadConfig): MethodDecorator {
   return (target, propertyKey) => {
     setMethodMeta(METADATA.FILE_UPLOAD, config, target.constructor, propertyKey as string)

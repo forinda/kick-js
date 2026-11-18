@@ -23,6 +23,7 @@
 // this value as a computed property key, where `symbol` is sufficient.
 export const KICK_DIALECT = Symbol.for('@forinda/kickjs-db/dialect')
 
+/** The SQL dialects kick/db supports. */
 export type DialectTag = 'postgres' | 'mysql' | 'sqlite'
 
 const DIALECT_TAGS: ReadonlySet<string> = new Set<DialectTag>(['postgres', 'mysql', 'sqlite'])

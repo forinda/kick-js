@@ -94,6 +94,10 @@ function findProjectView(root: string): { entry: string; version: string } | und
   }
 }
 
+/**
+ * Loads the project's `@forinda/kickjs-view` when the workspace is trusted and it has the needed
+ * exports; otherwise uses the bundled copy, warning once with the reason when the project's copy was not usable.
+ */
 export async function loadViewModule(
   root: string,
   warn: (message: string) => void,

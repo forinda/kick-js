@@ -44,6 +44,11 @@ export interface ContainerSpec {
   url: (host: string, port: number) => string
 }
 
+/**
+ * Options for {@link startService}.
+ *
+ * @see https://kickjs.app/guide/testing/large-suites
+ */
 export interface ServiceOptions {
   /** Override the preset's image, e.g. `'postgres:16-alpine'`. */
   image?: string
@@ -76,6 +81,7 @@ const PRESETS = {
   },
 } satisfies Record<string, ContainerSpec>
 
+/** A preset service for {@link startService}: `'postgres'`, `'redis'` or `'minio'`. */
 export type ServiceKind = keyof typeof PRESETS
 
 type Testcontainers = typeof import('testcontainers')

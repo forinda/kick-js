@@ -122,6 +122,7 @@ type UnwrapReply<A> =
         unknown
       : A
 
+/** True when `value` was made by `reply()`. */
 export function isReply(value: unknown): value is Reply {
   return (
     typeof value === 'object' &&
@@ -144,6 +145,7 @@ export interface Respondable {
   [RESPOND](ctx: RequestContext): void | PromiseLike<void>
 }
 
+/** True when `value` has a `[RESPOND](ctx)` method, so it writes its own response when returned from a handler. */
 export function isRespondable(value: unknown): value is Respondable {
   return (
     typeof value === 'object' &&

@@ -108,6 +108,7 @@ export interface RouteContributor {
   overrides: ReadonlyArray<{ source: ContributorSource; label?: string }>
 }
 
+/** Per-route data a runtime keeps alongside the handler: controller, handler name, contributors, validation, upload config and flags. */
 export interface RouteMeta {
   /**
    * Owning controller class — for DI resolution and adapter introspection.
@@ -175,6 +176,7 @@ const matchedRoutes = new WeakMap<RouteEntry, MatchedRoute>()
 
 const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
 
+/** The route a request matched, as `ctx.route`: method, declared path, full pattern, controller, handler and flags. */
 export interface MatchedRoute {
   readonly method: RouteMethod
   /** Path as declared on the handler, e.g. `/:id`. */
@@ -199,7 +201,7 @@ export type RouteTable = { mountPath: string; routes: RouteEntry[] }[]
 /**
  * The response surface {@link RequestContext}'s helpers (`json` / `html` /
  * `sse` / `download` / `render` / `problem`) drive, instead of calling Express
- * `res` methods directly (spec §4.3). Sized so `express.Response` satisfies it
+ * `res` methods directly. Sized so `express.Response` satisfies it
  * structurally — under the Express runtime the driver IS the Express response,
  * so there is no wrapping and no behavior change. Other runtimes (Fastify / h3)
  * provide a thin object implementing this over their native reply.
@@ -228,6 +230,7 @@ export function stringifyJson(data: unknown): string {
   }
 }
 
+/** The engine-neutral response object that runtimes, `onError` and `onNotFound` write to. */
 export interface RuntimeResponse {
   status(code: number): RuntimeResponse
   json(data: unknown): RuntimeResponse
@@ -243,7 +246,7 @@ export interface RuntimeResponse {
   readonly headersSent: boolean
 }
 
-// ── Runtime-typed escape hatches (spec §4.3b) ─────────────────────────────
+// ── Runtime-typed escape hatches ─────────────────────────────
 
 /**
  * Per-runtime type map: the engine-native request / response / app types an
@@ -301,7 +304,7 @@ export interface RuntimeAppOptions {
   /**
    * Express `trust proxy` setting (and the equivalent on other engines). The
    * function form is Express-specific; other runtimes interpret the simpler
-   * shapes (or normalize X-Forwarded-For themselves — see spec §10 Q1).
+   * shapes (or normalize X-Forwarded-For themselves).
    */
   trustProxy?: boolean | string | number | string[] | ((ip: string, hopIndex: number) => boolean)
   /**
@@ -409,7 +412,7 @@ export interface HttpRuntime<TApp = unknown> {
 /**
  * The supported surface adapters use to add HTTP routes, mounts, static dirs,
  * and middleware — engine-agnostic, in place of reaching for the raw Express
- * `app` (spec §4.4). Exposed as {@link AdapterContext.http}. Built by the
+ * `app`. Exposed as {@link AdapterContext.http}. Built by the
  * Application over the active {@link HttpRuntime}, so an adapter written against
  * this works under any runtime; the raw `app` escape hatch stays available for
  * the rare engine-specific need.

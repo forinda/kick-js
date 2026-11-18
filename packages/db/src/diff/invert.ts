@@ -180,6 +180,11 @@ const AMBIGUOUS_REVERSE_KINDS = new Set<Change['kind']>([
   'removeEnumValue',
 ])
 
+/**
+ * True when the change set holds a change whose reverse can't be generated
+ * faithfully (a dropped table or column, an altered column, an enum value
+ * added or removed), so its `down.sql` is only a draft.
+ */
 export function hasAmbiguousReverse(forward: ChangeSet): boolean {
   return forward.some((c) => AMBIGUOUS_REVERSE_KINDS.has(c.kind))
 }

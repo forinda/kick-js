@@ -1,5 +1,5 @@
 /**
- * Type-only assertions for the typed `@Inject` overload (architecture.md §22.4 #3).
+ * Type-only assertions for the typed `@Inject` overload.
  *
  * The actual narrowing happens at compile time — these tests serve as
  * a runtime smoke check that the decorator still works in all four

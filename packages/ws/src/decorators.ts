@@ -16,6 +16,8 @@ import { WS_METADATA, wsControllerRegistry, type WsHandlerDefinition } from './i
  *   handleSend(ctx: WsContext) { }
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/websockets
  */
 export function WsController(namespace?: string): ClassDecorator {
   return (target: any) => {
@@ -47,6 +49,8 @@ function createWsHandlerDecorator(type: WsHandlerDefinition['type'], event?: str
  *   console.log(`Client ${ctx.id} connected`)
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/websockets
  */
 export const OnConnect = createWsHandlerDecorator('connect')
 
@@ -60,6 +64,8 @@ export const OnConnect = createWsHandlerDecorator('connect')
  *   console.log(`Client ${ctx.id} disconnected`)
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/websockets
  */
 export const OnDisconnect = createWsHandlerDecorator('disconnect')
 
@@ -73,6 +79,8 @@ export const OnDisconnect = createWsHandlerDecorator('disconnect')
  *   console.error('WS error:', ctx.data)
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/websockets
  */
 export const OnError = createWsHandlerDecorator('error')
 
@@ -94,6 +102,8 @@ export const OnError = createWsHandlerDecorator('error')
  *   ctx.send('error', { message: `Unknown event: ${ctx.event}` })
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/websockets
  */
 export function OnMessage(event: string): MethodDecorator {
   return (target, propertyKey) => {

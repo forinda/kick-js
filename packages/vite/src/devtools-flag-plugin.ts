@@ -29,6 +29,7 @@
 
 import type { ConfigEnv, Plugin } from 'vite'
 
+/** Options for `devtoolsFlagPlugin`. */
 export interface DevtoolsFlagOptions {
   /**
    * Force the flag value. When set, environment-based detection is
@@ -62,6 +63,21 @@ export function resolveDevtoolsFlag(opts: DevtoolsFlagOptions = {}, env?: Config
   return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
 }
 
+/**
+ * Defines `__KICKJS_DEVTOOLS__` (or `flagName`) as a build-time boolean: `true` under `vite serve`,
+ * `false` under `vite build`, unless `enabled` or `KICKJS_DEVTOOLS=0|1` says otherwise. Guard
+ * devtools imports with it so production bundles drop them.
+ *
+ * @example
+ * ```ts
+ * if (__KICKJS_DEVTOOLS__) {
+ *   const { DevToolsAdapter } = await import('@forinda/kickjs-devtools')
+ *   adapters.push(DevToolsAdapter())
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/devtools#stripping-devtools-from-production-bundles
+ */
 export function devtoolsFlagPlugin(opts: DevtoolsFlagOptions = {}): Plugin {
   const flagName = opts.flagName ?? '__KICKJS_DEVTOOLS__'
   return {

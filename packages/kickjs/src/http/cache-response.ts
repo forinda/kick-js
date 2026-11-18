@@ -19,6 +19,11 @@ import type { RequestContext } from './context'
 import { applyHandlerResult } from './reply'
 import { stringifyJson, type RuntimeResponse } from './runtime'
 
+/**
+ * Options for {@link CacheResponse}.
+ *
+ * @see https://kickjs.app/guide/caching#caching-whole-responses
+ */
 export interface CacheResponseOptions {
   /** Seconds a stored response is served as fresh. */
   maxAge: number
@@ -73,6 +78,25 @@ const inFlight = new Map<string, Promise<Recorded | null>>()
 /** Headers that identify the caller: a request carrying one is never cached under a shared key. */
 const PERSONAL = ['authorization', 'proxy-authorization', 'x-api-key', 'cookie']
 
+/**
+ * Caches a route's whole response for `maxAge` seconds, answers `304` on a
+ * matching ETag, and with `swr` serves a stale copy while one request
+ * rebuilds it. Only `200` responses are stored. With the default or a string
+ * key, requests that identify the caller skip the cache unless the header is
+ * listed in `varies`; a `key` function skips that check, so it must include
+ * the user or tenant when the response depends on them.
+ *
+ * @example
+ * ```ts
+ * `@CacheResponse({ maxAge: 60, swr: 300, varies: ['accept-language'] })`
+ * `@Get('/')`
+ * list(ctx: RequestContext) {
+ *   // …
+ * }
+ * ```
+ *
+ * @see https://kickjs.app/guide/caching
+ */
 export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
   const maxAgeMs = options.maxAge * 1000
   const swrMs = (options.swr ?? 0) * 1000

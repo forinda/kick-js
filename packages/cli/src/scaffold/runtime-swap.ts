@@ -82,7 +82,7 @@ export function swapRuntime(
     if (args.length > 0) {
       const text = result.source.slice(args[0]!.start, args.at(-1)!.end)
       result.manual.push(
-        `The ${from} runtime had options (${text}); ${to} takes its own — see guide/http-runtimes.`,
+        `The ${from} runtime had options (${text}); ${to} takes its own — see https://kickjs.app/guide/http-runtimes`,
       )
     }
     result.source = result.source.slice(0, value.start) + call + result.source.slice(value.end)

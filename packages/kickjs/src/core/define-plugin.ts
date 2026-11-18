@@ -2,19 +2,20 @@ import type { Container } from './container'
 import type { KickPlugin } from './plugin'
 
 /**
- * Options passed to {@link definePlugin}. Mirrors the spec in
- * `architecture.md` §21.3.1 + §21.2.2 (Phase A "lite").
+ * Options passed to {@link definePlugin}.
+ *
+ * @see https://kickjs.app/guide/plugins#the-defineplugin-options
  */
 export interface DefinePluginOptions<TConfig> {
   /** Stable identity used for logging, `dependsOn` lookups, and `.scoped()` namespacing. */
   name: string
 
-  /** Optional plugin version — surfaced to DevTools and `kick add` compatibility checks (Phase B). */
+  /** Optional plugin version, recorded on the factory's `definition`. */
   version?: string
 
   /**
    * Peer-version ranges this plugin needs from the framework or other
-   * plugins. Recorded as metadata; runtime enforcement lands in §21.4.4.
+   * plugins. Recorded as metadata; not enforced at runtime yet.
    */
   requires?: { kickjs?: string }
 
@@ -72,7 +73,7 @@ const composeName = (base: string, scope: string): string => `${base}:${scope}`
 
 /**
  * Build a {@link KickPlugin} factory from a typed definition. See
- * `architecture.md` §21.2.2 for the design rationale.
+ * https://kickjs.app/guide/plugins for the design rationale.
  *
  * @example
  * ```ts

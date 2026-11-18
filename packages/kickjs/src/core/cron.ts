@@ -4,10 +4,16 @@ import { createLogger } from './logger'
 
 // String metadata key (post-Symbol migration). Slash-delimited
 // `kick/cron` so it can't collide with adopter metadata keys.
+/** Metadata key under which `@Cron` records a class's jobs. */
 const CRON_META = 'kick/cron'
 
 const log = createLogger('KickCron')
 
+/**
+ * Options for {@link Cron}.
+ *
+ * @see https://kickjs.app/guide/cron#options
+ */
 export interface CronOptions<Meta extends Record<string, unknown> = Record<string, unknown>> {
   /**
    * Stable job name for logs, error reports and `runCronJobs({ name })`.
@@ -39,6 +45,7 @@ export interface CronOptions<Meta extends Record<string, unknown> = Record<strin
   meta?: Meta
 }
 
+/** A `@Cron` job as recorded on its class: the options plus the cron expression and handler name. */
 export interface CronJobMeta<
   Meta extends Record<string, unknown> = Record<string, unknown>,
 > extends CronOptions<Meta> {
@@ -90,6 +97,8 @@ const cronClasses = new Map<string, Function>()
  *   await this.mailer.flush(run.meta.batch)
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/cron
  */
 export function Cron<Meta extends Record<string, unknown> = Record<string, unknown>>(
   expression: string,

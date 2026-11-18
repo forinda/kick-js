@@ -3,8 +3,10 @@ import type { Span } from './diagnostics'
 /** Bumped when the shape of a checked template changes; builds and runtimes must agree. */
 export const AST_FORMAT_VERSION = 1
 
+/** A literal value in a template expression. */
 export type Literal = string | number | boolean | null
 
+/** One step of a path expression: `.name`, `[expr]`, or their `?.` forms. */
 export interface PathSegment {
   /** `.name` / `?.name` */
   name?: string
@@ -13,6 +15,7 @@ export interface PathSegment {
   optional: boolean
 }
 
+/** A parsed template expression. */
 export type Expr =
   | { kind: 'literal'; value: Literal; span: Span }
   | { kind: 'path'; root: string; segments: PathSegment[]; span: Span }
@@ -28,9 +31,10 @@ export type Expr =
   | { kind: 'conditional'; test: Expr; whenTrue: Expr; whenFalse: Expr; span: Span }
   | { kind: 'pipe'; input: Expr; name: string; args: Expr[]; span: Span }
 
-/** Where an interpolation lands, which decides how its value is escaped (spec §4). */
+/** Where an interpolation lands, which decides how its value is escaped. */
 export type Ctx = 'text' | 'rcdata' | 'raw-text' | 'comment'
 
+/** A parsed element attribute. */
 export interface Attr {
   /** As written: `href`, `userId` (from `[userId]`), `on` (from `[class.on]`). */
   name: string
@@ -49,6 +53,7 @@ export interface Attr {
   span: Span
 }
 
+/** A parsed HTML element. */
 export interface Element {
   k: 'element'
   /** As written. */
@@ -62,6 +67,7 @@ export interface Element {
   span: Span
 }
 
+/** One branch of an `@if` / `@else if` / `@else` chain. */
 export interface IfBranch {
   /** Absent on `@else`. */
   cond?: Expr
@@ -70,8 +76,10 @@ export interface IfBranch {
   body: Node[]
 }
 
+/** A loop variable an `@for` can bind with `let`. */
 export type LoopVar = '$index' | '$first' | '$last' | '$even' | '$odd' | '$count'
 
+/** A parsed template node. */
 export type Node =
   | { k: 'text'; value: string; span: Span }
   | { k: 'interp'; expr: Expr; ctx: Ctx; span: Span }
@@ -100,12 +108,14 @@ export type Node =
   | { k: 'slot-fill'; name: string; body: Node[]; span: Span }
   | { k: 'assets'; entry: string; span: Span }
 
+/** An `@input` declaration, with its default when given. */
 export interface InputDecl {
   name: string
   default?: { value: Literal; span: Span }
   span: Span
 }
 
+/** A parsed template: its layout, inputs and body. */
 export interface TemplateAst {
   file: string
   /** `undefined`: none declared (the default layout applies); `null`: `@layout(none)`. */
@@ -124,6 +134,7 @@ export type At = [number, number]
 /** A path segment: `.n` or `[e]`; `o` marks `?.`. */
 export type CSeg = { n: string; o?: 1 } | { e: CExpr; o?: 1 }
 
+/** A checked expression, as the renderer reads it. */
 export type CExpr =
   /** literal */
   | { k: 'l'; v: Literal }
@@ -153,6 +164,7 @@ export type CAttr =
   /** `[style.n(.x)]="e"` */
   | { t: 'y'; n: string; e: CExpr; x?: string }
 
+/** A checked template node, as the renderer walks it. */
 export type CNode =
   /** static output */
   | { k: 's'; t: string }
@@ -185,6 +197,7 @@ export type CNode =
   | { k: 'o'; n: string; fb: CNode[] }
   | { k: 'as'; en: string }
 
+/** A template after `check`: plain JSON the renderer walks, which a build can ship as data. */
 export interface CheckedTemplate {
   v: typeof AST_FORMAT_VERSION
   name: string

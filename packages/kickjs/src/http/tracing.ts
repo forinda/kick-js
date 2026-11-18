@@ -22,8 +22,15 @@ import { setObserverPublisher, type ErrorInfo, type ResponseInfo } from '../core
 import type { CtxHandler } from './runtime'
 import type { RequestContext } from './context'
 
+/**
+ * `node:diagnostics_channel` tracing channel wrapping each route handler. Subscribers receive a {@link HandlerTraceContext}.
+ *
+ * @see https://kickjs.app/guide/observability#the-channels
+ */
 export const HANDLER_CHANNEL = 'kickjs:handler'
+/** `node:diagnostics_channel` channel that publishes each reported error with its {@link ErrorInfo} fields. */
 export const ERROR_CHANNEL = 'kickjs:error'
+/** `node:diagnostics_channel` channel that publishes a {@link ResponseInfo} for each finished response. */
 export const RESPONSE_CHANNEL = 'kickjs:response'
 
 /** What subscribers to `kickjs:handler` receive. */

@@ -28,6 +28,8 @@ import type { McpToolOptions } from './types'
  * In `explicit` mode (the default), only methods with this decorator
  * are exposed as tools. In `auto` mode, it still controls the human-
  * readable description and examples shown to the model.
+ *
+ * @see https://kickjs.app/guide/mcp
  */
 export function McpTool(options: McpToolOptions): MethodDecorator {
   return (target, propertyKey) => {

@@ -17,6 +17,12 @@ import {
 import { derivedFkName, derivedUniqueName } from './name'
 import type { IndexSnapshot, SchemaSnapshot, TableSnapshot } from './types'
 
+/**
+ * How TypeScript keys map to database names: `'snake_case'` keeps keys
+ * camelCase and names tables and columns in snake_case.
+ *
+ * @see https://kickjs.app/guide/database/schema#column-names-casing
+ */
 export type Casing = 'snake_case'
 
 class Conversions extends CamelCasePlugin {

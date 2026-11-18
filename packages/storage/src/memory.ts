@@ -9,6 +9,7 @@ import {
 } from './keys'
 import type { FileInfo, Storage } from './types'
 
+/** Options for {@link memoryStorage}. */
 export interface MemoryStorageOptions {
   /** Prefix for {@link Storage.url}. */
   baseUrl?: string

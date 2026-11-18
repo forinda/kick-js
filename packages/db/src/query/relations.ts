@@ -1,3 +1,5 @@
+import type { RelationSnapshot } from '../snapshot/types'
+
 /**
  * Resolved-relation sidecar consumed by the query compiler. The
  * shape is canonical and lives on `SchemaSnapshot.relations`; we
@@ -5,9 +7,6 @@
  * scoped to `query/` imports without reaching into the snapshot
  * module.
  */
-
-import type { RelationSnapshot } from '../snapshot/types'
-
 export type ResolvedRelation = RelationSnapshot
 
 /**

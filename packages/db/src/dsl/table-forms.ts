@@ -108,6 +108,8 @@ const CLASS_TABLE = Symbol.for('@forinda/kickjs-db/class-table')
  * Validation a column's SQL type can't express, on a builder field. The rule
  * has to fit the column: `@Rule({ minLength: 2 })` on an integer column is a
  * type error.
+ *
+ * @see https://kickjs.app/guide/db-table-forms
  */
 export function Rule(
   rule: StringRule,
@@ -171,6 +173,8 @@ type RowOf<C extends ColumnsRecord> = {
  * `table()`. The class is the row type and can hold methods; `User.table` is
  * the table, and exporting the class is enough for `kick db generate` and
  * `createDbClient({ schema })`.
+ *
+ * @see https://kickjs.app/guide/db-table-forms
  */
 export function TableBase<
   const N extends string,

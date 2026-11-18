@@ -49,6 +49,17 @@ export interface StorageAdapterOptions {
   settings?: readonly SettingsDeclaration[]
 }
 
+/**
+ * Binds one `Storage` under {@link STORAGE} (or `token`) so services can
+ * inject it, declares its settings, and checks it from `/health/ready`.
+ *
+ * @example
+ * ```ts
+ * bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
+ * ```
+ *
+ * @see https://kickjs.app/guide/file-storage
+ */
 export const StorageAdapter = defineAdapter<StorageAdapterOptions>({
   name: 'StorageAdapter',
   build: (config, { name }) => ({

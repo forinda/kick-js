@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely'
 import type { Dialect, SchemaSnapshot } from '../snapshot/types'
 
+/** A row of the migrations table: one applied migration. */
 export interface MigrationRow {
   id: string
   name: string

@@ -18,8 +18,7 @@ export interface RequestStore {
    * execution context constructed for the same request, regardless of
    * which middleware/contributor wrote it.
    *
-   * Keys are constrained to `string` per the locked decision in
-   * `architecture.md` §20.12 (#4); the value type is `unknown` because
+   * Keys are `string`; the value type is `unknown` because
    * the concrete shape at each key is determined by the consumer's
    * `ContextMeta` augmentation, not by the store itself.
    *

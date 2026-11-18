@@ -28,6 +28,7 @@ import { createToken, type InjectionToken } from './token'
 import { groupAssetKeys } from './asset-keys'
 import { isProduction } from './is-production'
 
+/** Format version written to, and expected in, the built asset manifest. */
 export const ASSET_MANIFEST_VERSION = 1 as const
 
 interface AssetManifest {
@@ -57,6 +58,11 @@ export interface KickAssets {}
  */
 export const ASSETS: InjectionToken<KickAssets> = createToken<KickAssets>('kick/assets/Map')
 
+/**
+ * Thrown when an asset key is not in the manifest, or no manifest can be found.
+ *
+ * @see https://kickjs.app/guide/asset-manager
+ */
 export class UnknownAssetError extends Error {
   readonly namespace: string
   readonly key: string
@@ -95,6 +101,16 @@ function toPosixPath(p: string): string {
   return p.replaceAll('\\', '/')
 }
 
+/**
+ * Absolute path of the asset `namespace/key`, from the built manifest or, in development, a walk of the `assetMap` source directories. Use it when the namespace or key is only known at runtime; throws {@link UnknownAssetError} when the asset is missing.
+ *
+ * @example
+ * ```ts
+ * const path = resolveAsset('mails', 'welcome')
+ * ```
+ *
+ * @see https://kickjs.app/guide/asset-manager
+ */
 export function resolveAsset(namespace: string, key: string): string {
   const resolved = loadManifest()
   if (!resolved) {

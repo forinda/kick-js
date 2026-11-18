@@ -1,3 +1,5 @@
+import type { RequestContext } from './context'
+
 /**
  * The slot a view engine fills so `ctx.render()` works on every runtime.
  * An adapter binds a renderer onto each request; `ctx.render` asks it first
@@ -5,10 +7,13 @@
  * doesn't own the name. `Symbol.for`, so an engine binds it without
  * importing this module.
  */
-import type { RequestContext } from './context'
-
 export const VIEW_RENDERER = Symbol.for('kickjs.viewRenderer')
 
+/**
+ * Per-render options for `ctx.render()`: status, headers, layout, locale and time zone.
+ *
+ * @see https://kickjs.app/guide/views
+ */
 export interface ViewRenderOptions {
   status?: number
   headers?: Record<string, string>
@@ -26,10 +31,12 @@ export type ViewRenderer = (
   ctx: RequestContext,
 ) => Promise<string | undefined>
 
+/** Attach a view renderer to a request, for {@link viewRendererFor} to find later. */
 export function bindViewRenderer(req: object, renderer: ViewRenderer): void {
   ;(req as Record<symbol, unknown>)[VIEW_RENDERER] = renderer
 }
 
+/** The view renderer bound to this request by {@link bindViewRenderer}, or `undefined`. */
 export function viewRendererFor(req: unknown): ViewRenderer | undefined {
   return (req as Record<symbol, ViewRenderer | undefined> | null)?.[VIEW_RENDERER]
 }

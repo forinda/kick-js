@@ -26,6 +26,7 @@ export interface RouteToolRequest {
   body?: unknown
 }
 
+/** What {@link buildRouteTool} returns: the tool's input schema, and a way to turn tool arguments back into a request. */
 export interface RouteTool {
   /**
    * One JSON Schema object for the tool's arguments: path parameters (always

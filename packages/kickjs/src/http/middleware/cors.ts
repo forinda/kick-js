@@ -4,6 +4,11 @@ import type {
   ConnectNext as NextFunction,
 } from '../connect'
 
+/**
+ * Options for {@link cors}.
+ *
+ * @see https://kickjs.app/guide/security-headers
+ */
 export interface CorsOptions {
   /** Allowed origin(s). `true` reflects request origin, `'*'` allows all, `false` rejects all. Default: `false` (restrictive) */
   origin?: boolean | string | RegExp | (string | RegExp)[]

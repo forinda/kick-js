@@ -131,7 +131,11 @@ export function registerInjectable(target: any, scope: Scope): void {
   }
 }
 
-/** Mark a class as injectable with lifecycle scope */
+/**
+ * Mark a class as injectable with lifecycle scope
+ *
+ * @see https://kickjs.app/guide/dependency-injection
+ */
 export function Injectable(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'injectable', target)
@@ -139,7 +143,11 @@ export function Injectable(options?: ServiceOptions): ClassDecorator {
   }
 }
 
-/** Mark a class as a service (semantic alias for Injectable) */
+/**
+ * Mark a class as a service (semantic alias for Injectable)
+ *
+ * @see https://kickjs.app/guide/dependency-injection
+ */
 export function Service(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'service', target)
@@ -147,7 +155,11 @@ export function Service(options?: ServiceOptions): ClassDecorator {
   }
 }
 
-/** Mark a class as a generic managed component */
+/**
+ * Mark a class as a generic managed component
+ *
+ * @see https://kickjs.app/guide/dependency-injection
+ */
 export function Component(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'component', target)
@@ -155,7 +167,11 @@ export function Component(options?: ServiceOptions): ClassDecorator {
   }
 }
 
-/** Mark a class as a repository */
+/**
+ * Mark a class as a repository
+ *
+ * @see https://kickjs.app/guide/dependency-injection
+ */
 export function Repository(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'repository', target)
@@ -165,7 +181,11 @@ export function Repository(options?: ServiceOptions): ClassDecorator {
 
 // ── Method Decorators ───────────────────────────────────────────────────
 
-/** Mark a method as a lifecycle hook called after instantiation */
+/**
+ * Mark a method as a lifecycle hook called after instantiation
+ *
+ * @see https://kickjs.app/guide/dependency-injection
+ */
 export function PostConstruct(): MethodDecorator {
   return (target, propertyKey) => {
     setClassMeta(METADATA.POST_CONSTRUCT, propertyKey, target)
@@ -188,6 +208,8 @@ export function PostConstruct(): MethodDecorator {
  * For application-lifetime resources (a connection pool, a timer, a socket
  * server) use an adapter's `shutdown()` hook, which the framework runs on a
  * real shutdown AND on every HMR reload, time-boxed and concurrent.
+ *
+ * @see https://kickjs.app/guide/dependency-injection
  */
 export function PreDestroy(): MethodDecorator {
   return (target, propertyKey) => {
@@ -208,7 +230,9 @@ export function PreDestroy(): MethodDecorator {
 export interface PropertyOrParameterDecorator {
   /** Property decorator form — `@Autowired(TOKEN) private foo!: Foo`. */
   (target: object, propertyKey: string | symbol): void
-  /** Constructor-parameter form — `constructor(@Inject(TOKEN) foo: Foo) {}`. */
+  /**
+   * Constructor-parameter form — `constructor(@Inject(TOKEN) foo: Foo) {}`.
+   */
   (target: object, propertyKey: string | symbol | undefined, parameterIndex: number): void
 }
 
@@ -251,6 +275,8 @@ function applyInjection(
  * to a key of the augmented `KickJsRegistry`. After `kick typegen`
  * populates the registry, `@Autowired('kick/prisma/Client')` auto-
  * completes the key and typo'd literals become TS2345 errors.
+ *
+ * @see https://kickjs.app/guide/dependency-injection
  */
 export function Autowired<K extends keyof KickJsRegistry & string>(
   token: K,
@@ -295,6 +321,8 @@ export function Autowired(token?: unknown): PropertyOrParameterDecorator {
  * After `kick typegen` runs, the literal autocompletes from the
  * registry and a typo (`@Inject('kick/prisma/Cleint')`) becomes a
  * TS2345 error.
+ *
+ * @see https://kickjs.app/guide/dependency-injection
  */
 export function Inject<K extends keyof KickJsRegistry & string>(
   token: K,
@@ -368,6 +396,8 @@ type ValueKey<K extends string> = [EnvKey] extends [never] ? K : K & EnvKey
  * - After typegen, `KickEnv` is populated and unknown keys become a tsc
  *   error. The optional `defaultValue` is type-checked against the
  *   schema's inferred type for that key.
+ *
+ * @see https://kickjs.app/guide/dependency-injection
  */
 export function Value<K extends string>(
   envKey: ValueKey<K>,
@@ -422,6 +452,8 @@ function attachBuilder(target: any): void {
  *
  * If you'd rather not write the `declare`, use `withBuilder()` instead —
  * same runtime, types inferred automatically.
+ *
+ * @see https://kickjs.app/guide/dependency-injection
  */
 export function Builder(target: any): void {
   attachBuilder(target)

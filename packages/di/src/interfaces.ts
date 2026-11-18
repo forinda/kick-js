@@ -57,7 +57,7 @@ export type PostConstructStatus = 'pending' | 'completed' | 'failed' | 'skipped'
  * String metadata keys for the DI system + decorator subsystem. Every
  * key starts with the `kick:` prefix; the suffix is a short identifier
  * that may itself contain `:`, `-`, or `_` separators (historical —
- * keys grew alongside the framework). The §22 v4 convention is "no
+ * keys grew alongside the framework). The v4 convention is "no
  * Symbols", not "use a strict naming scheme" — Symbols don't survive
  * JSON serialisation, can't be addressed by string from worker
  * threads, and don't show up in DevTools snapshots.
