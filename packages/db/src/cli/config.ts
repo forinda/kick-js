@@ -70,9 +70,12 @@ export interface TenantsConfig {
 }
 
 /**
- * Loads a config file and returns its `db` block with defaults filled in:
- * `src/db/schema.ts`, `db/migrations`, `db/seeds`, Postgres, and `DATABASE_URL`
- * for the connection string.
+ * Loads a config file and returns part of its `db` block with defaults filled
+ * in: `schemaPath` (`src/db/schema.ts`), `migrationsDir` (`db/migrations`),
+ * `seedsDir` (`db/seeds`), `dialect` (Postgres) and `connectionString`
+ * (`DATABASE_URL`), plus `adapter`, `driftCheck` and `driftIgnore` as given.
+ * Other fields (`casing`, `migrationsTable`, `migrationsDirs`, `tenants`) are
+ * not copied.
  */
 export async function resolveDbConfig(opts: { configPath: string }): Promise<DbConfig> {
   const abs = path.resolve(opts.configPath)
