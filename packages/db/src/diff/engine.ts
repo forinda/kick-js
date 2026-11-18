@@ -15,6 +15,7 @@ export interface RenameHints {
   columns?: Record<string, string>
 }
 
+/** Options for `diff()`: renames to apply instead of a drop and an add. */
 export interface DiffOptions {
   renames?: RenameHints
   /**
@@ -24,6 +25,14 @@ export interface DiffOptions {
   explicitRenames?: boolean
 }
 
+/**
+ * The changes that turn the `prev` snapshot into `next`, ordered so they can
+ * be applied in sequence. A dropped and an added table or column are paired as
+ * a rename when `renames` names them, or, unless `explicitRenames` is set, when
+ * there is exactly one of each.
+ *
+ * @see https://kickjs.app/guide/database/migrations#renames
+ */
 export function diff(
   prev: SchemaSnapshot,
   next: SchemaSnapshot,

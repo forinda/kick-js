@@ -7,6 +7,7 @@ export interface PgQueryRunner {
   query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<{ rows: R[] }>
 }
 
+/** Options for `introspectPg()`. */
 export interface IntrospectPgOptions {
   /** Default 'public'. */
   schema?: string

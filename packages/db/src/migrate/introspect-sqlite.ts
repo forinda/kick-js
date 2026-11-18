@@ -23,6 +23,7 @@ export interface SqliteIntrospectDb {
   prepare(sql: string): { all(...params: unknown[]): unknown[] }
 }
 
+/** SQLite introspection options. `excludeTables` defaults to the migration tracking tables. */
 export interface IntrospectSqliteOptions {
   excludeTables?: string[]
 }

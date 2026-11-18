@@ -31,6 +31,11 @@ function isMissingTable(err: unknown): boolean {
   )
 }
 
+/**
+ * Options for `push()`, which applies the schema to the database without writing a migration.
+ *
+ * @see https://kickjs.app/guide/database/cli#push
+ */
 export interface PushOptions {
   adapter: MigrationAdapter
   /** The schema module — what `createDbClient({ schema })` takes. */
@@ -47,6 +52,7 @@ export interface PushOptions {
   confirmDataLoss?: (losses: string[]) => Promise<boolean>
 }
 
+/** What `push()` did: whether there was anything to push, and how many changes. */
 export interface PushResult {
   status: 'pushed' | 'no-changes'
   changeCount: number

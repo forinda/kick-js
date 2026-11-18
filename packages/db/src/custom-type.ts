@@ -24,6 +24,11 @@
 
 import { ColumnBuilder } from './dsl/columns/types'
 
+/**
+ * Options for `customType()`: the column's SQL type, and optional encode and decode hooks.
+ *
+ * @see https://kickjs.app/guide/db-extensions
+ */
 export interface CustomTypeOptions<TJs, TDriver = unknown> {
   /**
    * SQL data type as it would appear in `CREATE TABLE` — `'text'`,

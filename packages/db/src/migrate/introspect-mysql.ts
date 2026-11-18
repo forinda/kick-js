@@ -15,6 +15,7 @@ export interface MysqlIntrospectDb {
   query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R, unknown]>
 }
 
+/** MySQL introspection options. `excludeTables` defaults to the migration tracking tables. */
 export interface IntrospectMysqlOptions {
   excludeTables?: string[]
 }

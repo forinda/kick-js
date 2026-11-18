@@ -10,17 +10,32 @@ export interface ViewMarks {
   __materialized: boolean
 }
 
+/**
+ * A view declared with `view()` or `materializedView()`: a table declaration that also carries its SQL.
+ *
+ * @see https://kickjs.app/guide/database/schema#views
+ */
 export type ViewDecl<
   TName extends string = string,
   C extends Record<string, ColumnBuilder> = Record<string, ColumnBuilder>,
   TSchema extends string | undefined = string | undefined,
 > = TableDecl<TName, C, TSchema> & ViewMarks
 
+/**
+ * Options for `view()`: the `SELECT` it is defined as.
+ *
+ * @see https://kickjs.app/guide/database/schema#views
+ */
 export interface ViewOptions {
   /** The `SELECT` the view is defined as, in your database's SQL. */
   as: string
 }
 
+/**
+ * Options for `materializedView()`: the `SELECT`, and indexes on the view.
+ *
+ * @see https://kickjs.app/guide/database/schema#materialized-views-postgres
+ */
 export interface MaterializedViewOptions<
   C extends Record<string, ColumnBuilder>,
 > extends ViewOptions {

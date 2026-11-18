@@ -76,6 +76,9 @@ export type CheckSelfRefs<C> = {
       : `selfRef('${SelfRefTarget<C[P]>}'): this table has no such column`
 }
 
+/**
+ * A column's foreign key, from `.references()`: the referenced column (as a thunk) and the actions.
+ */
 export interface FkSpec {
   thunk: () => ColumnRef
   onDelete: FkAction
@@ -111,6 +114,9 @@ function dateLiteral(d: Date): string {
   return d.toISOString().replace('T', ' ').replace('Z', '+00:00')
 }
 
+/**
+ * What a column builder records about its column: type, nullability, default, keys and the rest.
+ */
 export interface ColumnState {
   type: string
   nullable: boolean
@@ -157,6 +163,7 @@ export interface ColumnState {
  * Runtime is a no-op — the symbol never reaches a value.
  */
 export const KICK_GENERATED = Symbol.for('@forinda/kickjs-db/Generated')
+/** Type-only marker for a column that can be omitted on insert. See `KICK_GENERATED`. */
 export type GeneratedBrand = { readonly [KICK_GENERATED]?: true }
 
 /**
@@ -179,6 +186,7 @@ export type GeneratedAlwaysBrand = { readonly [KICK_GENERATED_ALWAYS]?: true }
  * `<TNullable>` would collapse the subclass back to the parent.
  */
 export const KICK_NOT_NULL = Symbol.for('@forinda/kickjs-db/NotNull')
+/** Type-only marker for a `NOT NULL` column. See `KICK_NOT_NULL`. */
 export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
 
 /**

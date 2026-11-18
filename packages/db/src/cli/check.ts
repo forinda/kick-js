@@ -9,6 +9,11 @@ import { computeMigrationHash, readJournal } from '../migrate/journal'
 import { extractSnapshot } from '../snapshot/extract'
 import { readLatestSnapshotEntry } from './generate'
 
+/**
+ * What `checkMigrations()` found; `ok` is true when there is nothing to fix.
+ *
+ * @see https://kickjs.app/guide/database/cli#check
+ */
 export interface CheckResult {
   /** Changes in the schema that no migration covers yet — run `kick db generate`. */
   unmigratedChanges: number
