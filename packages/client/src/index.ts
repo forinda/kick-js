@@ -127,6 +127,7 @@ type LooseQuery = Record<string, string | number | boolean | Array<string | numb
 // `query` — sort fields autocomplete as '-createdAt' | 'createdAt' | …
 type QueryField<T> = unknown extends T ? { query?: LooseQuery } : { query?: T }
 
+/** Per-call options: headers, abort signal, and the route's typed `params`, `body` and `query`. */
 export type RequestOptions<S extends RouteShapeLike, M extends ClientMethod = ClientMethod> = {
   /** Extra headers merged over the client-level ones. */
   headers?: Record<string, string>
@@ -136,6 +137,7 @@ export type RequestOptions<S extends RouteShapeLike, M extends ClientMethod = Cl
   BodyField<S['body'], M> &
   QueryField<S['query']>
 
+/** Options for {@link createClient}. */
 export interface ClientOptions {
   /**
    * Base URL INCLUDING the mount prefix + version the server adds at
@@ -172,6 +174,19 @@ export class KickClientError extends Error {
   }
 }
 
+/**
+ * Typed client returned by {@link createClient}. Each method takes a route key from the
+ * `KickRoutes.Api` map for its verb and checks `params`, `body` and `query` against it.
+ * Non-2xx responses throw {@link KickClientError}.
+ *
+ * @example
+ * ```ts
+ * const api = createClient<KickApi>({ baseUrl: 'https://api.example.com/api/v1' })
+ * const task = await api.get('/tasks/:id', { params: { id: '42' } })
+ * ```
+ *
+ * @see https://kickjs.app/guide/typed-client
+ */
 export interface KickClient<Api extends ApiMap> {
   get<P extends PathsFor<Api, 'GET'> & string>(
     path: P,

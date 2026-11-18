@@ -19,6 +19,11 @@ export interface ScrollMeta {
   previousPage: number | string | null
 }
 
+/**
+ * A prop wrapped by one of the prop helpers, which controls when it is sent.
+ *
+ * @see https://kickjs.app/guide/inertia#when-a-prop-is-sent
+ */
 export interface InertiaProp<T = unknown> {
   readonly [PROP]: PropKind
   readonly value: Resolver<T>

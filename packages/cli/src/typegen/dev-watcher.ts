@@ -36,6 +36,7 @@ import type { ScanDelta } from './scanner'
  */
 export const TYPEGEN_OWNER_KEY = '__kickjs_typegen_owner'
 
+/** File-watcher event names that {@link TypegenDevWatcher.handleWatchEvent} accepts. */
 export type TypegenWatchEvent = 'add' | 'change' | 'unlink' | 'unlinkDir'
 
 /** Injectable pipeline — production uses the real functions. */
@@ -46,6 +47,7 @@ export interface TypegenDevPipeline {
   buildAssets: typeof buildAssets
 }
 
+/** Options for {@link createTypegenDevWatcher}. */
 export interface TypegenDevWatcherOptions {
   cwd: string
   /** Pre-loaded kick.config.ts (null when the project has none). */
@@ -67,6 +69,7 @@ export interface TypegenDevWatcherOptions {
   pipeline?: TypegenDevPipeline
 }
 
+/** Handle returned by {@link createTypegenDevWatcher}. */
 export interface TypegenDevWatcher {
   /** Feed a chokidar-style watcher event into the debounce window. */
   handleWatchEvent(event: TypegenWatchEvent, file: string): void
@@ -85,6 +88,13 @@ export interface TypegenDevWatcher {
   dispose(): void
 }
 
+/**
+ * Create a debounced typegen runner for dev mode. Feed it file-watcher events: TypeScript
+ * changes trigger an incremental pass, a removed directory triggers a full scan, and asset
+ * template changes rebuild assets. Errors go to `emitWarning` instead of throwing.
+ *
+ * @see https://kickjs.app/guide/typegen#watch-mode-failure-surfacing
+ */
 export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): TypegenDevWatcher {
   const { cwd, config } = opts
   const debounceMs = opts.debounceMs ?? 100

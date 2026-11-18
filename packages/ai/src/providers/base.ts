@@ -42,6 +42,7 @@ const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_BASE_DELAY_MS = 1000
 const DEFAULT_MAX_DELAY_MS = 30_000
 
+/** Retry policy for provider HTTP calls: 429, 500, 502, 503 and 504 responses are retried with exponential backoff. */
 export interface RetryOptions {
   /** Maximum number of retry attempts (default: 3). Set to 0 to disable retries. */
   maxRetries?: number

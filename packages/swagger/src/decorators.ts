@@ -44,6 +44,7 @@ export interface ApiSecurityRequirement {
   scopes?: string[]
 }
 
+/** Options for {@link ApiOperation}. */
 export interface ApiOperationOptions {
   summary?: string
   description?: string
@@ -51,6 +52,7 @@ export interface ApiOperationOptions {
   deprecated?: boolean
 }
 
+/** Options for {@link ApiResponse}: one documented response status, with an optional schema. */
 export interface ApiResponseOptions {
   status: number
   description?: string

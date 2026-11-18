@@ -14,6 +14,7 @@ export interface Violation {
   suggestion?: string
 }
 
+/** The file a {@link Rule} checks: its source, path, and whether it is first-party framework code. */
 export interface LintContext {
   source: string
   file: string
@@ -25,6 +26,7 @@ export interface LintContext {
   firstParty: boolean
 }
 
+/** A lint rule: an id, a description, a default severity, and a `check` that returns the file's violations. */
 export interface Rule {
   id: string
   description: string

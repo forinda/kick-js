@@ -1,5 +1,8 @@
 import type { WebSocket } from 'ws'
 
+// ponytail: fixed cap; raise it if an app really keeps a socket in more rooms.
+export const MAX_ROOMS_PER_SOCKET = 1000
+
 /**
  * Manages WebSocket room membership and broadcasting.
  * Standalone from ws/socket.io — can be swapped for socket.io's built-in rooms.
@@ -13,10 +16,9 @@ import type { WebSocket } from 'ws'
  * Membership lives in this process only: `getSockets` and `getAllRooms`
  * describe this instance. `broadcast` reaches other instances when the adapter
  * has a broker.
+ *
+ * @see https://kickjs.app/guide/websockets#rooms
  */
-// ponytail: fixed cap; raise it if an app really keeps a socket in more rooms.
-export const MAX_ROOMS_PER_SOCKET = 1000
-
 export class RoomManager {
   /**
    * @param onSend Called with the number of frames each broadcast wrote.

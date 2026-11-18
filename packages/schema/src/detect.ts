@@ -5,10 +5,16 @@ import { isYupSchema, fromYup } from './adapters/yup.js'
 
 const customAdapters: SchemaAdapter[] = []
 
+/**
+ * Add a {@link SchemaAdapter} that {@link detectSchema} checks before the built-in ones.
+ *
+ * @see https://kickjs.app/guide/schema#registering-a-custom-adapter
+ */
 export function registerAdapter(adapter: SchemaAdapter): void {
   customAdapters.push(adapter)
 }
 
+/** True when `schema` is an object with `safeParse` and `toJsonSchema` methods. */
 export function isKickSchema(schema: unknown): schema is KickSchema {
   return (
     schema != null &&
@@ -100,6 +106,13 @@ function fromSafeParseDuckType(schema: any): KickSchema {
   }
 }
 
+/**
+ * Wrap any supported schema as a {@link KickSchema}. Tries, in order: an existing `KickSchema`,
+ * registered adapters, Zod, Valibot, Yup, Standard Schema, a plain function (a throw means
+ * invalid), and any object with `safeParse`. Throws for anything else.
+ *
+ * @see https://kickjs.app/guide/schema
+ */
 export function detectSchema(schema: unknown): KickSchema {
   if (isKickSchema(schema)) return schema
 

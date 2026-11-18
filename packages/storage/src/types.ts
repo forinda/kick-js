@@ -45,11 +45,17 @@ export interface Storage {
   url(key: string, options?: UrlOptions): Promise<string>
 }
 
+/** Options for `put()` and `putIfAbsent()`. */
 export interface PutOptions {
   /** Sent as `Content-Type` when the file is served. Buckets and memory keep it; disk doesn't. */
   contentType?: string
 }
 
+/**
+ * Options for `url()`.
+ *
+ * @see https://kickjs.app/guide/file-storage#urls
+ */
 export interface UrlOptions {
   /** Seconds a signed URL stays valid. Default 3600, at most 604800 (7 days). */
   expiresIn?: number
@@ -72,6 +78,7 @@ export interface ByteRange {
   end?: number
 }
 
+/** Metadata for one stored file. */
 export interface FileInfo {
   key: string
   size: number
@@ -79,6 +86,11 @@ export interface FileInfo {
   contentType?: string
 }
 
+/**
+ * Options for `list()`: prefix, delimiter, cursor and page size.
+ *
+ * @see https://kickjs.app/guide/file-storage#listing
+ */
 export interface ListOptions {
   prefix?: string
   /**
@@ -92,6 +104,7 @@ export interface ListOptions {
   limit?: number
 }
 
+/** One page of `list()` results. */
 export interface ListPage {
   files: FileInfo[]
   /** With a `delimiter`: the folders, each once, ending in the delimiter. */

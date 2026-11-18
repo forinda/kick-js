@@ -68,6 +68,7 @@ export function publicUrl(driver: string, baseUrl: string | undefined, key: stri
   return `${baseUrl.replace(/\/+$/, '')}/${encodeKey(key)}`
 }
 
+/** Validate a `list()` page size: a whole number from 1 to 1000 (default 1000), else throws. For custom drivers. */
 export function checkLimit(limit = 1000): number {
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
     throw new Error('storage: list() limit must be a whole number from 1 to 1000')
@@ -130,6 +131,7 @@ export async function listPage(
   }
 }
 
+/** Validate a `list()` delimiter: `undefined` or a non-empty string, else throws. For custom drivers. */
 export function checkDelimiter(delimiter: string | undefined) {
   if (delimiter !== undefined && (typeof delimiter !== 'string' || delimiter === '')) {
     throw new Error('storage: list() delimiter must be a non-empty string')

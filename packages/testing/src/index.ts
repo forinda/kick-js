@@ -109,6 +109,22 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
 }
 
 /**
+ * Normalize every accepted `overrides` shape to `[token, value]` pairs.
+ *
+ * An array or Map keeps the token's identity, which is what the container
+ * matches on; an object literal is limited to string and symbol keys by the
+ * language itself.
+ */
+function overrideEntries(
+  overrides: NonNullable<CreateTestAppOptions['overrides']>,
+): Array<[unknown, unknown]> {
+  if (Array.isArray(overrides)) return overrides.map(([token, value]) => [token, value])
+  if (overrides instanceof Map) return [...overrides.entries()]
+  const record = overrides as Record<symbol | string, unknown>
+  return Reflect.ownKeys(record).map((key) => [key, record[key as never]])
+}
+
+/**
  * Create an Application instance configured for testing.
  * Resets the DI container, registers modules, applies overrides,
  * and returns the Application, which drives whichever runtime is configured.
@@ -133,23 +149,9 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
  * const { app } = await createTestApp({ modules: [UserModule], runtime: fastifyRuntime() })
  * const res = await request(app.handle.bind(app)).get('/api/v1/users')
  * ```
- */
-/**
- * Normalize every accepted `overrides` shape to `[token, value]` pairs.
  *
- * An array or Map keeps the token's identity, which is what the container
- * matches on; an object literal is limited to string and symbol keys by the
- * language itself.
+ * @see https://kickjs.app/guide/testing
  */
-function overrideEntries(
-  overrides: NonNullable<CreateTestAppOptions['overrides']>,
-): Array<[unknown, unknown]> {
-  if (Array.isArray(overrides)) return overrides.map(([token, value]) => [token, value])
-  if (overrides instanceof Map) return [...overrides.entries()]
-  const record = overrides as Record<symbol | string, unknown>
-  return Reflect.ownKeys(record).map((key) => [key, record[key as never]])
-}
-
 export async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
   /**
