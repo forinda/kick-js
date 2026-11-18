@@ -14,6 +14,7 @@ import { fileRenameEdits, references, renameEdits, renameRange } from './referen
 import { renderCompletions, renderDefinition } from './render-calls'
 import { kickTokens, TOKEN_TYPES } from './tokens'
 
+/** The Volar service plugin for `.kick` documents: diagnostics, completion, hover, definitions, references, rename, formatting and semantic tokens. */
 export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
   const diagnostics = createDiagnosticsPlugin(ws)
   return {

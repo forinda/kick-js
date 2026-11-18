@@ -34,6 +34,7 @@ import { optimize } from './optimize'
 
 export type { CheckedTemplate } from '../ast'
 
+/** What `check` returns: `template` is absent when any diagnostic is an error. */
 export interface CheckResult {
   template?: CheckedTemplate
   diagnostics: Diagnostic[]

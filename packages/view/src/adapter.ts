@@ -89,6 +89,7 @@ export function viewsMiddleware(
   }
 }
 
+/** Options for `KickView`: the `createViews` options, or a views instance to reuse. */
 export interface KickViewOptions extends ViewsOptions {
   /** A views instance to use — share it with error pages and emails. */
   views?: Views

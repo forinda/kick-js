@@ -9,6 +9,7 @@ import type { Element, Node } from './ast'
 import { warning, type Diagnostic } from './diagnostics'
 import { parse } from './parse/template'
 
+/** Options for `format`. */
 export interface FormatOptions {
   /** Spaces per level. Default 2. */
   indent?: number
@@ -267,6 +268,13 @@ function shape(nodes: Node[]): string[] {
   return out
 }
 
+/**
+ * Formats a `.kick` source: spacing inside `{{ }}` and block heads, and indentation by nesting.
+ * `output` is absent when the source has syntax errors; when formatting would change more
+ * than whitespace, `output` is the source unchanged and a warning says why.
+ *
+ * @see https://kickjs.app/guide/views#formatting-and-checking
+ */
 export function format(
   source: string,
   file: string,

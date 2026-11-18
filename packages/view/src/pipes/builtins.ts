@@ -5,6 +5,7 @@
 import type { Pipe } from '../render/render'
 import { SafeHtml } from '../render/safe'
 
+/** The names of the built-in pipes. */
 export const BUILTIN_PIPES: readonly string[] = [
   'uppercase',
   'lowercase',
@@ -25,6 +26,7 @@ export const BUILTIN_PIPES: readonly string[] = [
   'kvQuery',
 ]
 
+/** What built-in pipes read from the render: locale, time zone, and the request's `urlFor`. */
 export interface PipeEnv {
   locale: string
   timeZone: string
@@ -83,6 +85,11 @@ const toNumber = (v: unknown): number | undefined => {
 
 const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
 
+/**
+ * The built-in pipes bound to a render's locale and time zone (`date`, `currency`, `kvRoute`, ...).
+ *
+ * @see https://kickjs.app/guide/views#pipes
+ */
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
     // `{{ 'Users.show' | kvRoute:user.id }}`: the route's URL, params in path order.

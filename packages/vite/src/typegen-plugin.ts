@@ -101,11 +101,19 @@ async function loadCliFromProject(root: string): Promise<TypegenCliModule | null
   }
 }
 
+/** Options for `kickjsTypegenPlugin`. */
 export interface TypegenPluginOptions {
   /** Test seam — defaults to project-root resolution of the real CLI. */
   loadCli?: (root: string) => Promise<TypegenCliModule | null>
 }
 
+/**
+ * Runs typegen on save when the app is served with plain `vite`, using the project's
+ * `@forinda/kickjs-cli`. Does nothing under `kick dev`, which runs its own watcher, or when
+ * the CLI isn't installed. Included in `kickjsVitePlugin()`.
+ *
+ * @see https://kickjs.app/guide/typegen
+ */
 export function kickjsTypegenPlugin(opts: TypegenPluginOptions = {}): Plugin {
   const loadCli = opts.loadCli ?? loadCliFromProject
   return {

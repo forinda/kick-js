@@ -266,6 +266,7 @@ function embedded(id: string, languageId: string, text: string, [from, to]: Rang
   }
 }
 
+/** A `.kick` document, with its HTML, `<style>` and `<script>` regions as embedded codes for their own language services. */
 export class KickVirtualCode implements VirtualCode {
   readonly id = 'root'
   readonly languageId = 'kick'
@@ -337,6 +338,7 @@ class RenderCallsCode implements VirtualCode {
   }
 }
 
+/** The Volar language plugin: `.kick` files, plus TS / JS files for their `ctx.render(...)` template names. */
 export const kickLanguagePlugin: LanguagePlugin<URI> = {
   getLanguageId(uri) {
     return uri.path.endsWith('.kick') ? 'kick' : undefined
