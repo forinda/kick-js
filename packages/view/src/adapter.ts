@@ -96,16 +96,6 @@ export interface KickViewOptions extends ViewsOptions {
 }
 
 /**
- * The `.kick` view engine for `bootstrap({ adapters })`.
- *
- * ```ts
- * const views = createViews({ layout: 'layouts/main' })
- * bootstrap({ modules, adapters: [KickView({ views })] })
- * // in a controller
- * await ctx.render('users/show', { user })
- * ```
- */
-/**
  * Re-check templates on every render only in development: NODE_ENV is
  * `development`, or the views come from `kick dev` (the virtual module hands
  * over `bundle: null` there). An unset NODE_ENV in production stays fast.
@@ -125,6 +115,8 @@ export function kickViewDev(options: KickViewOptions, nodeEnv: string | undefine
  * import kickViews from 'virtual:kick-views'
  *
  * bootstrap({ modules, adapters: [KickView({ ...kickViews })] })
+ * // in a controller
+ * await ctx.render('users/show', { user })
  * ```
  *
  * @see https://kickjs.app/guide/views
