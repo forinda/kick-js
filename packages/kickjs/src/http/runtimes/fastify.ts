@@ -443,7 +443,7 @@ function hopTrust(hops: number): (ip: string, hopIndex: number) => boolean {
 
 /**
  * The Fastify HTTP runtime. Pass to `bootstrap({ runtime: fastifyRuntime() })`.
- * Per spec §10: Fastify's built-in pino logger is disabled (`logger: false`) so
+ * Fastify's built-in pino logger is disabled (`logger: false`) so
  * the kickjs `requestLogger` middleware stays the single log format.
  */
 export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
@@ -687,7 +687,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
 /**
  * The Fastify runtime's engine-native types — what the runtime-typed escape
  * hatches resolve to once the `kick/runtime` typegen emits a `KickRuntimeRegister`
- * augmentation pointing here (spec §4.3b). `AdapterContext.app` / `getRuntimeApp()`
+ * augmentation pointing here. `AdapterContext.app` / `getRuntimeApp()`
  * become `FastifyInstance`; `ctx.req` / `ctx.res` the Fastify request / reply.
  * Mirrors {@link import('../runtime').ExpressRuntimeTypes} for the default engine.
  */

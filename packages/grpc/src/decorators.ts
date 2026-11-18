@@ -26,6 +26,8 @@ import { GRPC_METADATA, grpcServiceRegistry, type GrpcHandlerDefinition } from '
  *   }
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/grpc
  */
 export function GrpcService(service: DescService): ClassDecorator {
   return (target: any) => {
@@ -54,6 +56,8 @@ export function GrpcService(service: DescService): ClassDecorator {
  * @GrpcMethod('say')     // same, named explicitly
  * handleSay(req: SayRequest, ctx: GrpcContext) { … }
  * ```
+ *
+ * @see https://kickjs.app/guide/grpc
  */
 export function GrpcMethod(rpc?: string): MethodDecorator {
   return (target, propertyKey) => {

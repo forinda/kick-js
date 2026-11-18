@@ -78,6 +78,8 @@ export interface ContextMeta {}
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface ContextKeys {}
 
+type KnownContextKey = keyof ContextMeta | keyof ContextKeys
+
 /**
  * Every context key the project has registered — the union of the
  * {@link ContextKeys} (dependsOn-only) and {@link ContextMeta} (value-type)
@@ -98,7 +100,6 @@ export interface ContextKeys {}
  * module, and would make the pair circular. Re-exported from
  * `context-decorator` for back-compat.
  */
-type KnownContextKey = keyof ContextMeta | keyof ContextKeys
 export type ContextMetaKey = [KnownContextKey] extends [never] ? string : KnownContextKey & string
 
 /** Resolve a {@link ContextMeta} value type, falling back to `Fallback` for unknown keys. */

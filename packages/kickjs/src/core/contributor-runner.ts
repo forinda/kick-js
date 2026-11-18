@@ -47,11 +47,11 @@ const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
  * Execute a built {@link ContributorPipeline} against an {@link ExecutionContext}.
  *
  * Sequential — one contributor at a time, in the topo order chosen at
- * pipeline-build time. Per `architecture.md` §20.10, V1 does not run
+ * pipeline-build time. Per https://kickjs.app/guide/context-decorators, V1 does not run
  * contributors in parallel even within the same topo level; that is a
  * V2 follow-up gated on profiling.
  *
- * ## Error matrix (architecture.md §20.9)
+ * ## Error matrix
  *
  * | resolve outcome | optional | onError defined | runner behaviour                                 |
  * |-----------------|----------|-----------------|--------------------------------------------------|

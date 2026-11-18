@@ -410,7 +410,7 @@ export interface ApplicationOptions {
    * `@forinda/kickjs/fastify`) or a custom engine driver. Defaults to
    * {@link expressRuntime}. The engine-native escape hatches
    * (`getRuntimeApp()`, `AdapterContext.app`) follow the active runtime via the
-   * registry (`ActiveRuntime`, spec §4.3b) — Express by default, or the augmented
+   * registry (`ActiveRuntime`) — Express by default, or the augmented
    * engine once the `kick/runtime` typegen output is present.
    */
   /**
@@ -2412,7 +2412,7 @@ export class Application {
 
   /**
    * Get registered plugins — used by DevToolsAdapter for topology
-   * introspection (architecture.md §23). Read-only; returns the
+   * introspection (https://kickjs.app/guide/devtools). Read-only; returns the
    * already-sorted plugin list (post-`dependsOn` topo-sort).
    */
   getPlugins(): readonly KickPlugin[] {

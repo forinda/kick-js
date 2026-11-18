@@ -96,13 +96,13 @@ export type KickServer = http.Server | https.Server | http2.Http2SecureServer | 
 export interface AdapterContext {
   /**
    * Engine-agnostic HTTP surface — the supported way to add routes, mounts,
-   * static dirs, and middleware (spec §4.4). Prefer this over {@link app}:
+   * static dirs, and middleware. Prefer this over {@link app}:
    * an adapter written against `http` works under any runtime.
    */
   http: AdapterHttp
   /**
    * Engine-native application instance — Express under the default runtime,
-   * typed from the active runtime via {@link ActiveRuntime} (spec §4.3b).
+   * typed from the active runtime via {@link ActiveRuntime}.
    * Escape hatch for genuinely engine-specific needs; for everything else use
    * {@link http}.
    */
@@ -333,7 +333,7 @@ export interface AppAdapter {
   shutdown?(): MaybePromise
 
   /**
-   * Optional DevTools introspection hook (architecture.md §23). Returns
+   * Optional DevTools introspection hook (https://kickjs.app/guide/devtools). Returns
    * a snapshot describing this adapter's current state, metrics, and DI
    * tokens. DevTools awaits the result, so async work is fine — but keep
    * the implementation cheap (counters + flags, no DB round trips) since
@@ -347,7 +347,7 @@ export interface AppAdapter {
   introspect?(): IntrospectionSnapshot | Promise<IntrospectionSnapshot>
 
   /**
-   * Optional DevTools tabs this adapter contributes (architecture.md §23).
+   * Optional DevTools tabs this adapter contributes.
    * Returns an array of `DevtoolsTabDescriptor` shapes — typically one
    * entry per adapter-owned panel (iframe / launch / html view).
    *

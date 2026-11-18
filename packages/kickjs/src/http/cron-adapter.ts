@@ -97,6 +97,19 @@ function isCronProcess(): boolean {
   return !cluster.isWorker || process.env[CRON_WORKER_ENV] === '1'
 }
 
+/**
+ * Runs every `@Cron()` method of the app's services on its schedule, after
+ * the server starts. Uses `croner` unless `schedule` brings another
+ * scheduler; `enabled: false` turns it off for a process. Under a cluster
+ * only one process runs the jobs.
+ *
+ * @example
+ * ```ts
+ * bootstrap({ modules, adapters: [KickCronAdapter()] })
+ * ```
+ *
+ * @see https://kickjs.app/guide/cron
+ */
 export const KickCronAdapter = defineAdapter<CronAdapterOptions>({
   name: 'KickCronAdapter',
   defaults: { enabled: true },

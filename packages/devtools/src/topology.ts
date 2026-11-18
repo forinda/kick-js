@@ -3,7 +3,7 @@
  * container and produces a JSON-serialisable {@link TopologySnapshot}.
  *
  * Calls `introspect()` on every plugin and adapter that implements it
- * (architecture.md §23.3); falls back to a minimal `{ protocolVersion,
+ * (https://kickjs.app/guide/devtools); falls back to a minimal `{ protocolVersion,
  * name, kind }` stub for primitives that don't. Per-primitive
  * introspection failures are caught + collected into the snapshot's
  * `errors` field rather than failing the entire endpoint.

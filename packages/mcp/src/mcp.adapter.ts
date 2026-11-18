@@ -312,6 +312,8 @@ export interface McpAdapterExtensions {
  *   ],
  * })
  * ```
+ *
+ * @see https://kickjs.app/guide/mcp
  */
 export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>({
   name: 'McpAdapter',

@@ -1,6 +1,6 @@
 /**
  * The `.kick` template parser: HTML-aware, because where a value lands
- * decides how it is escaped (spec §2). One pass over the source, with a stack
+ * decides how it is escaped. One pass over the source, with a stack
  * of open elements and blocks.
  */
 import type {

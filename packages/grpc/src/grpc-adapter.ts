@@ -67,6 +67,8 @@ const NEXT = Symbol.for('kick.grpc.next')
  * curl -X POST http://localhost:3000/acme.user.v1.UserService/GetUser \
  *   -H 'Content-Type: application/json' -d '{"id":"1"}'
  * ```
+ *
+ * @see https://kickjs.app/guide/grpc
  */
 export const GrpcAdapter = defineAdapter<GrpcAdapterOptions, GrpcAdapterExtensions>({
   name: 'GrpcAdapter',

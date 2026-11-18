@@ -7,7 +7,7 @@ import {
 
 /**
  * Where a contributor was registered, ordered by precedence
- * (lower index wins). Mirrors `architecture.md` §20.4.
+ * (lower index wins). See https://kickjs.app/guide/context-decorators
  *
  * Levels (highest → lowest precedence):
  * - `'method'` — `@LoadX` on a controller method.

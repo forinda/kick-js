@@ -273,10 +273,10 @@ export {
   type BuildPipelineOptions,
 } from './contributor-pipeline'
 
-// Phase 2 — sequential async runner with the §20.9 error matrix.
+// Phase 2 — sequential async runner with the contributor error matrix.
 export { runContributors, type RunContributorsOptions } from './contributor-runner'
 
-// Plugin/adapter dependsOn topo-sort (architecture.md §21.2.1).
+// Plugin/adapter dependsOn topo-sort.
 export {
   mountSort,
   DuplicateMountNameError,
@@ -286,7 +286,7 @@ export {
   type MountKind,
 } from './mount-sort'
 
-// Plugin/adapter factories (architecture.md §21.2.2 + §21.3.1 + §21.3.4).
+// Plugin/adapter factories.
 export {
   definePlugin,
   type DefinePluginOptions,
@@ -302,7 +302,7 @@ export {
   type AdapterFactory,
 } from './define-adapter'
 
-// Typegen-narrowed `dependsOn` (architecture.md §21.2.1).
+// Typegen-narrowed `dependsOn`.
 export { type KickJsPluginRegistry, type KickJsPluginName } from './augmentation'
 
 // Asset manager. Three accessor variants over one

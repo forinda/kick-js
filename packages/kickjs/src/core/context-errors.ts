@@ -5,7 +5,7 @@
  * `DuplicateContributorError` are startup-time errors raised during
  * pipeline build (topo-sort + validation), not per-request — a
  * misconfigured app fails to boot rather than fails a request. Per the
- * locked design in `architecture.md` §20.4, the pipeline is validated
+ * locked design in https://kickjs.app/guide/context-decorators, the pipeline is validated
  * once when each route is mounted and the resolved order is cached on
  * the route.
  *
@@ -63,7 +63,7 @@ export class MissingContributorError extends Error {
  * than reaching this error at all. This error remains the backstop for
  * routes typegen couldn't prove (module/adapter/bootstrap registrations),
  * handlers typed as plain `RequestContext`, and contributors that ran but
- * resolved to `undefined`. See `architecture.md` §20.14.
+ * resolved to `undefined`. See https://kickjs.app/guide/context-decorators
  *
  * @example
  * ```text
@@ -138,7 +138,7 @@ export class ContributorCycleError extends Error {
 /**
  * Two contributors at the same precedence level both produce the same key
  * for the same route. Precedence resolution (method > class > module >
- * adapter > global, per architecture.md §20.4) silently drops
+ * adapter > global, per https://kickjs.app/guide/context-decorators) silently drops
  * lower-precedence duplicates; this error fires only when ties occur
  * within a single level — e.g., two method-level decorators declaring
  * `key: 'tenant'`.

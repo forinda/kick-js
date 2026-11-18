@@ -26,7 +26,7 @@ The const names (left column) didn't change. The values they bind to did.
 
 ## Why this changed
 
-Architecture-doc rationale lives in [§22 of `architecture.md`](https://github.com/forinda/kick-js/blob/main/architecture.md#22-di-token-convention--symbol-to-string-migration). The short version:
+In short:
 
 - **Symbols don't survive serialization** — JSON, worker boundaries, devtools snapshots all drop them.
 - **Symbols don't autocomplete.** A typo'd `Symbol('MaillerService')` is a fresh token; the container resolves it to a different missing-binding error than the typo'd literal would.
@@ -91,8 +91,6 @@ export const QUEUE_WORKER = createToken<QueueWorker>('mycorp/Worker:emails')
 
 The `kick/` prefix is **reserved** for `@forinda/kickjs-*` packages — `kick typegen` will warn on third-party tokens that squat it. Pick something distinct (`mycorp/`, `acme/`, `<your-org>/`) instead.
 
-See [§22.2 of `architecture.md`](https://github.com/forinda/kick-js/blob/main/architecture.md#222-convention) for the full naming spec.
-
 ## Step 5 (CI) — block regression
 
 The framework ships [`@forinda/kickjs-lint`](https://www.npmjs.com/package/@forinda/kickjs-lint) — a tiny package with the rules behind the convention. Add it to your project to flag new `Symbol(...)` DI token declarations and warn on `kick/`-prefix squatting:
@@ -154,7 +152,7 @@ The shape of `ViewAdapterOptions` is unchanged. Only the construction syntax dif
 
 ## Context Contributors API — typed `dependsOn` (no source change required)
 
-The Context Contributor pipeline ([architecture.md §20](https://github.com/forinda/kick-js/blob/main/architecture.md#20-context-contributor-pipeline-issue-107)) didn't change shape in v4 — `defineContextDecorator()`, `contributors()` on adapters / plugins / modules, the precedence ordering, and the topo-sort all behave exactly as in v3. **Adopter code keeps working with zero edits.**
+The [Context Contributor pipeline](./context-decorators.md) didn't change shape in v4 — `defineContextDecorator()`, `contributors()` on adapters / plugins / modules, the precedence ordering, and the topo-sort all behave exactly as in v3. **Adopter code keeps working with zero edits.**
 
 What v4 adds on top is **typed narrowing for `dependsOn`**: after `kick typegen` runs, `dependsOn` on plugins and adapters only accepts the plugin/adapter names your project boots.
 
@@ -187,10 +185,10 @@ Plugins that ship contributors via `contributors()` and depend on another plugin
 
 The `dependsOn` narrowing is one slice of the broader v4 push to make plugin/adapter coordination type-safe. Other v4 surfaces already shipped:
 
-- **`defineAugmentation()`** for advertising augmentable interfaces ([architecture.md §21.3.3](https://github.com/forinda/kick-js/blob/main/architecture.md#2133-standardized-augmentation-registry)).
-- **`introspect()`** slot on `defineAdapter()` / `definePlugin()` for DevTools (architecture.md §23) — optional; existing adapters/plugins keep working.
+- **`defineAugmentation()`** for advertising augmentable interfaces.
+- **`introspect()`** slot on `defineAdapter()` / `definePlugin()` for [DevTools](devtools.md) — optional; existing adapters/plugins keep working.
 - **Asset Manager** — `assetMap` config + `assets.x.y()` typed accessor + `@Asset` decorator ([guide](asset-manager.md)).
-- **DevTools v2 panel** with topology, runtime, memory, and routes tabs (architecture.md §23) — gated by mounting `DevToolsAdapter`; no behaviour change for adopters who don't.
+- **DevTools v2 panel** with topology, runtime, memory, and routes tabs — gated by mounting `DevToolsAdapter`; no behaviour change for adopters who don't.
 
 None of these break v3 source. They're all opt-in surfaces that light up when you adopt them.
 
@@ -230,4 +228,3 @@ The Vite dev plugin already suppresses signal registration in dev mode, so this 
 
 - [Dependency Injection](dependency-injection.md) — `createToken<T>` and typed `container.resolve()`.
 - [Type Generation](typegen.md) — how `kick typegen` discovers tokens and narrows `@Inject` literals.
-- [Architecture §22](https://github.com/forinda/kick-js/blob/main/architecture.md#22-di-token-convention--symbol-to-string-migration) — full convention spec + design rationale.

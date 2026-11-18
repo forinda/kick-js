@@ -11,8 +11,8 @@ interface GeneratePluginOptions {
 /**
  * Scaffold a `definePlugin()` factory under `src/plugins/<name>.plugin.ts`.
  *
- * v4 standardised on the `definePlugin()` factory pattern (architecture
- * §21.2.2) — same surface as `defineAdapter()`, so adopters learn one
+ * v4 standardised on the `definePlugin()` factory pattern
+ * (https://kickjs.app/guide/plugins) — same surface as `defineAdapter()`, so adopters learn one
  * mental model. The generated template uses the factory shape with a
  * typed config object, defaults block, and a build function returning
  * the underlying KickPlugin hooks.

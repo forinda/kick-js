@@ -28,6 +28,8 @@ import type { AiToolOptions } from './types'
  *   }
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/ai
  */
 export function AiTool(options: AiToolOptions): MethodDecorator {
   return (target, propertyKey) => {

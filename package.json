@@ -23,6 +23,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "oxlint packages/",
     "lint:fix": "oxlint packages/ --fix",
+    "lint:jsdoc": "node scripts/check-jsdoc.mjs",
     "lint:tokens": "node packages/lint/bin.mjs --first-party --scope packages --cwd .",
     "clean": "pnpm -r run clean",
     "format": "oxfmt --write \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/__tests__/**/*.{ts,tsx}\" \"packages/*/spa/src/**/*.{ts,tsx}\" \"docs/**/*.md\" \"docs/.vitepress/**/*.{ts,mts,vue}\" \"tutorials/**/*.md\" \"scripts/*.{ts,js,mjs}\" \"*.md\"",

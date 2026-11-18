@@ -187,7 +187,7 @@ describe('runContributors — DI deps', () => {
   })
 })
 
-// ── Error matrix (architecture.md §20.9) ────────────────────────────────
+// ── Error matrix ────────────────────────────────
 
 describe('runContributors — error matrix', () => {
   it('case 1 — resolve throws + optional=true → skip, key unset, pipeline continues', async () => {

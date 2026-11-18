@@ -138,6 +138,8 @@ function requestTenant(): string | undefined {
   return id === undefined || id === null ? undefined : String(id)
 }
 
+let tenancies = 0
+
 /**
  * One description of how tenants are separated, shared by the schema
  * (`tenantKey(tenancy)`) and the client (`createDbClient({ tenancy })`).
@@ -149,8 +151,6 @@ function requestTenant(): string | undefined {
  * })
  * ```
  */
-let tenancies = 0
-
 export function defineTenancy(options: TenancyOptions): Tenancy {
   if (options.strategy === 'database' && !options.dialectFor) {
     throw new Error("kickjs-db: 'database' tenancy needs dialectFor(tenantId)")

@@ -12,7 +12,7 @@ interface GenerateAdapterOptions {
  * Scaffold a `defineAdapter()` factory under `src/adapters/<name>.adapter.ts`.
  *
  * v4 dropped the `class implements AppAdapter` pattern in favour of the
- * `defineAdapter()` factory (architecture.md §21.3.4). The generated
+ * `defineAdapter()` factory (https://kickjs.app/guide/adapters). The generated
  * template uses the new factory shape so adopters get a working adapter with
  * EVERY hook on `AppAdapter`, a typed config object with defaults, and the
  * factory's call / `.scoped()` / `.async()` surfaces — without writing a

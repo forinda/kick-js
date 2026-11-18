@@ -9,8 +9,7 @@
  *   1. 2-deep nested findMany returns the exact shape declared by
  *      the type system: User[] where each user has `posts:
  *      (Post & { comments: Comment[] })[]`.
- *   2. Empty inner sets aggregate to `[]`, not `null` (spec §4.1
- *      COALESCE behavior).
+ *   2. Empty inner sets aggregate to `[]`, not `null` (COALESCE).
  *   3. `findFirst` returns the first row only.
  *   4. `findUnique` returns the matched row.
  *   5. Per-relation `where` + `limit` filter the inner aggregation.
@@ -186,7 +185,7 @@ describe('db.query.X.findMany({ with }) — real PG round trip', () => {
     const u2 = rows.find((r) => r.email === 'c@d.com')!
     expect(u2.posts).toHaveLength(1)
     const p3 = u2.posts[0]
-    // Empty inner set — must be [] not null per spec §4.1 COALESCE.
+    // Empty inner set — must be [] not null (COALESCE).
     expect(p3.comments).toEqual([])
   }, 60_000)
 

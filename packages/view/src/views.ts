@@ -150,27 +150,27 @@ interface State {
 
 type FileLoaderModule = typeof import('./loaders/file')
 
+let fileLoaderModule: (() => Promise<FileLoaderModule>) | undefined
+
 /**
  * How `createViews` reaches the file loader when it's given neither a loader
  * nor a bundle. The Node entry sets it; the edge entry (`workerd`, `worker`,
  * `browser` conditions) doesn't, so an edge build never contains `node:fs`.
  */
-let fileLoaderModule: (() => Promise<FileLoaderModule>) | undefined
-
 export function useFileLoader(load: () => Promise<FileLoaderModule>): void {
   fileLoaderModule = load
 }
 
-/** The TypeScript stripper for `<script client>`; the Node entry sets it. */
 let typeStripper: ((code: string) => string) | undefined
 
+/** The TypeScript stripper for `<script client>`; the Node entry sets it. */
 export function useStripTypes(strip: (code: string) => string): void {
   typeStripper = strip
 }
 
-/** Reads a client file the build wrote to disk; the Node entry sets it. */
 let clientReader: ((url: URL) => Promise<Uint8Array>) | undefined
 
+/** Reads a client file the build wrote to disk; the Node entry sets it. */
 export function useClientFiles(read: ((url: URL) => Promise<Uint8Array>) | undefined): void {
   clientReader = read
 }

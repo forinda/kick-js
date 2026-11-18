@@ -90,6 +90,8 @@ const cronClasses = new Map<string, Function>()
  *   await this.mailer.flush(run.meta.batch)
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/cron
  */
 export function Cron<Meta extends Record<string, unknown> = Record<string, unknown>>(
   expression: string,

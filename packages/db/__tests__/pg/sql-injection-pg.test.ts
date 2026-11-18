@@ -1,5 +1,5 @@
 /**
- * Architecture-spec §13 hardening — SQL emission threat model.
+ * Hardening — SQL emission threat model.
  *
  * Adversarial-input coverage that empirically locks the trust
  * boundary of the SQL emitter. Trust is decided by time of authorship:

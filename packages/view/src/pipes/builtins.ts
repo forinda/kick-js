@@ -1,5 +1,5 @@
 /**
- * The built-in pipes (spec §7). Synchronous, locale- and time-zone-aware
+ * The built-in pipes. Synchronous, locale- and time-zone-aware
  * through the render's env — never the server's.
  */
 import type { Pipe } from '../render/render'

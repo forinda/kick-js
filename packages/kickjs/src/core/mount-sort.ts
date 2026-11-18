@@ -22,7 +22,7 @@ export interface MountSortItem {
   /**
    * Other plugin/adapter names that must mount before this one. Cycles
    * and missing names fail at boot — same fail-fast contract as the
-   * Context Contributor pipeline (architecture.md §20.4).
+   * Context Contributor pipeline.
    */
   dependsOn?: readonly string[]
 }

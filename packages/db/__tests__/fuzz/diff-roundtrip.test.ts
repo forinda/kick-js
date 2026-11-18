@@ -3,7 +3,7 @@ import { diff, hasAmbiguousReverse, invertChanges } from '@forinda/kickjs-db'
 import { applyChangeSet, snapshotsEqual } from './apply-changeset'
 import { generateSnapshot } from './random-schema'
 
-// Architecture spec §13 hardening — 1000 random schema-pair fixtures
+// Hardening — 1000 random schema-pair fixtures
 // asserting two structural properties on the diff engine:
 //
 //   1. **Forward fidelity:** `applyChangeSet(A, diff(A, B)) ≡ B` for

@@ -233,7 +233,7 @@ export interface ContextDecoratorSpec<
  *
  * Frozen and shared by every use site of the decorator (method, class,
  * module, adapter, global). The pipeline builder dedupes by `key` using
- * the precedence rule defined in §20.4 of `architecture.md`.
+ * the precedence rule in https://kickjs.app/guide/context-decorators.
  */
 export interface ContributorRegistration<
   K extends ContextMetaKey = ContextMetaKey,
@@ -588,7 +588,7 @@ export interface DefineContextDecoratorFn {
  * Boot-time validation: a missing `resolve`, an empty `key`, or a
  * non-array `dependsOn` throws `TypeError` here at definition time
  * (typically module-load) rather than waiting for the first request.
- * See `architecture.md` §20 for the full pipeline plan.
+ * See https://kickjs.app/guide/context-decorators for the full pipeline plan.
  *
  * **Parameterised contributors:** TS generics are positional, so to
  * specify `P` (the per-call params shape) with this signature you
@@ -611,7 +611,7 @@ function defineContextDecoratorImpl<
   if (spec === null || typeof spec !== 'object') {
     throw new TypeError(
       'defineContextDecorator: spec must be an object literal. ' +
-        'See architecture.md §20.4 for the spec shape.',
+        'See https://kickjs.app/guide/context-decorators for the spec shape.',
     )
   }
   if (typeof spec.key !== 'string' || spec.key.length === 0) {

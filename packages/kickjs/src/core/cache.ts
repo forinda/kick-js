@@ -177,6 +177,20 @@ function isCachedNull(value: unknown): boolean {
  */
 const inFlight = new Map<string, Promise<unknown>>()
 
+/**
+ * Caches a method's result for `ttl` seconds (default 60) in the
+ * {@link CacheProvider}. The key is `method:Class` plus the arguments, or
+ * `options.key` — a string, or a function of the arguments. Simultaneous
+ * misses on one key share one call. `@CacheEvict(prefix)` clears entries.
+ *
+ * @example
+ * ```ts
+ * `@Cacheable(300)`
+ * findAll() { return this.repo.list() }
+ * ```
+ *
+ * @see https://kickjs.app/guide/caching
+ */
 export function Cacheable(
   ttl?: number,
   options?: { key?: string | ((...args: any[]) => string) },
@@ -243,6 +257,8 @@ let warnedNoDelByPrefix = false
  *
  * @param key - Cache key prefix to evict (matches the @Cacheable key), or a
  *   function of the method's arguments that returns it — e.g. `(id) => "product:" + id`.
+ *
+ * @see https://kickjs.app/guide/caching
  */
 export function CacheEvict(key: string | ((...args: any[]) => string)): MethodDecorator {
   return (_target, _propertyKey, descriptor: PropertyDescriptor) => {

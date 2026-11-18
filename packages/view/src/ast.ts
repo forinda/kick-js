@@ -28,7 +28,7 @@ export type Expr =
   | { kind: 'conditional'; test: Expr; whenTrue: Expr; whenFalse: Expr; span: Span }
   | { kind: 'pipe'; input: Expr; name: string; args: Expr[]; span: Span }
 
-/** Where an interpolation lands, which decides how its value is escaped (spec §4). */
+/** Where an interpolation lands, which decides how its value is escaped. */
 export type Ctx = 'text' | 'rcdata' | 'raw-text' | 'comment'
 
 export interface Attr {

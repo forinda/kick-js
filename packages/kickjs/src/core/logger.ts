@@ -27,7 +27,7 @@
  * Logger.setProvider(new PinoProvider())
  * ```
  *
- * See `docs/guide/logging.md` for Pino, Winston, and silent-logger recipes.
+ * See https://kickjs.app/guide/logging for Pino, Winston, and silent-logger recipes.
  */
 export interface LoggerProvider {
   info(msg: string, ...args: any[]): void
@@ -300,7 +300,7 @@ const loggerCache = new Map<string, Logger>()
  * // Shorthand function
  * const log = createLogger('OrderService')
  *
- * // Pluggable backend — see docs/guide/logging.md
+ * // Pluggable backend — see https://kickjs.app/guide/logging
  * Logger.setProvider(new MyCustomProvider())
  *
  * // Injectable — auto-named from class

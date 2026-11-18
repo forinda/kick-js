@@ -1,3 +1,5 @@
+import type { RequestContext } from './context'
+
 /**
  * The slot a view engine fills so `ctx.render()` works on every runtime.
  * An adapter binds a renderer onto each request; `ctx.render` asks it first
@@ -5,8 +7,6 @@
  * doesn't own the name. `Symbol.for`, so an engine binds it without
  * importing this module.
  */
-import type { RequestContext } from './context'
-
 export const VIEW_RENDERER = Symbol.for('kickjs.viewRenderer')
 
 export interface ViewRenderOptions {

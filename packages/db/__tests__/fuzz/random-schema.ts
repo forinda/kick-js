@@ -7,7 +7,7 @@ import type {
   TableSnapshot,
 } from '@forinda/kickjs-db'
 
-// Architecture spec §13 — diff-engine fuzz harness. Generates random
+// Diff-engine fuzz harness. Generates random
 // SchemaSnapshot fixtures from a seeded RNG so the same seed always
 // produces the same pair, and a failing case can be reproduced
 // exactly by re-running with the seed printed in the assertion.

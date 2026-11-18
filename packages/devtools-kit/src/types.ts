@@ -203,8 +203,8 @@ export interface TopologyTokenEntry {
 
 /**
  * Coarse Context Contributor entry for the topology graph. The full
- * pipeline (with deps, sources, etc.) is documented in
- * `architecture.md` §20; this surface is just enough for the panel to
+ * pipeline (with deps, sources, etc.) is documented at
+ * https://kickjs.app/guide/context-decorators; this surface is just enough for the panel to
  * draw the Module → Contributor edge.
  */
 /**

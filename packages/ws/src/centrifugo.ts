@@ -186,6 +186,8 @@ export interface CentrifugoAdapterOptions extends CentrifugoClientOptions {
  * broadcaster keep working. Enable
  * `client.subscribe_to_user_personal_channel` in Centrifugo so users are
  * subscribed to that channel on connect.
+ *
+ * @see https://kickjs.app/guide/centrifugo
  */
 export const CentrifugoAdapter = defineAdapter<CentrifugoAdapterOptions>({
   name: 'CentrifugoAdapter',

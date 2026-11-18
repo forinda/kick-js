@@ -92,6 +92,8 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
  *   GET /docs         — Swagger UI (local assets, no CDN)
  *   GET /redoc        — ReDoc (CDN — no local package available)
  *   GET /openapi.json — Raw OpenAPI 3.0.3 spec
+ *
+ * @see https://kickjs.app/guide/swagger
  */
 export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
   name: 'SwaggerAdapter',

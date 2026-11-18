@@ -263,6 +263,8 @@ function acceptsHtml(accept: string | string[] | undefined): boolean {
  *       style.css
  *   server/            ← KickJS server
  * ```
+ *
+ * @see https://kickjs.app/guide/spa
  */
 export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
   name: 'SpaAdapter',

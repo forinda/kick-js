@@ -347,7 +347,7 @@ export interface RunContributorResult<K extends string> {
 /**
  * Run a single context contributor in isolation against a fake
  * {@link ExecutionContext}. Skips the container, the topo-sort, and the
- * §20.9 error matrix — calls `decorator.registration.resolve(ctx, deps)`
+ * Contributor error matrix — calls `decorator.registration.resolve(ctx, deps)`
  * directly so unit tests can assert pure resolve behaviour.
  *
  * Errors thrown by `resolve()` propagate so tests can `expect(...).rejects`
@@ -414,7 +414,7 @@ export async function runContributor<
   return { value: value as MetaValue<K>, ctx, meta }
 }
 
-// ── Plugin unit-test harness (architecture.md §21.3.2) ──────────────────
+// ── Plugin unit-test harness ──────────────────
 
 /**
  * Options for {@link createTestPlugin}.
@@ -436,8 +436,7 @@ export interface CreateTestPluginOptions {
 }
 
 /**
- * Result of {@link createTestPlugin}. Mirrors the spec sketch in
- * `architecture.md` §21.3.2 — `.container`, lifecycle invokers, and a
+ * Result of {@link createTestPlugin}: `.container`, lifecycle invokers, and a
  * `runContributors()` helper that builds a one-plugin pipeline against a
  * fake `ExecutionContext`.
  */

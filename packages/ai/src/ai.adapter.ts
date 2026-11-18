@@ -117,6 +117,8 @@ function toolNameFor(name: string, handler: string): string {
  *   }
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/ai
  */
 export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
   name: 'AiAdapter',

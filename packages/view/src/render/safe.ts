@@ -1,7 +1,7 @@
 /**
  * The few functions every rendered value passes through: a property read
  * that can't reach prototypes or functions, and escaping for each place a
- * value can land (spec §3, §4).
+ * value can land.
  */
 import { FORBIDDEN_NAMES } from '../parse/expression'
 

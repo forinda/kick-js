@@ -44,7 +44,7 @@ function lineOf(source: string, index: number): number {
 
 /**
  * Forbid `export const X = Symbol('...')` declarations in token-bearing
- * files. The §22 v4 migration replaced first-party DI tokens with
+ * files. The v4 migration replaced first-party DI tokens with
  * `createToken<T>()`; this rule blocks regression in framework code and
  * encourages adopters to follow the same pattern.
  *
@@ -70,7 +70,7 @@ export const diTokenSymbol: Rule = {
         file,
         line: i + 1,
         message: `\`${match[1]} = Symbol(...)\` declares a DI token via Symbol`,
-        suggestion: `Use \`createToken<T>('kick/<area>/<key>')\` -- see architecture.md section 22`,
+        suggestion: `Use \`createToken<T>('kick/<area>/<key>')\` -- see https://kickjs.app/guide/dependency-injection`,
       })
     }
     return out

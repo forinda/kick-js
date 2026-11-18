@@ -34,7 +34,7 @@ export {
   type TypegenWatchEvent,
 } from './typegen/dev-watcher'
 
-// Plugin Generator Extension API (architecture.md §21.2.3)
+// Plugin Generator Extension API
 // Plugins ship `kick g <name>` generators via `kickjs.generators` in
 // their package.json — see `defineGenerator` for the manifest shape.
 export {

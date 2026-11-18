@@ -222,6 +222,8 @@ function unsign(signed: string, secrets: string[]): { value: string; stale: bool
 
 // ── Middleware Factory ────────────────────────────────────────────────
 
+const storeLog = createLogger('Session')
+
 /**
  * Session management middleware.
  *
@@ -246,8 +248,6 @@ function unsign(signed: string, secrets: string[]): { value: string; stale: bool
  * })
  * ```
  */
-const storeLog = createLogger('Session')
-
 export function session(options: SessionOptions) {
   if (options.store === 'cookie') return cookieSession(options)
   const {

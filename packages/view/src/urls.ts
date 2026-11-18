@@ -1,6 +1,6 @@
 /**
- * Attributes whose value is a URL a browser may navigate to, load or run
- * (spec §4). Their assembled value is scheme-checked when rendered.
+ * Attributes whose value is a URL a browser may navigate to, load or run.
+ * Their assembled value is scheme-checked when rendered.
  */
 export const URL_ATTRS: ReadonlySet<string> = new Set([
   'href',

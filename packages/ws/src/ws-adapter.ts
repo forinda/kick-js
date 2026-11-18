@@ -91,6 +91,8 @@ export interface WsAdapterExtensions {
  *
  * Clients connect to: `ws://localhost:3000/ws/chat`
  * Messages are JSON: `{ "event": "send", "data": { "text": "hello" } }`
+ *
+ * @see https://kickjs.app/guide/websockets
  */
 export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
   name: 'WsAdapter',

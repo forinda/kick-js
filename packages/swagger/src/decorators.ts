@@ -1,7 +1,7 @@
 import { setMethodMeta, setClassMeta, pushMethodMeta } from '@forinda/kickjs'
 
 /**
- * String metadata keys for the swagger decorators. Follows the §22
+ * String metadata keys for the swagger decorators. Follows the
  * v4 'kick:area:thing' convention — survives JSON serialisation,
  * addressable by literal from cross-package consumers, visible in
  * DevTools snapshots.
@@ -59,14 +59,22 @@ export interface ApiResponseOptions {
   name?: string
 }
 
-/** Attach operation metadata to a route handler */
+/**
+ * Attach operation metadata to a route handler
+ *
+ * @see https://kickjs.app/guide/swagger
+ */
 export function ApiOperation(options: ApiOperationOptions): MethodDecorator {
   return (target, propertyKey) => {
     setMethodMeta(SWAGGER_KEYS.OPERATION, options, target.constructor, propertyKey as string)
   }
 }
 
-/** Document a response status. Can be stacked multiple times. */
+/**
+ * Document a response status. Can be stacked multiple times.
+ *
+ * @see https://kickjs.app/guide/swagger
+ */
 export function ApiResponse(options: ApiResponseOptions): MethodDecorator {
   return (target, propertyKey) => {
     pushMethodMeta<ApiResponseOptions>(
@@ -78,7 +86,11 @@ export function ApiResponse(options: ApiResponseOptions): MethodDecorator {
   }
 }
 
-/** Apply OpenAPI tags at class or method level */
+/**
+ * Apply OpenAPI tags at class or method level
+ *
+ * @see https://kickjs.app/guide/swagger
+ */
 export function ApiTags(...tags: string[]): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
@@ -89,7 +101,11 @@ export function ApiTags(...tags: string[]): ClassDecorator & MethodDecorator {
   }
 }
 
-/** Mark endpoint as requiring Bearer token auth */
+/**
+ * Mark endpoint as requiring Bearer token auth
+ *
+ * @see https://kickjs.app/guide/swagger
+ */
 export function ApiBearerAuth(name = 'BearerAuth'): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
@@ -131,6 +147,8 @@ export function ApiBearerAuth(name = 'BearerAuth'): ClassDecorator & MethodDecor
  *   health() { ... }
  * }
  * ```
+ *
+ * @see https://kickjs.app/guide/swagger
  */
 export function ApiSecurity(
   requirement: string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[],
@@ -160,6 +178,8 @@ export function ApiSecurity(
  * Use when the controller is mostly secured but exposes a
  * health-check / login / public-stats endpoint that shouldn't
  * carry the inherited security requirement in the OpenAPI spec.
+ *
+ * @see https://kickjs.app/guide/swagger
  */
 export function ApiPublic(): MethodDecorator {
   return (target, propertyKey) => {
@@ -167,7 +187,11 @@ export function ApiPublic(): MethodDecorator {
   }
 }
 
-/** Exclude a controller or method from the OpenAPI spec */
+/**
+ * Exclude a controller or method from the OpenAPI spec
+ *
+ * @see https://kickjs.app/guide/swagger
+ */
 export function ApiExclude(): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {

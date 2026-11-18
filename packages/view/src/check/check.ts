@@ -1,7 +1,7 @@
 /**
  * `check`: turn a parsed template into a checked one — names resolved,
  * pipes, components, slots and layouts verified, and every interpolation's
- * context enforced (spec §4). What passes here is safe to render.
+ * context enforced. What passes here is safe to render.
  */
 import { FORM_GLOBALS, SECRET_FIELD } from '../form-state'
 import { parseValidate, VALIDATORS_TAG } from '../validators'
