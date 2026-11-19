@@ -211,6 +211,14 @@ describe('the kick/views typegen — PR review 4', () => {
       opts,
     )
     expect(out).toContain("box: { kind: 'User'; value: User_2 }")
+    const keys = renderViewTypes(
+      summaries({
+        a: "@import type { User } from '@/a'\n@input u: User\n<p></p>",
+        b: "@import type { User } from '@/b'\n@input byName: { User: User; User?: User }\n<p></p>",
+      }),
+      opts,
+    )
+    expect(keys).toContain('byName: { User: User_2; User?: User_2 }')
   })
 
   it("types a required read that's otherwise unknown as non-nullish", () => {
