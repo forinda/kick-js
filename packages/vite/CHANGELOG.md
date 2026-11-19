@@ -1,5 +1,17 @@
 # @forinda/kickjs-vite
 
+## 8.6.0
+
+### Minor Changes
+
+- [#1163](https://github.com/forinda/kick-js/pull/1163) [`c9abeb9`](https://github.com/forinda/kick-js/commit/c9abeb9329bf5ec4990dda0fb3a9f8a2114da05b) Thanks [@forinda](https://github.com/forinda)! - Named view roots: `.kick` templates can live in more folders than `src/views` — a module's own views folder, or a package that ships views — addressed as `root::path` (`ctx.render('billing::invoices/show')`). Declare them once in `kick.config.ts` under `views: { dir, roots }`; the runtime, the Vite build and dev server, `kick check:views`, `kick fmt:views`, typegen and the language server all read it. A root's references resolve in that root first, then the app's; its component tags start with the root's name (`<ui-button>`). A package says where its views are with `"kick": { "views": "<folder>" }` in its package.json.
+
+### Patch Changes
+
+- [#1149](https://github.com/forinda/kick-js/pull/1149) [`04ff64e`](https://github.com/forinda/kick-js/commit/04ff64e64ba0d53de9afa26413e3fd3777428789) Thanks [@forinda](https://github.com/forinda)! - `envWatchPlugin()` now watches the same `.env` files `@forinda/kickjs` loads: the ones `KICKJS_ENV_FILE` names, or `.env.[mode].local`, `.env.[mode]`, `.env.local` and `.env`. Before, it watched a fixed list, so editing `.env.development.local` or a file named in `KICKJS_ENV_FILE` didn't reload `kick dev`.
+
+- [#1153](https://github.com/forinda/kick-js/pull/1153) [`be8a293`](https://github.com/forinda/kick-js/commit/be8a2936d25dbe093a9b7d0f09ca875326c92c95) Thanks [@forinda](https://github.com/forinda)! - JSDoc for the remaining public exports, shown on hover in editors.
+
 ## 8.5.2
 
 ### Patch Changes

@@ -1,5 +1,23 @@
 # @forinda/kickjs-db
 
+## 8.13.0
+
+### Minor Changes
+
+- [#1164](https://github.com/forinda/kick-js/pull/1164) [`47e24d5`](https://github.com/forinda/kick-js/commit/47e24d5d99d7fcf734cd4045b605513497026f62) Thanks [@forinda](https://github.com/forinda)! - `kick db … --config <file>` (`-c`, or `KICK_DB_CONFIG`) runs a command with a db config from a named file — `db/staging.ts`, `db/prod.ts`, or one per database — replacing kick.config's `db` block for that run. The standalone `kickjs-db` bin takes the same flag. The file exports a db config (or a kick.config-style object with a `db` block); each run with one prints `db config: <file>` first.
+
+### Patch Changes
+
+- [#1155](https://github.com/forinda/kick-js/pull/1155) [`c1daf7e`](https://github.com/forinda/kick-js/commit/c1daf7e73063386bb547be51615ec8726702388c) Thanks [@forinda](https://github.com/forinda)! - JSDoc for the remaining public exports, shown on hover in editors.
+
+- [#1152](https://github.com/forinda/kick-js/pull/1152) [`0656616`](https://github.com/forinda/kick-js/commit/0656616a5c4c67f01a11d10f3507cd78762d09da) Thanks [@forinda](https://github.com/forinda)! - JSDoc and messages now link https://kickjs.app instead of repo files and design-note sections.
+  
+  - Every public decorator and adapter has JSDoc with a `@see` link to its guide, shown on hover. New JSDoc for `@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`, `@Cacheable`, `@CacheResponse`, `KickCronAdapter`, `InertiaAdapter`, `StorageAdapter`, `KickView` and `SocketIoAdapter`.
+  - JSDoc that a statement had separated from its export is back on it, so editors show it: `session`, `DevToolsAdapter`, `defineTenancy`, `ContextMetaKey`, `VIEW_RENDERER`, `ResolvedRelation`, `useFileLoader`, `useStripTypes`, `useClientFiles`.
+  - Messages that pointed at design-note sections or `guide/…` paths now give the page's URL: `defineModule` and `defineContextDecorator` option errors, kick-lint's token suggestion, and `kick` runtime swap's manual-step note.
+- Updated dependencies [[`0656616`](https://github.com/forinda/kick-js/commit/0656616a5c4c67f01a11d10f3507cd78762d09da)]:
+  - @forinda/kickjs-cli-kit@0.1.4
+
 ## 8.12.4
 
 ### Patch Changes
