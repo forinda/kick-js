@@ -739,3 +739,37 @@ describe('snippets', () => {
     expect(out).toBe('T:7')
   })
 })
+
+describe('dynamic components', () => {
+  const files = {
+    'components/chart-bar': '@input data\n<b>{{ data.v }}</b>',
+    'components/chart-line': '@input data\n<i>{{ data.v }}</i>',
+    'components/box-a': '<div><slot name="h" [x]="1" /></div>',
+    'components/box-b': '<p><slot name="h" /></p>',
+  }
+  const page = '<component [is]="k" of="chart-bar chart-line" [data]="d" hx-get="/a" />'
+
+  it('renders the candidate named, forwarding non-inputs to its root', () => {
+    expect(r({ ...files, page }, { k: 'chart-bar', d: { v: 1 } }).html).toBe('<b hx-get="/a">1</b>')
+    expect(r({ ...files, page }, { k: 'chart-line', d: { v: 2 } }).html).toBe(
+      '<i hx-get="/a">2</i>',
+    )
+  })
+
+  it('renders nothing for null', () => {
+    expect(r({ ...files, page }, { k: null, d: {} }).html).toBe('')
+  })
+
+  it('fails for any other value, prototype names included, listing the candidates', () => {
+    for (const k of ['constructor', '__proto__', '../x', 'nope']) {
+      expect(() => r({ ...files, page }, { k, d: {} }), k).toThrow(/chart-bar, chart-line/)
+    }
+  })
+
+  it('binds undefined for a value only some candidates offer', () => {
+    const p =
+      '<component [is]="k" of="box-a box-b">@slot(\'h\'; let x) {[{{ x ?? \'none\' }}]}</component>'
+    expect(r({ ...files, page: p }, { k: 'box-a' }).html).toBe('<div>[1]</div>')
+    expect(r({ ...files, page: p }, { k: 'box-b' }).html).toBe('<p>[none]</p>')
+  })
+})

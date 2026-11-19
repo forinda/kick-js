@@ -533,3 +533,71 @@ describe('snippets', () => {
     clean({ page: '@render b(1)\n@snippet b(x) {{{ x }}}' })
   })
 })
+
+describe('dynamic components', () => {
+  const charts = {
+    'components/chart-bar': '@input data\n<b>{{ data.v }}</b>',
+    'components/chart-line': '@input data\n@input color = "red"\n<i>{{ data.v }}</i>',
+  }
+
+  it('needs of and a bound is', () => {
+    expect(errs({ ...charts, page: '<component [is]="k" [data]="d" />' })).toEqual([
+      expect.stringContaining('of'),
+    ])
+    expect(errs({ ...charts, page: '<component of="chart-bar" [data]="d" />' })).toEqual([
+      expect.stringContaining('is'),
+    ])
+    expect(
+      errs({ ...charts, page: '<component is="chart-bar" of="chart-bar" [data]="d" />' }),
+    ).toEqual([expect.stringContaining('is')])
+  })
+
+  it('names an unknown candidate, and warns about a repeated one', () => {
+    expect(
+      errs({ ...charts, page: '<component [is]="k" of="chart-bar nope-x" [data]="d" />' }),
+    ).toEqual([expect.stringContaining('nope-x')])
+    expect(
+      warns({ ...charts, page: '<component [is]="k" of="chart-bar chart-bar" [data]="d" />' }),
+    ).toEqual([expect.stringContaining('chart-bar')])
+  })
+
+  it("checks every candidate's required inputs", () => {
+    expect(errs({ ...charts, page: '<component [is]="k" of="chart-bar chart-line" />' })).toEqual([
+      expect.stringContaining('chart-bar'),
+      expect.stringContaining('chart-line'),
+    ])
+  })
+
+  it('refuses a fill no candidate has, and a let no candidate offers', () => {
+    const boxes = {
+      'components/box-a': '<div><slot name="h" [x]="1" /></div>',
+      'components/box-b': '<div></div>',
+    }
+    expect(
+      errs({
+        ...boxes,
+        page: '<component [is]="k" of="box-a box-b">@slot(\'nope\') {x}</component>',
+      }),
+    ).toEqual([expect.stringContaining('nope')])
+    clean({
+      ...boxes,
+      page: '<component [is]="k" of="box-a box-b">@slot(\'h\'; let x) {{{ x }}}</component>',
+    })
+    expect(
+      errs({
+        ...boxes,
+        page: '<component [is]="k" of="box-a box-b">@slot(\'h\'; let z) {x}</component>',
+      }),
+    ).toEqual([expect.stringContaining('z')])
+  })
+
+  it('refuses attributes for a component whose root is a <component>', () => {
+    expect(
+      errs({
+        ...charts,
+        'components/x-w': '@input k\n<component [is]="k" of="chart-bar" [data]="1" />',
+        page: '<x-w k="chart-bar" hx-get="/a" />',
+      }),
+    ).toEqual([expect.stringContaining('hx-get')])
+  })
+})

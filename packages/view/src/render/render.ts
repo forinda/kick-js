@@ -354,6 +354,21 @@ class Renderer {
         }
         return
       }
+      case 'dyn': {
+        inst.at = n.at
+        const v = this.value(n.e, inst)
+        if (v === null || v === undefined) return
+        // Own keys only: 'constructor' or '__proto__' from data is no candidate.
+        const hit = typeof v === 'string' && Object.hasOwn(n.c, v) ? n.c[v] : undefined
+        if (hit?.k !== 'cmp') {
+          this.fail(
+            inst,
+            `<component> got ${JSON.stringify(v)} — it renders one of ${Object.keys(n.c).join(', ')}`,
+          )
+        }
+        this.component(hit, inst)
+        return
+      }
       case 'rnd':
         inst.at = n.at
         this.snippet(n, inst)

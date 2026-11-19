@@ -673,6 +673,10 @@ class Checker {
       this.err(el.span, '<script client> must be at the top level of the component')
       return undefined
     }
+    if (!el.foreign && lower === 'component') {
+      this.dynamic(el, out)
+      return undefined
+    }
     if (!el.foreign && lower.includes('-')) {
       const names = this.tags.get(lower)
       if (names && names.length > 1) {
@@ -979,7 +983,14 @@ class Checker {
     return undefined
   }
 
-  private call(el: Element, name: string, out: CNode[], root = false): void {
+  private call(
+    el: Element,
+    name: string,
+    out: CNode[],
+    root = false,
+    /** One candidate of a `<component>`: slot fills are checked across all candidates instead. */
+    candidate = false,
+  ): void {
     const sig = this.signature(name)
     const target = this.project.templates.get(name)!
     const slotOf = new Map<string, number>()
@@ -1048,6 +1059,11 @@ class Checker {
         fallthrough[0]!.span,
         `<${el.tag}> passes ${passed} to its root element, but ${leaf.name}.kick needs exactly one root element for that`,
       )
+    } else if (fallthrough.length && leaf.root?.k === 'el' && leaf.root.tag === 'component') {
+      this.err(
+        fallthrough[0]!.span,
+        `<${el.tag}> passes ${passed} to its root, but ${leaf.name}.kick's root is a <component>, whose element is only chosen at render time — declare them as inputs and pass them on`,
+      )
     } else if (fallthrough.length && leaf.root?.k === 'slot') {
       this.err(
         fallthrough[0]!.span,
@@ -1075,12 +1091,16 @@ class Checker {
         continue
       }
       if (c.name in fills) this.err(c.span, `slot '${c.name}' is filled twice`)
-      else if (!sig.outlets.has(c.name)) this.err(c.span, `<${el.tag}> has no slot '${c.name}'`)
-      fills[c.name] = this.fill(c, sig.outlets.get(c.name))
+      else if (!sig.outlets.has(c.name) && !candidate) {
+        this.err(c.span, `<${el.tag}> has no slot '${c.name}'`)
+      }
+      fills[c.name] = this.fill(c, candidate ? undefined : sig.outlets.get(c.name))
     }
     if (rest.some((c) => !(c.k === 'text' && !c.value.trim()))) {
       if (!sig.outlets.has('')) {
-        this.err(el.span, `<${el.tag}> has no default <slot /> for the content inside it`)
+        if (!candidate) {
+          this.err(el.span, `<${el.tag}> has no default <slot /> for the content inside it`)
+        }
       } else if ('' in fills) {
         this.err(
           el.span,
@@ -1103,6 +1123,77 @@ class Checker {
       ...(root ? { r: 1 as const } : {}),
       at: at(el.span),
     })
+  }
+
+  /**
+   * `<component [is]="expr" of="tag-a tag-b">`: an ordinary call per
+   * candidate (inputs, passthrough and fills checked for each), picked at
+   * render time. Fills and their `let`s are checked across the candidates.
+   */
+  private dynamic(el: Element, out: CNode[]): void {
+    const isA = el.attrs.find((a) => a.name.toLowerCase() === 'is')
+    const ofA = el.attrs.find((a) => a.name.toLowerCase() === 'of')
+    if (!ofA || ofA.kind !== 'static') {
+      this.err(
+        ofA?.span ?? el.span,
+        '<component> needs of="tag-a tag-b": the components it may render',
+      )
+      return
+    }
+    if (!isA || isA.kind !== 'bind' || !isA.expr) {
+      this.err(
+        isA?.span ?? el.span,
+        '<component> needs [is]="expr" — a bound value; for a fixed component, write its tag',
+      )
+      return
+    }
+    const rest = el.attrs.filter((a) => a !== isA && a !== ofA)
+    const c: Record<string, CNode> = Object.create(null)
+    const sigs: Signature[] = []
+    const reported = this.diagnostics.length
+    for (const tag of String(ofA.parts?.[0] ?? '')
+      .split(/\s+/)
+      .filter(Boolean)) {
+      const lower = tag.toLowerCase()
+      if (lower in c) {
+        this.warn(ofA.span, `${lower} is listed twice in of`)
+        continue
+      }
+      const names = this.tags.get(lower)
+      if (!names || names.length !== 1) {
+        this.err(
+          ofA.span,
+          `<component> lists ${lower}, which isn't a component (no ${this.project.componentsDir}/…/${lower}.kick)`,
+        )
+        continue
+      }
+      const one: CNode[] = []
+      this.call({ ...el, tag: lower, attrs: rest }, names[0]!, one, el === this.rootElement, true)
+      const cmp = one.find((n) => n.k === 'cmp')
+      if (cmp) c[lower] = cmp
+      sigs.push(this.signature(names[0]!))
+    }
+    // The fills compile once per candidate: report each problem once.
+    const seen = new Set<string>()
+    const mine = this.diagnostics.splice(reported).filter((d) => {
+      const key = `${d.severity}|${d.span.start.offset}|${d.message}`
+      return !seen.has(key) && seen.add(key)
+    })
+    this.diagnostics.push(...mine)
+    for (const f of el.children) {
+      if (f.k !== 'slot-fill') continue
+      const having = sigs.filter((s) => s.outlets.has(f.name))
+      if (!having.length) {
+        this.err(f.span, `no candidate of <component> has a slot '${f.name || 'default'}'`)
+        continue
+      }
+      for (const l of f.lets) {
+        if (!having.some((s) => s.outlets.get(f.name)!.includes(l.from))) {
+          this.err(f.span, `no candidate's slot '${f.name || 'default'}' offers '${l.from}'`)
+        }
+      }
+    }
+    out.push({ k: 'dyn', e: this.expr(isA.expr), c, at: at(el.span) })
   }
 
   /**

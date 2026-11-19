@@ -39,6 +39,8 @@ function deep(n: CNode): CNode {
       }
     case 'o':
       return { ...n, fb: optimize(n.fb) }
+    case 'dyn':
+      return { ...n, c: Object.fromEntries(Object.entries(n.c).map(([k, v]) => [k, deep(v)])) }
     case 's':
       return { ...n }
     default:
