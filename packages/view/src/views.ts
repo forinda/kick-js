@@ -41,6 +41,8 @@ export interface Loader {
   read(name: string): Promise<string>
   /** Changes when the source changes (an mtime); checked on every render in dev. */
   version?(name: string): Promise<number>
+  /** The file `name` came from, for messages (default `<name>.kick`). */
+  file?(name: string): string
 }
 
 /** What a build emits: checked templates as data. */
@@ -82,6 +84,11 @@ export interface ShareContext {
 export interface ViewsOptions {
   /** Default `src/views`. */
   viewsDir?: string
+  /**
+   * More view folders, by name (absolute paths): `{ billing: '/app/src/modules/billing/views' }`
+   * renders `billing::invoices/show`. The Vite plugin fills it in from kick.config's `views.roots`.
+   */
+  roots?: Record<string, string>
   /** Default `components`, inside the views folder. */
   componentsDir?: string
   /** Default `src/views/pipes.ts`. Read when `pipes` isn't given and there is no bundle. */
@@ -308,7 +315,11 @@ export function createViews(options: ViewsOptions = {}): Views {
     (loader ??= settle(
       options.loader
         ? Promise.resolve(options.loader)
-        : fileLoaders().then((m) => m.fileLoader(options.viewsDir ?? 'src/views')),
+        : fileLoaders().then((m) =>
+            options.roots && Object.keys(options.roots).length
+              ? m.multiRootLoader(options.viewsDir ?? 'src/views', options.roots)
+              : m.fileLoader(options.viewsDir ?? 'src/views'),
+          ),
       () => (loader = undefined),
     ))
 
@@ -345,7 +356,7 @@ export function createViews(options: ViewsOptions = {}): Views {
     const parseErrors = new Map<string, Diagnostic>()
     await Promise.all(
       names.map(async (name) => {
-        const r = parse(await l.read(name), `${name}.kick`)
+        const r = parse(await l.read(name), l.file?.(name) ?? `${name}.kick`)
         templates.set(name, r.ast)
         const first = r.diagnostics.find((d) => d.severity === 'error')
         if (first) parseErrors.set(name, first)
