@@ -763,8 +763,9 @@ function mergeDeclared(
       continue
     }
     const type = d.type ?? l.type
-    // A layout default of another type isn't what the page declared: no help.
-    const fits = !d.type || !l.type || d.type === l.type
+    // A layout default only stands in for a typed page input when the layout
+    // declares the same type: an untyped default (`= '0'`) may not fit `number`.
+    const fits = !d.type || d.type === l.type
     out[name] = { ...(type ? { type } : {}), optional: d.optional || (l.optional && fits) }
   }
   return out

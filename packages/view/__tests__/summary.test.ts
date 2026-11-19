@@ -235,4 +235,11 @@ describe('data summary — PR review 4', () => {
     const layout = sum("@input total: string = '0'\n<b>{{ total }}</b><slot />")
     expect(mergeSummary(page, layout).declared.total).toMatchObject({ optional: false })
   })
+
+  it("doesn't let an untyped layout default make a typed page input optional", async () => {
+    const { mergeSummary } = await import('../src/check/summary')
+    const page = sum('@input total: number\n<p>{{ total }}</p>')
+    const layout = sum("@input total = '0'\n<b>{{ total }}</b><slot />")
+    expect(mergeSummary(page, layout).declared.total).toMatchObject({ optional: false })
+  })
 })

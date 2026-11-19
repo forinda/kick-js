@@ -31,7 +31,7 @@ What the types come from:
 <h1>{{ title }}</h1>
 ```
 
-A declared type replaces the inferred one. A default makes the name optional and fills it in when nobody passes it; the page's layouts see it too, and `share()` or the controller override it. A layout's own `@input` defaults work the same way, under the page's. A relative import path is relative to the template.
+A declared type replaces the inferred one. A default makes the name optional and fills it in when nobody passes it; the page's layouts see it too, and `share()` or the controller override it. A layout's own `@input` defaults work the same way, under the page's; when the page declares a type for the name, the layout default makes it optional only if the layout declares the same type. A relative import path is relative to the template.
 
 **Shared names**: list what `createViews({ share })` supplies once, so controllers needn't pass it. `kick add views` writes this file (a `.ts`, so a mistake in it is reported):
 
