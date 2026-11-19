@@ -237,3 +237,25 @@ describe('component features in a bundle', () => {
     expect(AST_FORMAT_VERSION).toBe(3)
   })
 })
+
+describe('page @input defaults', () => {
+  const files = {
+    'layouts/main': '<title>{{ title }}</title><slot />',
+    page: "@layout('layouts/main')\n@input title = 'Home'\n<p>x</p>",
+  }
+
+  it('reach the layout', async () => {
+    const views = createViews({ viewsDir: dir(files), warn: () => {} })
+    expect(await views.render('page')).toBe('<title>Home</title><p>x</p>')
+  })
+
+  it('give way to share() and to the controller', async () => {
+    const shared = createViews({
+      viewsDir: dir(files),
+      warn: () => {},
+      share: () => ({ title: 'S' }),
+    })
+    expect(await shared.render('page')).toBe('<title>S</title><p>x</p>')
+    expect(await shared.render('page', { title: 'C' })).toBe('<title>C</title><p>x</p>')
+  })
+})

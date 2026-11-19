@@ -415,7 +415,15 @@ export function createViews(options: ViewsOptions = {}): Views {
       const used = new Map<string, CheckedTemplate>()
       let validation = false
       // A controller's own `$errors` / `$old` (a re-render) win over the session's.
-      const page = { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data }
+      // Low to high: the page's @input defaults, form state's empty bags,
+      // share(), the request's form state, the controller's data.
+      const page = {
+        ...template.defaults,
+        ...emptyFormState(),
+        ...shared,
+        ...takeFormState(opts.ctx),
+        ...data,
+      }
       const html = render(
         template,
         page,

@@ -762,3 +762,13 @@ describe('<component> slot content', () => {
     expect(JSON.stringify(t.body).split('leaf').length - 1).toBe(1)
   })
 })
+
+describe('page @input', () => {
+  it('lets a page declare typed data', () => {
+    clean({ page: '@input user: User\n<p>{{ user.name }}</p>' })
+  })
+
+  it('lets a component type its inputs', () => {
+    clean({ 'components/x-c': '@input x: number\n<b>{{ x }}</b>' }, 'components/x-c')
+  })
+})

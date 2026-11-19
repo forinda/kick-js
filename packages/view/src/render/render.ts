@@ -652,6 +652,8 @@ export function render(
   } = {},
 ): string {
   const r = new Renderer(env)
+  // A page's @input defaults sit under whatever data was given.
+  if (template.defaults) data = { ...template.defaults, ...data }
   r.rootData = data as Record<string, unknown>
   const page: Inst = {
     t: template,

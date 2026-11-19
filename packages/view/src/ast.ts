@@ -301,6 +301,8 @@ export interface CheckedTemplate {
   client?: { code: string; js: boolean }
   /** a field in it has `validate`: pages rendering it ship the validator script */
   validates?: true
+  /** a page's `@input name = value` defaults: data that fills in when nobody supplied it */
+  defaults?: Record<string, Literal>
   /** its `@snippet`s, by name */
   snippets?: Record<string, CSnippet>
   /** its `@fragment`s, by name */
