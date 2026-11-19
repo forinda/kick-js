@@ -268,3 +268,69 @@ describe('stacks', () => {
     clean({ 'components/x-y': `${push}<b></b>` }, 'components/x-y')
   })
 })
+
+describe('fragments', () => {
+  const frag = (src: string, name: string) => clean({ page: src }).fragments?.[name]
+
+  it('refuses @fragment in a component, allows it in a layout', () => {
+    expect(errs({ 'components/x-y': "@fragment('a') {<b></b>}" }, 'components/x-y')).toEqual([
+      expect.stringContaining('components'),
+    ])
+    expect(
+      clean({ 'layouts/main': "@fragment('a') {<slot />}" }, 'layouts/main').fragments?.a,
+    ).toBeDefined()
+  })
+
+  it('refuses a fragment name used twice', () => {
+    expect(errs({ page: "@fragment('a') {x}@fragment('a') {y}" })).toEqual([
+      expect.stringContaining("'a'"),
+    ])
+  })
+
+  it('needs the names enclosing blocks bind: @for, @if as, @let', () => {
+    expect(
+      frag(
+        "@for (user of users; track user.id) {@fragment('row') {<tr>{{ user.name }}</tr>}}",
+        'row',
+      )?.needs,
+    ).toEqual(['user'])
+    expect(frag("@if (current; as u) {@fragment('me') {{{ u.name }}}}", 'me')?.needs).toEqual(['u'])
+    expect(frag("@let total = a + b;\n@fragment('t') {{{ total }}}", 't')?.needs).toEqual(['total'])
+  })
+
+  it("doesn't need page data or names bound inside it", () => {
+    expect(frag("@fragment('f') {{{ title }}}", 'f')?.needs).toEqual([])
+    expect(frag("@fragment('f') {@for (x of xs; track x) {{{ x }}}}", 'f')?.needs).toEqual([])
+  })
+
+  it('compiles nested fragments: the inner needs only what is bound outside it', () => {
+    const page = clean({
+      page: "@for (g of groups; track g.id) {@fragment('group') {@for (u of g.users; track u.id) {@fragment('user') {{{ u.name }}{{ g.id }}}}}}",
+    })
+    expect(page.fragments?.group?.needs).toEqual(['g'])
+    expect(page.fragments?.user?.needs).toEqual(['u', 'g'])
+  })
+
+  it("refuses an enclosing loop's $index, but needs its alias", () => {
+    expect(errs({ page: "@for (x of xs; track x) {@fragment('f') {{{ $index }}}}" })).toEqual([
+      expect.stringContaining('alias it'),
+    ])
+    expect(
+      frag("@for (x of xs; track x; let i = $index) {@fragment('f') {{{ i }}}}", 'f')?.needs,
+    ).toEqual(['i'])
+  })
+
+  it('leaves the inline markup as if the wrapper were not there', () => {
+    const wrapped = clean({ page: "<p>@fragment('a') {<b>{{ t }}</b>}</p>" })
+    const plain = clean({ page: '<p><b>{{ t }}</b></p>' })
+    // Source positions differ; the markup doesn't.
+    const noAt = (body: unknown) => JSON.stringify(body, (k, v) => (k === 'at' ? undefined : v))
+    expect(noAt(wrapped.body)).toBe(noAt(plain.body))
+  })
+
+  it('reports a problem inside a fragment once', () => {
+    expect(warns({ page: '@fragment(\'f\') {<stack name="a" /><stack name="a" />}' })).toHaveLength(
+      1,
+    )
+  })
+})

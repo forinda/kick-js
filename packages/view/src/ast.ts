@@ -1,7 +1,7 @@
 import type { Span } from './diagnostics'
 
 /** Bumped when the shape of a checked template changes; builds and runtimes must agree. */
-export const AST_FORMAT_VERSION = 1
+export const AST_FORMAT_VERSION = 2
 
 /** A literal value in a template expression. */
 export type Literal = string | number | boolean | null
@@ -208,6 +208,17 @@ export type CNode =
   | { k: 'as'; en: string }
 
 /** A template after `check`: plain JSON the renderer walks, which a build can ship as data. */
+/** A page's `@fragment`, compiled to render on its own. */
+export interface CheckedFragment {
+  /** names enclosing blocks bound (loop items, aliases, `@let`): the caller passes them */
+  needs: string[]
+  /** scope slots the unit needs */
+  slots: number
+  body: CNode[]
+  /** a field in it has `validate` */
+  validates?: true
+}
+
 export interface CheckedTemplate {
   v: typeof AST_FORMAT_VERSION
   name: string
@@ -225,4 +236,6 @@ export interface CheckedTemplate {
   client?: { code: string; js: boolean }
   /** a field in it has `validate`: pages rendering it ship the validator script */
   validates?: true
+  /** its `@fragment`s, by name */
+  fragments?: Record<string, CheckedFragment>
 }
