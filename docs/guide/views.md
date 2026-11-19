@@ -38,7 +38,7 @@ Other template engines (EJS, Pug, Handlebars) keep working through [`ViewAdapter
 
 ## Setup
 
-`kick add views` does this for you: it installs the package, writes `src/views.ts`, a layout and a `home` page, puts the adapter in `src/adapters/views.ts` (`viewsAdapter()`) and adds it to `bootstrap()` in `src/index.ts`, and prints the line that registers `viewCliPlugin` in `kick.config.ts` (for `kick check:views` and `kick fmt:views`). By hand:
+`kick add views` does this for you: it installs the package, writes `src/views.ts`, a layout, a `home` page and `src/views/shared.d.ts` (for [typed render data](#typed-render-data)), puts the adapter in `src/adapters/views.ts` (`viewsAdapter()`) and adds it to `bootstrap()` in `src/index.ts`, and prints the line that registers `viewCliPlugin` in `kick.config.ts` (for `kick check:views` and `kick fmt:views`). By hand:
 
 ```bash
 pnpm add @forinda/kickjs-view
@@ -973,6 +973,68 @@ export default defineConfig({ plugins: [viewCliPlugin] })
 - `kick fmt:views` formats every template: `{{ x | pipe }}` and `@if (x) {` spacing, indentation by nesting, and a closing tag or `}` on its own line when its opener is on an earlier one. `<pre>`, `<textarea>`, `<script>`, `<style>`, `@verbatim` and comments are left exactly as written. A file is only rewritten if the result means the same template; otherwise it's left alone with a warning.
 - `kick fmt:views --check` lists the files that would change and exits 1, which suits CI.
 - `kick check:views` reports every error with its file, line and column, the same checks the build runs: syntax, unknown pipes, component inputs, slots, layouts and unsafe interpolation.
+- `kick typegen` writes the types that check `ctx.render`: see [Typed render data](#typed-render-data).
+
+When your views aren't in `src/views`, use the factory, which also tells the typegen where to look:
+
+```ts
+import { kickViewsCli } from '@forinda/kickjs-view/cli'
+export default defineConfig({ plugins: [kickViewsCli({ dir: 'app/views', componentsDir: 'ui' })] })
+```
+
+## Typed render data {#typed-render-data}
+
+`kick typegen` (and `kick dev`) reads every page and writes `.kickjs/types/kick__views.ts`. From then on `ctx.render` and `views.render` accept only real template names, and the data must include what the page reads:
+
+```ts
+await ctx.render('users/show', { user }) // ok
+await ctx.render('users/shwo', { user }) // error: no such template
+await ctx.render('users/show', {}) // error: 'user' is missing
+```
+
+What the types come from:
+
+- **Names a page reads** (`{{ user.name }}`, `[href]="post.url"`, `@for (p of posts)`) are required, shaped by how they're read: `user` is `{ name: unknown }`, `posts` an iterable of whatever `p` reads. Values the template only prints stay `unknown`.
+- **Guarded reads are optional and may be `null`**: `@if (user) { … }` and everything inside it, `user ?? 'guest'`, `user?.name`, `user && user.name`, `user ? … : …`. So `findById(): User | null` passes straight in.
+- **Extra keys are fine**, and form state (`$errors`, `$old`, `$flash`) is never asked for.
+- **A fragment render** (`{ fragment: 'row' }`) takes only what that fragment needs.
+- **Layouts:** the reads of a page's own `@layout(...)` chain are included. Layouts from the `layout` mapping or `baseLayout` aren't (typegen can't see `createViews`); those usually read shared names, below.
+
+**Tighter types**, page by page: declare the data with `@input`, importing the types it uses.
+
+```kick
+@import type { User } from '@/domain/user'
+@input user: User
+@input title: string = 'Users'
+<h1>{{ title }}</h1>
+```
+
+A declared type replaces the inferred one. A default makes the name optional and fills it in when nobody passes it; the page's layouts see it too, and `share()` or the controller override it. A relative import path is relative to the template.
+
+**Shared names**: list what `createViews({ share })` supplies once, so controllers needn't pass it. `kick add views` writes this file:
+
+```ts
+// src/views/shared.d.ts
+declare module '@forinda/kickjs' {
+  interface KickViewShared {
+    user: { name: string } | undefined
+    csrfToken: string
+  }
+}
+export {}
+```
+
+**Other engines**: once the registry exists, a name it doesn't know is an error. An app that also renders EJS or Pug through [`ViewAdapter`](./view-engines.md) opts out of that check, which also lets a misspelled `.kick` name compile:
+
+```ts
+declare module '@forinda/kickjs' {
+  interface KickViewTypeOptions {
+    otherEngines: true
+  }
+}
+```
+
+The view package declares the same interfaces for `views.render` outside an app (emails, the edge); typegen fills whichever of `@forinda/kickjs` and `@forinda/kickjs-view` you have installed.
 
 ## Editor support
 
