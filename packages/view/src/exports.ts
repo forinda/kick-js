@@ -7,6 +7,13 @@ export type { Attr, Ctx, Element, IfBranch, InputDecl, LoopVar, Node, TemplateAs
 export { parse, type ParseResult } from './parse/template'
 export type { CAttr, CExpr, CNode, CSeg, CheckedTemplate } from './ast'
 export { check, type CheckResult } from './check/check'
+export {
+  merge as mergeField,
+  mergeSummary,
+  type DataSummary,
+  type Field,
+  type Shape,
+} from './check/summary'
 export { componentTag, layoutResolver, templateName, type Project } from './check/project'
 export { isUrlAttr, URL_ATTRS } from './urls'
 export {

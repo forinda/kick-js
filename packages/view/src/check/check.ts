@@ -23,6 +23,7 @@ import {
   type TemplateAst,
 } from '../ast'
 import { error, warning, type Diagnostic, type Span } from '../diagnostics'
+import { summarize, type DataSummary } from './summary'
 import { decodeEntities } from '../entities'
 import { isUrlAttr } from '../urls'
 import {
@@ -41,6 +42,8 @@ export type { CheckedTemplate } from '../ast'
 export interface CheckResult {
   template?: CheckedTemplate
   diagnostics: Diagnostic[]
+  /** A page's or layout's render data, for typegen; present even when the check failed. */
+  data?: DataSummary
 }
 
 /** SVG animation elements can set any attribute — `href` included — to these values. */
@@ -1606,5 +1609,11 @@ export function check(name: string, project: Project): CheckResult {
   if (Object.keys(c.fragments).length) template.fragments = c.fragments
   if (Object.keys(c.snippets).length) template.snippets = c.snippets
   const failed = c.diagnostics.some((d) => d.severity === 'error')
-  return failed ? { diagnostics: c.diagnostics } : { template, diagnostics: c.diagnostics }
+  // What a page reads, for typegen — not part of the compiled template.
+  const data = component ? undefined : summarize(ast)
+  const result: CheckResult = failed
+    ? { diagnostics: c.diagnostics }
+    : { template, diagnostics: c.diagnostics }
+  if (data) result.data = data
+  return result
 }
