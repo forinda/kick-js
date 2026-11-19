@@ -16,8 +16,7 @@ const FILE = 17
 
 /** Template names a page can render: everything but components. */
 function renderable(ws: Workspace): string[] {
-  const dir = `${ws.componentsDir()}/`
-  return ws.names().filter((n) => !n.startsWith(dir))
+  return ws.names().filter((n) => !ws.isComponent(n))
 }
 
 export function renderCompletions(

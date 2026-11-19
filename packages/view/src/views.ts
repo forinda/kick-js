@@ -13,7 +13,13 @@ import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
-import { componentTag, layoutResolver, templateName, type Project } from './check/project'
+import {
+  componentTag,
+  isComponent,
+  layoutResolver,
+  templateName,
+  type Project,
+} from './check/project'
 import {
   CLIENT_SCRIPT_FILE,
   NO_STRIPPER,
@@ -529,7 +535,7 @@ export function createViews(options: ViewsOptions = {}): Views {
         ? Object.keys(bundle.templates)
         : [...(await current()).project.templates.keys()]
       const name = names.find(
-        (n) => n.startsWith(`${componentsDir}/`) && componentTag(n, componentsDir) === m[1],
+        (n) => isComponent(n, componentsDir) && componentTag(n, componentsDir) === m[1],
       )
       if (!name) return undefined
       const t = bundle ? bundle.templates[name]! : checked(await current(), name)

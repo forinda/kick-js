@@ -1,6 +1,7 @@
 /** Named view roots in the editor: `billing::…` templates from another folder. */
 import { describe, expect, it } from 'vitest'
 import { definition } from '../src/plugin/definition'
+import { completions } from '../src/plugin/completion'
 import { hover } from '../src/plugin/hover'
 import { ROOT, cursor, uri, workspaceOf } from './helpers'
 
@@ -44,5 +45,44 @@ describe('view roots in the editor', () => {
     ws.setBuffer(uri('page'), text)
     const h = hover(ws, uri('page'), text, offset)
     expect(JSON.stringify(h?.contents)).toContain('label')
+  })
+})
+
+describe('view roots in the editor — review fixes', () => {
+  it("offers a root's component tags", async () => {
+    const ws = await workspaceOf(FILES, { roots })
+    const { text, offset } = cursor('<ui-b§')
+    ws.setBuffer(uri('page'), text)
+    const labels = completions(ws, uri('page'), text, offset).map((c) => c.label)
+    expect(labels).toContain('ui-button')
+  })
+
+  it("re-checks app pages when a root component changes, and root pages when their root's layout does", async () => {
+    const ws = await workspaceOf(
+      {
+        ...FILES,
+        'src/views/page.kick': '<ui-button label="x"></ui-button>',
+        'src/modules/ui/views/page.kick': "@layout('layouts/main')\n<p></p>",
+      },
+      { roots },
+    )
+    expect([...ws.dependentsOf('ui::components/button')]).toContain('page')
+    expect([...ws.dependentsOf('ui::layouts/main')]).toContain('ui::page')
+    expect([...ws.dependentsOf('layouts/main')]).not.toContain('ui::page')
+  })
+
+  it("doesn't offer a root's components as pages to render", async () => {
+    const ws = await workspaceOf(FILES, { roots })
+    const { text, offset } = cursor("@layout('§')\n<p></p>")
+    ws.setBuffer(uri('page'), text)
+    const labels = completions(ws, uri('page'), text, offset).map((c) => c.label)
+    expect(labels).toContain('ui::page')
+    expect(labels).not.toContain('ui::components/button')
+  })
+
+  it('maps a file inside a root to its full name, for renames', async () => {
+    const ws = await workspaceOf(FILES, { roots })
+    expect(ws.relOf(uiUri('page'))).toBe('ui::page.kick')
+    expect(ws.relOf(`file://${UI}/layouts`)).toBe('ui::layouts')
   })
 })

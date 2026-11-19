@@ -104,6 +104,11 @@ export class Workspace {
     return split(name).path
   }
 
+  /** A component: under the components folder, in the app's views or a root's. */
+  isComponent(name: string): boolean {
+    return split(name).path.startsWith(`${this.opts.componentsDir}/`)
+  }
+
   // ── names ─────────────────────────────────────────────────────────────
 
   private nameOfPath(path: string): string | undefined {
@@ -123,10 +128,18 @@ export class Workspace {
     return { dir: dir ?? this.opts.viewsDir, path }
   }
 
-  /** `uri`'s path inside the views folder (`layouts/main.kick`, `layouts`); `undefined` outside it. */
+  /**
+   * `uri`'s path inside the views folder (`layouts/main.kick`, `layouts`), or
+   * inside a root with its prefix (`ui::layouts`); `undefined` outside them.
+   */
   relOf(uri: string): string | undefined {
-    const rel = relative(this.opts.viewsDir, URI.parse(uri).fsPath).split(sep).join(posix.sep)
-    return rel.startsWith('..') || isAbsolute(rel) ? undefined : rel
+    const path = URI.parse(uri).fsPath
+    for (const { root, dir } of this.folders()) {
+      const rel = relative(dir, path).split(sep).join(posix.sep)
+      if (rel.startsWith('..') || isAbsolute(rel)) continue
+      return root === undefined ? rel : `${root}::${rel}`
+    }
+    return undefined
   }
 
   nameOf(uri: string): string | undefined {
@@ -290,7 +303,7 @@ export class Workspace {
       for (const d of this.dependentsOf(n)) todo.push(d)
     }
     // A template appearing or disappearing can change how unknown tags resolve elsewhere.
-    if (membershipChanged && name.startsWith(`${this.opts.componentsDir}/`)) {
+    if (membershipChanged && this.isComponent(name)) {
       const tag = this.opts.view.componentTag(name, this.opts.componentsDir)
       for (const [n, e] of this.entries) if (e.tags.has(tag)) this.cache.delete(n)
     }
@@ -301,12 +314,14 @@ export class Workspace {
     // A configured layout can wrap any page: re-check them all.
     if (this.configuredLayouts().has(name)) return new Set(this.names().filter((n) => n !== name))
     const out = new Set<string>()
-    const tag = name.startsWith(`${this.opts.componentsDir}/`)
+    const tag = this.isComponent(name)
       ? this.opts.view.componentTag(name, this.opts.componentsDir)
       : undefined
     for (const [n, e] of this.entries) {
       if (n === name) continue
-      if ((tag && e.tags.has(tag) && this.entries.has(name)) || e.layouts.has(name)) out.add(n)
+      // A layout as written; in a root's template it names the root's own first.
+      const usesLayout = [...e.layouts].some((l) => this.refOf(n, l) === name)
+      if ((tag && e.tags.has(tag) && this.entries.has(name)) || usesLayout) out.add(n)
     }
     return out
   }

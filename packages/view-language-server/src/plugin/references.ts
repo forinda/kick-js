@@ -225,8 +225,8 @@ export async function fileRenameEdits(
   const changes: Record<string, TextEdit[]> = {}
   const dir = ws.componentsDir()
   for (const [oldName, newName] of renamed) {
-    const comp = oldName.startsWith(`${dir}/`)
-    const newTag = newName.startsWith(`${dir}/`) ? ws.view.componentTag(newName, dir) : undefined
+    const comp = ws.isComponent(oldName)
+    const newTag = ws.isComponent(newName) ? ws.view.componentTag(newName, dir) : undefined
     const targets: Array<[Target, string]> = [[{ kind: 'layout', name: oldName }, newName]]
     if (comp && newTag)
       targets.push([

@@ -6,7 +6,7 @@
  *
  * @module @forinda/kickjs-vite/kick-views-plugin
  */
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Plugin } from 'vite'
@@ -96,6 +96,8 @@ async function kickFiles(dir: string): Promise<string[]> {
  */
 export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let viewsDir = ''
+  /** The views folder came from the plugin's options or kick.config (not the default). */
+  let viewsDirSet = false
   /** Named roots, from the plugin's `roots` or kick.config's. */
   let roots: ViewRoot[] = []
   const rootDirs = () => new Map(roots.map((r) => [r.name, r.dir]))
@@ -114,6 +116,14 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   /** What messages call it: `<name>.kick` for the app's, the project path for a root's. */
   const labelOf = (name: string) =>
     name.includes('::') ? relative(root, fileOf(name)).split(sep).join('/') : `${name}.kick`
+  /**
+   * kick dev: the folders the views read, only where they were configured —
+   * spread over `createViews`, a default here would replace the app's own
+   * `viewsDir`. A build renders from the bundle.
+   */
+  const devFolders = () =>
+    (viewsDirSet ? `, viewsDir: ${JSON.stringify(viewsDir)}` : '') +
+    (roots.length ? `, roots: ${JSON.stringify(Object.fromEntries(rootDirs()))}` : '')
   /** Folders whose `.kick` files may back a client-script module. */
   const viewDirs = () => [viewsDir, ...roots.map((r) => r.dir)]
   let pipesFile = ''
@@ -285,16 +295,24 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
               views?: { dir?: string; roots?: Record<string, string> }
             } | null
           )?.views
+      viewsDirSet = !!(options.viewsDir || fromConfig?.dir)
       viewsDir =
         options.viewsDir || !fromConfig?.dir
           ? resolve(config.root, options.viewsDir ?? 'src/views')
           : resolve(configDir, fromConfig.dir)
       const wanted = options.roots ?? fromConfig?.roots
+      // An editable root by its real folder: a workspace package linked into
+      // node_modules is otherwise ignored by Vite's watcher, and its module ids
+      // wouldn't match the files the watcher reports.
       roots = wanted
-        ? (await import('@forinda/kickjs-view/cli')).resolveViewRoots(configDir, { roots: wanted })
-            .roots
+        ? (await import('@forinda/kickjs-view/cli'))
+            .resolveViewRoots(configDir, { roots: wanted })
+            .roots.map((r) => (r.readOnly ? r : { ...r, dir: realpathSync(r.dir) }))
         : []
-      pipesFile = resolve(config.root, options.pipesFile ?? 'src/views/pipes.ts')
+      // Beside the views, as `kick check:views` and the editor look for it.
+      pipesFile = options.pipesFile
+        ? resolve(config.root, options.pipesFile)
+        : join(viewsDir, 'pipes.ts')
       // Beside the views, as the editor and `kick check:views` look for it.
       validatorsFile = options.validatorsFile
         ? resolve(config.root, options.validatorsFile)
@@ -433,11 +451,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
           : 'const clientDir = undefined;',
         // kick dev: the views read the validators file this plugin serves, wherever it's configured.
         `export const validatorsFile = ${build ? 'undefined' : JSON.stringify(validatorsFile)};`,
-        // kick dev: the folders the views read (a build renders from the bundle).
-        `export const viewsDir = ${build ? 'undefined' : JSON.stringify(viewsDir)};`,
-        `export const roots = ${build ? 'undefined' : JSON.stringify(Object.fromEntries(rootDirs()))};`,
         'export { bundle, pipes, clientScriptPath, clientDir }',
-        `export default { bundle, pipes, clientScriptPath, clientDir${build ? '' : ', validatorsFile, viewsDir, roots'} }`,
+        `export default { bundle, pipes, clientScriptPath, clientDir${build ? '' : `, validatorsFile${devFolders()}`} }`,
       ].join('\n')
     },
   }

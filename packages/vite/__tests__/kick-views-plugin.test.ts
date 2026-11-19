@@ -4,7 +4,9 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
@@ -618,7 +620,8 @@ describe('named view roots', () => {
     try {
       const mod = await vite.ssrLoadModule('virtual:kick-views')
       expect(mod.default.roots).toEqual({ ui: join(root, 'ui') })
-      expect(mod.default.viewsDir).toBe(join(root, 'src/views'))
+      // Not configured here: left to createViews's own option or default.
+      expect('viewsDir' in mod.default).toBe(false)
       const res = await fetch(`${base}/_kick/c/ui-button.00000000.js`)
       expect(res.status).toBe(200)
       expect(await res.text()).toContain('ui-dev')
@@ -650,5 +653,63 @@ describe('named view roots', () => {
     } finally {
       await vite.close()
     }
+  })
+})
+
+describe('named view roots — review fixes', () => {
+  it("finds pipes.ts beside kick.config's views folder", async () => {
+    const root = project({
+      'app/views/home.kick': '<p>{{ name | shout }}</p>',
+      'app/views/pipes.ts': 'export const shout = (v: unknown) => String(v).toUpperCase()',
+    })
+    const code = await bundle(root, { loadConfig: async () => ({ views: { dir: 'app/views' } }) })
+    expect(code).toContain('"home"')
+  })
+
+  it('watches a linked workspace package by its real folder', async () => {
+    const root = project({
+      'packages/ui/package.json': '{ "name": "@acme/ui", "kick": { "views": "views" } }',
+      'packages/ui/views/components/button.kick': '<button></button>',
+    })
+    mkdirSync(join(root, 'node_modules/@acme'), { recursive: true })
+    symlinkSync(join(root, 'packages/ui'), join(root, 'node_modules/@acme/ui'))
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin({ roots: { ui: '@acme/ui' } })],
+      server: { middlewareMode: true, ws: false },
+    })
+    try {
+      const mod = await vite.ssrLoadModule('virtual:kick-views')
+      expect(mod.default.roots).toEqual({ ui: join(realpathSync(root), 'packages/ui/views') })
+    } finally {
+      await vite.close()
+    }
+  })
+
+  it("hands the dev views only what was configured, so an app's own viewsDir stands", async () => {
+    const root = project({ 'src/views/home.kick': '<p></p>', 'app/views/x.kick': '<p></p>' })
+    const serve = async (opts: KickViewsPluginOptions) => {
+      const vite = await createServer({
+        root,
+        configFile: false,
+        logLevel: 'silent',
+        appType: 'custom',
+        plugins: [kickViewsPlugin(opts)],
+        server: { middlewareMode: true, ws: false },
+      })
+      try {
+        return (await vite.ssrLoadModule('virtual:kick-views')).default
+      } finally {
+        await vite.close()
+      }
+    }
+    const plain = await serve({ loadConfig: async () => null })
+    expect('viewsDir' in plain).toBe(false)
+    expect('roots' in plain).toBe(false)
+    const configured = await serve({ loadConfig: async () => ({ views: { dir: 'app/views' } }) })
+    expect(configured.viewsDir).toBe(join(root, 'app/views'))
   })
 })

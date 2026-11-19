@@ -94,3 +94,33 @@ describe('view roots at render', () => {
     await expect(v.render('nope::x')).rejects.toThrow(/nope::x/)
   })
 })
+
+describe('view roots — client scripts', () => {
+  it("serves a root component's script by its prefixed tag", async () => {
+    const { check } = await import('../src/check/check')
+    const { parse } = await import('../src/parse/template')
+    const { BUILTIN_PIPES } = await import('../src/pipes/builtins')
+    const { AST_FORMAT_VERSION } = await import('../src/ast')
+    const files = {
+      'ui::components/button': '<button></button>\n<script client>\nconsole.log(1)\n</script>',
+      page: '<ui-button></ui-button>',
+    }
+    const project = {
+      templates: new Map(Object.entries(files).map(([n, s]) => [n, parse(s, `${n}.kick`).ast])),
+      pipes: new Set(BUILTIN_PIPES),
+      componentsDir: 'components',
+    }
+    const button = check('ui::components/button', project).template!
+    button.client = { code: 'console.log(1)', js: true }
+    const v = createViews({
+      bundle: {
+        v: AST_FORMAT_VERSION,
+        templates: { 'ui::components/button': button, page: check('page', project).template! },
+      },
+      warn: () => {},
+    })
+    const src = /src="\/_kick\/c\/([^"]+)"/.exec(await v.render('page'))![1]!
+    expect(src).toMatch(/^ui-button\./)
+    expect(await v.clientScript(src)).toContain('console.log(1)')
+  })
+})

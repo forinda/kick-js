@@ -207,8 +207,8 @@ export function startServer(): void {
 
   connection.onRequest('kick/templateNames', () => {
     if (!ws) return []
-    const dir = `${ws.componentsDir()}/`
-    return ws.names().filter((n) => !n.startsWith(dir))
+    const w = ws
+    return w.names().filter((n) => !w.isComponent(n))
   })
 
   // For clients that keep TS / JS files to themselves (the VS Code extension):
