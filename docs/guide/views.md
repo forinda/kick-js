@@ -38,7 +38,7 @@ Other template engines (EJS, Pug, Handlebars) keep working through [`ViewAdapter
 
 ## Setup
 
-`kick add views` does this for you: it installs the package, writes `src/views.ts`, a layout, a `home` page and `src/views/shared.d.ts` (for [typed render data](#typed-render-data)), puts the adapter in `src/adapters/views.ts` (`viewsAdapter()`) and adds it to `bootstrap()` in `src/index.ts`, and prints the line that registers `viewCliPlugin` in `kick.config.ts` (for `kick check:views` and `kick fmt:views`). By hand:
+`kick add views` does this for you: it installs the package, writes `src/views.ts`, a layout, a `home` page and `src/views/shared.ts` (for [typed render data](#typed-render-data)), puts the adapter in `src/adapters/views.ts` (`viewsAdapter()`) and adds it to `bootstrap()` in `src/index.ts`, and prints the line that registers `viewCliPlugin` in `kick.config.ts` (for `kick check:views` and `kick fmt:views`). By hand:
 
 ```bash
 pnpm add @forinda/kickjs-view
@@ -995,9 +995,11 @@ await ctx.render('users/show', {}) // error: 'user' is missing
 What the types come from:
 
 - **Names a page reads** (`{{ user.name }}`, `[href]="post.url"`, `@for (p of posts)`) are required, shaped by how they're read: `user` is `{ name: unknown }`, `posts` an iterable of whatever `p` reads. Values the template only prints stay `unknown`.
-- **Guarded reads are optional and may be `null`**: `@if (user) { … }` and everything inside it, `user ?? 'guest'`, `user?.name`, `user && user.name`, `user ? … : …`. So `findById(): User | null` passes straight in.
+- **A tested name may be `null`**: inside `@if (user) { … }` (and an `@else` after `@if (!user)`), `user && user.name`, `user ? … : …`, and `@for` sources. So `findById(): User | null` passes straight in. The name must still be passed: a missing one warns at render.
+- **`??` and `?.` let a name be left out**: `user ?? 'guest'`, `user?.name`.
+- **`$index` and the other loop variables**, `@let`s and `@for` items are the template's own, never data; reading through an alias (`@let u = user`) types `user`.
 - **Extra keys are fine**, and form state (`$errors`, `$old`, `$flash`) is never asked for.
-- **A fragment render** (`{ fragment: 'row' }`) takes only what that fragment needs.
+- **A fragment render** (`{ fragment: 'row' }`) takes only what that fragment reads. Its needs (names bound around it, like a loop's item) must come from the controller, so `KickViewShared` doesn't cover them, just as `share()` doesn't at render.
 - **Layouts:** the reads of a page's own `@layout(...)` chain are included. Layouts from the `layout` mapping or `baseLayout` aren't (typegen can't see `createViews`); those usually read shared names, below.
 
 **Tighter types**, page by page: declare the data with `@input`, importing the types it uses.
@@ -1009,13 +1011,19 @@ What the types come from:
 <h1>{{ title }}</h1>
 ```
 
-A declared type replaces the inferred one. A default makes the name optional and fills it in when nobody passes it; the page's layouts see it too, and `share()` or the controller override it. A relative import path is relative to the template.
+A declared type replaces the inferred one. A default makes the name optional and fills it in when nobody passes it; the page's layouts see it too, and `share()` or the controller override it. A layout's own `@input` defaults work the same way, under the page's. A relative import path is relative to the template.
 
-**Shared names**: list what `createViews({ share })` supplies once, so controllers needn't pass it. `kick add views` writes this file:
+**Shared names**: list what `createViews({ share })` supplies once, so controllers needn't pass it. `kick add views` writes this file (a `.ts`, so a mistake in it is reported):
 
 ```ts
-// src/views/shared.d.ts
+// src/views/shared.ts
 declare module '@forinda/kickjs' {
+  interface KickViewShared {
+    user: { name: string } | undefined
+    csrfToken: string
+  }
+}
+declare module '@forinda/kickjs-view' {
   interface KickViewShared {
     user: { name: string } | undefined
     csrfToken: string

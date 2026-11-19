@@ -8,11 +8,11 @@
 
 - **Typegen:** `kick typegen` writes `.kickjs/types/kick__views.ts` from every page. Only real template names compile, and the data must include what the page reads.
   - The shape comes from paths and loops.
-  - Guarded reads (`@if (x)`, `??`, `?.`, `&&`, ternaries) are optional and nullable.
+  - A name a condition tests (`@if (x)`, `&&`, ternaries, `@for` sources) may be `null`; `??` and `?.` let it be left out.
   - Extra keys are fine.
-  - `{ fragment }` renders take just that fragment's needs.
-- **Annotations:** `@input user: User` with `@import type { User } from '…'` types a page's data. Pages may now declare `@input`s, and a default (`@input title = 'Home'`) fills in when nobody passes the name; the page's layouts see it.
-- **Shared names:** declare what `createViews({ share })` supplies once in `interface KickViewShared`; `kick add views` scaffolds `src/views/shared.d.ts`.
+  - `{ fragment }` renders take just what that fragment reads; its needs aren't covered by shared names.
+- **Annotations:** `@input user: User` with `@import type { User } from '…'` types a page's data. Pages and layouts may now declare `@input`s, and a default (`@input title = 'Home'`) fills in when nobody passes the name; the page's layouts see it.
+- **Shared names:** declare what `createViews({ share })` supplies once in `interface KickViewShared`; `kick add views` scaffolds `src/views/shared.ts`.
 - **Other engines:** `interface KickViewTypeOptions { otherEngines: true }` lets names outside the registry through, for apps that also use `ViewAdapter`.
 - **Unchanged without typegen:** an empty registry keeps `ctx.render` as loose as before.
 - **New `kickViewsCli({ dir, componentsDir, pipes, validators })`:** configures the view CLI plugin and its typegen; `viewCliPlugin` is `kickViewsCli()`.

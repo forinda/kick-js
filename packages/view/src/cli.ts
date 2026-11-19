@@ -30,8 +30,6 @@ export interface ViewsCliOptions {
 const line = (d: Diagnostic, prefix: string) =>
   `${prefix}${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`
 
-/** Template names (`users/show`) under the views folder, or those `paths` name. */
-
 /** Format templates in place, or with `check` report the ones that would change. Returns the exit code. */
 export async function fmtViews(
   opts: ViewsCliOptions & { check?: boolean; indent?: number },

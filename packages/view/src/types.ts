@@ -50,10 +50,13 @@ export type ViewNameOf<R, O> = [keyof R] extends [never]
 
 type DataOf<R, N> = N extends keyof R ? (R[N] extends { data: infer D } ? D : never) : never
 
-/** Shared names may be left out; extra keys are always fine. */
-type WithShared<D, S> = Omit<D, keyof S> &
-  Partial<Pick<D, Extract<keyof D, keyof S>>> &
-  Record<string, unknown>
+/**
+ * Shared names may be left out; extra keys are fine. The union keeps an
+ * interface or class instance assignable (they have no index signature),
+ * while an object literal's extra keys are allowed by the second member.
+ */
+type Shaped<D, S> = Omit<D, keyof S> & Partial<Pick<D, Extract<keyof D, keyof S>>>
+type WithShared<D, S> = Shaped<D, S> | (Shaped<D, S> & Record<string, unknown>)
 
 /** The data `ctx.render(N, data)` takes. */
 export type ViewDataOf<R, S, N> = [DataOf<R, N>] extends [never]
@@ -67,23 +70,17 @@ export type ViewFragmentNameOf<R, N> = [FragmentsOf<R, N>] extends [never]
   ? string
   : Extract<keyof FragmentsOf<R, N>, string>
 
-type Intersect<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void
-  ? I
-  : never
-
-/** The data a fragment render takes: the needs of every fragment named. */
-type Names<F> = Extract<F extends readonly (infer X)[] ? X : F, string>
-
+/**
+ * The data a fragment render takes: its needs exactly (the controller passes
+ * them; `share()` doesn't count at render), plus the page data it reads.
+ */
 export type ViewFragmentDataOf<R, S, N, F> = [FragmentsOf<R, N>] extends [never]
   ? Record<string, any>
-  : WithShared<
-      Intersect<
-        {
-          [K in Names<F>]: K extends keyof FragmentsOf<R, N> ? FragmentsOf<R, N>[K] : never
-        }[Names<F>]
-      >,
-      S
-    >
+  : F extends keyof FragmentsOf<R, N>
+    ? FragmentsOf<R, N>[F] extends { needs: infer Needs; reads: infer Reads }
+      ? Needs & WithShared<Reads, S>
+      : Record<string, any>
+    : never
 
 type Opts = Omit<RenderOptions, 'fragment'> & { ctx?: unknown }
 
@@ -104,6 +101,16 @@ export type RenderArgs<R, S, N> = [DataOf<R, N>] extends [never]
             opts: Opts & { fragment: F | readonly ViewFragmentNameOf<R, N>[] },
           ]
         }[ViewFragmentNameOf<R, N>]
+
+/**
+ * A name any string may take: while the registry is empty, or other engines
+ * are on — so a generic helper over names compiles. `never` otherwise.
+ */
+export type LooseViewName = [keyof KickViews] extends [never]
+  ? string
+  : KickViewTypeOptions extends { otherEngines: true }
+    ? string
+    : never
 
 /** The app's template names. */
 export type ViewName = ViewNameOf<KickViews, KickViewTypeOptions>

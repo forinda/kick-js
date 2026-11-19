@@ -4,7 +4,10 @@ import type { RenderArgs, ViewNameOf } from '../src/types'
 import type { Views } from '../src/index'
 
 interface Reg {
-  page: { data: { user: { name: unknown } }; fragments: { row: { u: unknown } } }
+  page: {
+    data: { user: { name: unknown } }
+    fragments: { row: { needs: { u: unknown }; reads: {} } }
+  }
 }
 declare function render<N extends ViewNameOf<Reg, {}>>(
   name: N,

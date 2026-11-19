@@ -7,12 +7,12 @@
  * so `skipLibCheck` doesn't hide a bad `@input` type or an `@import type` that
  * doesn't resolve.
  */
-import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import type { CliTypegen } from '@forinda/kickjs-cli-kit'
 import { check } from './check/check'
 import { isComponent } from './check/project'
-import { mergeSummary, type DataSummary, type Field, type Shape } from './check/summary'
+import { mergeSummary, summarize, type DataSummary, type Field, type Shape } from './check/summary'
 import type { KickViewsCliOptions } from './cli'
 import { loadViewsProject } from './load-project'
 
@@ -92,17 +92,35 @@ export function renderViewTypes(
   entries: ViewTypesEntry[],
   opts: { modules: string[]; outDir: string; projectRoot: string },
 ): string {
-  const imports = new Set<string>()
+  // `import type { … } from 'm'` lines merged per module, so two templates
+  // importing from one place don't declare a name twice.
+  const named = new Map<string, Set<string>>()
+  const other = new Set<string>()
   for (const e of entries) {
     for (const line of e.summary.imports) {
-      imports.add(importLine(line, e.file, opts.outDir, opts.projectRoot))
+      const rewritten = importLine(line, e.file, opts.outDir, opts.projectRoot)
+      const m = /^import\s+type\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2$/.exec(rewritten.trim())
+      if (!m) {
+        other.add(rewritten)
+        continue
+      }
+      const names = named.get(m[3]!) ?? new Set<string>()
+      for (const n of m[1]!.split(',')) if (n.trim()) names.add(n.trim().replace(/\s+/g, ' '))
+      named.set(m[3]!, names)
     }
   }
+  const imports = [
+    ...[...named].map(([from, names]) => `import type { ${[...names].join(', ')} } from '${from}'`),
+    ...other,
+  ]
   const body = entries
     .toSorted((a, b) => a.name.localeCompare(b.name))
     .map((e) => {
       const fragments = Object.entries(e.summary.fragments)
-        .map(([name, fields]) => `${key(name)}: ${objectType(fields)}`)
+        .map(
+          ([name, f]) =>
+            `${key(name)}: { needs: ${objectType(f.needs)}; reads: ${objectType(f.reads)} }`,
+        )
         .join('; ')
       return [
         `    // from ${e.file}`,
@@ -129,15 +147,17 @@ export function renderViewTypes(
 
 const PACKAGES = ['@forinda/kickjs', '@forinda/kickjs-view'] as const
 
-/** Is `pkg` installed in the project at `root`? */
+/**
+ * Is `pkg` installed for the project at `root`? Looks for
+ * `node_modules/<pkg>/package.json` up the folders, as Node resolves — not
+ * `require.resolve('<pkg>/package.json')`, which a package's `exports` can
+ * refuse.
+ */
 function installedIn(root: string): (pkg: string) => boolean {
-  const req = createRequire(join(root, 'package.json'))
   return (pkg) => {
-    try {
-      req.resolve(`${pkg}/package.json`)
-      return true
-    } catch {
-      return false
+    for (let dir = resolve(root); ; dir = dirname(dir)) {
+      if (existsSync(join(dir, 'node_modules', pkg, 'package.json'))) return true
+      if (dirname(dir) === dir) return false
     }
   }
 }
@@ -173,7 +193,8 @@ export function viewsTypegen(
         if (r.diagnostics.some((d) => d.severity === 'error') || loaded.unparsed.has(name)) {
           failed.push(name)
         }
-        summaries.set(name, r.data ?? emptySummary())
+        // The summary is typegen's own pass: the runtime check never computes it.
+        summaries.set(name, summarize(loaded.project.templates.get(name)!))
       }
       if (failed.length) {
         ctx.log.warn(
@@ -205,5 +226,3 @@ export function viewsTypegen(
     },
   }
 }
-
-const emptySummary = (): DataSummary => ({ fields: {}, declared: {}, imports: [], fragments: {} })

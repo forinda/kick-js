@@ -77,6 +77,12 @@ describe('format', () => {
     expect(fmt(once)).toBe(once)
   })
 
+  it('leaves a typed @input with generics out of the indentation', () => {
+    const src =
+      '@input u: Array<User>\n@input m: Map<string, A[]> = null\n<div>\n  <p>x</p>\n</div>\n'
+    expect(fmt(src)).toBe(src)
+  })
+
   it('spaces pipes in interpolations and block headers', () => {
     expect(fmt("<p>{{title|titlecase}} {{ at  |date:'short'| uppercase }}</p>\n")).toBe(
       "<p>{{ title | titlecase }} {{ at | date:'short' | uppercase }}</p>\n",

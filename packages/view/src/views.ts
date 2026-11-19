@@ -2,7 +2,7 @@
  * `createViews`: templates from a loader or a build's bundle, checked once
  * and cached, rendered with the app's pipes and shared data.
  */
-import type { ViewName, ViewRenderArgs } from './types'
+import type { LooseViewName, ViewName, ViewRenderArgs } from './types'
 import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
@@ -126,6 +126,11 @@ export interface ViewsOptions {
 /** A views instance: renders templates and serves component client scripts. */
 export interface Views {
   render<N extends ViewName>(name: N, ...args: ViewRenderArgs<N>): Promise<string>
+  render(
+    name: LooseViewName,
+    data?: object,
+    opts?: RenderOptions & { ctx?: unknown },
+  ): Promise<string>
   /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
   clientScript(file: string): Promise<string | undefined>
   /** A client file (script, stylesheet, asset) by its served name, with its content type. */
@@ -396,7 +401,7 @@ export function createViews(options: ViewsOptions = {}): Views {
 
   const views: Views = {
     has,
-    async render(name, data = {}, opts = {}) {
+    async render(name: string, data: object = {}, opts: RenderOptions & { ctx?: unknown } = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
       if (!(await has(name))) throw new Error(`template '${name}' not found`)
       const st = bundle ? undefined : await current()

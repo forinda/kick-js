@@ -8,6 +8,8 @@
 import type { Expr, Node, TemplateAst } from '../ast'
 import { FORM_GLOBALS } from '../form-state'
 
+const LOOP_VARS = new Set(['$index', '$first', '$last', '$even', '$odd', '$count'])
+
 /** The shape of a value, as far as the template's reads reveal it. */
 export type Shape =
   | { k: 'unknown' }
@@ -27,10 +29,15 @@ export interface DataSummary {
   fields: Record<string, Field>
   /** `@input name: Type` in the page: its type, and optional when it has a default. */
   declared: Record<string, { type?: string; optional: boolean }>
+  /** `@input name = value` defaults. */
+  defaults?: Record<string, unknown>
   /** `@import type …` lines, as written. */
   imports: string[]
-  /** Per `@fragment`: its needs (names bound around it) and the page data it reads. */
-  fragments: Record<string, Record<string, Field>>
+  /**
+   * Per `@fragment`: its needs (names bound around it — the caller passes
+   * them, `share()` doesn't count) and the page data it reads.
+   */
+  fragments: Record<string, { needs: Record<string, Field>; reads: Record<string, Field> }>
   /** The page's `@layout`: `null` for none, absent when it declares none. */
   layout?: string | null
 }
@@ -39,55 +46,81 @@ export interface DataSummary {
 
 /** One level of a read path while recording; turned into a `Field` at the end. */
 interface Level {
-  /** Read here without a guard: required. */
-  required: boolean
-  /** A loop source: may be null (`@for` shows `@empty`) even when required. */
-  nullable: boolean
-  /** A computed segment or a non-path use made this level opaque. */
+  /** Some read needs the name present (a missing one warns at render). */
+  present: boolean
+  /** Some read needs it non-null. */
+  nonNull: boolean
+  /** A loop source: may be null (`@for` shows `@empty`). */
+  loop: boolean
+  /** A computed segment made this level opaque. */
   opaque: boolean
   props: Map<string, Level>
   item?: Level
   pair?: Level
 }
 
-const level = (): Level => ({ required: false, nullable: false, opaque: false, props: new Map() })
+const level = (): Level => ({
+  present: false,
+  nonNull: false,
+  loop: false,
+  opaque: false,
+  props: new Map(),
+})
 
 type Step = { p: string } | { item: true } | { pair: true }
 
-/** Where a local name's value came from in the data, or null for a local of no data origin. */
-type Origin = { root: string; steps: Step[] } | null
+/**
+ * How a read treats the levels it touches: `use` needs them present and
+ * non-null; `test` (a condition) present, maybe null; `soft` (`??`, `?.`)
+ * neither.
+ */
+type Mode = 'use' | 'test' | 'soft'
 
+/** A local name: what it's bound to, at which scope depth. */
 interface Binding {
-  origin: Origin
-  /** Scope depth it was bound at — a fragment reads names bound below its own depth as needs. */
   depth: number
+  /** Data root, another local, or nothing data-shaped (a loop counter, a computed @let). */
+  src: { k: 'data'; root: string } | { k: 'var'; name: string; b: Binding } | null
+  /** Steps from `src` to the value. */
+  steps: Step[]
 }
 
-/** A read: a data root and steps, with the levels it guards. */
+/** What a binding to an expression points at: its data root or local, and steps. */
+interface Target {
+  src: Binding['src']
+  steps: Step[]
+}
+
+/** One read to record: root, steps, a mode per level (0 = root), opaque end, loop marker. */
 interface Read {
   root: string
   steps: Step[]
-  /** Levels (index into root + steps, 0 = root) read under a guard. */
-  guarded: Set<number>
-  /** Every level guarded (a condition or `??` operand). */
-  all: boolean
-  /** Opaque at the end (a computed segment followed). */
+  modes: Mode[]
   opaqueEnd: boolean
+  loop?: 'item' | 'pair'
 }
 
 class Summarizer {
   readonly roots = new Map<string, Level>()
   private readonly scopes: Array<Map<string, Binding>> = [new Map()]
-  /** Paths a condition tested, for the branch it protects. */
-  private readonly tested: Array<Array<{ root: string; steps: Step[] }>> = []
-  /** Fragments being walked: their recorder and scope depth at entry. */
-  private readonly frags: Array<{ roots: Map<string, Level>; depth: number }> = []
-  readonly fragments = new Map<string, Map<string, Level>>()
+  /** Paths a condition tested (as data reads or locals), for the branch it protects. */
+  private readonly tested: Array<Array<{ root: string; steps: Step[]; local?: Binding }>> = []
+  /** Fragments being walked: their recorders and scope depth at entry. */
+  private readonly frags: Array<{
+    needs: Map<string, Level>
+    reads: Map<string, Level>
+    depth: number
+  }> = []
+  readonly fragments = new Map<string, { needs: Map<string, Level>; reads: Map<string, Level> }>()
+  /** Set while walking an `@for` source: the read it makes is a loop source. */
+  private loopNext?: 'item' | 'pair'
 
   // ── scope ──
 
-  private bind(name: string, origin: Origin): void {
-    this.scopes[this.scopes.length - 1]!.set(name, { origin, depth: this.scopes.length - 1 })
+  private bind(name: string, src: Binding['src'], steps: Step[] = []): Binding {
+    const b: Binding = { depth: this.scopes.length - 1, src, steps }
+    this.scopes[this.scopes.length - 1]!.set(name, b)
+    return b
   }
   private lookup(name: string): Binding | undefined {
     for (let i = this.scopes.length - 1; i >= 0; i--) {
@@ -107,60 +140,107 @@ class Summarizer {
 
   // ── reads ──
 
-  /** A path expression read as data, returning its origin (for aliases). */
-  private path(e: Extract<Expr, { kind: 'path' }>, all: boolean): Origin {
+  /**
+   * A path read. Returns what a binding to it should point at: the data root
+   * or local it reads, with its steps (null when it isn't a plain path).
+   */
+  private path(e: Extract<Expr, { kind: 'path' }>, mode: Mode): Target | null {
+    const loop = this.loopNext
+    this.loopNext = undefined
+    if (LOOP_VARS.has(e.root)) return null
     const steps: Step[] = []
+    const own: Mode[] = [mode]
     let opaqueEnd = false
-    const guarded = new Set<number>()
-    for (const [i, s] of e.segments.entries()) {
-      // `a?.b`: the level holding `a` may be nullish.
-      if (s.optional) guarded.add(i)
+    for (const s of e.segments) {
+      // `a?.b`: the level holding `a` may be missing or null.
+      if (s.optional) own[own.length - 1] = 'soft'
       if (s.computed) {
-        this.expr(s.computed, false)
+        this.expr(s.computed, 'use')
         opaqueEnd = true
         break
       }
       steps.push({ p: s.name! })
+      own.push(mode)
     }
     const b = this.lookup(e.root)
-    let root = e.root
-    let base: Step[] = []
-    if (b) {
-      if (!b.origin) return null
-      root = b.origin.root
-      base = b.origin.steps
-    } else if (FORM_GLOBALS.has(e.root)) {
-      return null
+    if (!b && FORM_GLOBALS.has(e.root)) return null
+    // The page's view: follow locals back to data.
+    const page = b ? this.resolve(b, steps, own) : { root: e.root, steps, modes: own }
+    if (page) this.recordInto(this.roots, this.guarded({ ...page, opaqueEnd, loop }))
+    // Each fragment's view: stop at the first name bound around it (a need).
+    for (const f of this.frags) {
+      const r = b ? this.resolveFor(f.depth, e.root, b, steps, own) : null
+      if (r?.need) this.recordInto(f.needs, this.guarded({ ...r.read, opaqueEnd, loop }))
+      else if (r) this.recordInto(f.reads, this.guarded({ ...r.read, opaqueEnd, loop }))
+      else if (!b)
+        this.recordInto(f.reads, this.guarded({ root: e.root, steps, modes: own, opaqueEnd, loop }))
     }
-    const full = [...base, ...steps]
-    // Guard indexes are relative to the read's own path: shift past the origin.
-    const shifted = new Set([...guarded].map((g) => g + base.length))
-    // A condition earlier tested a prefix of this path: those levels are guarded.
+    if (opaqueEnd) return null
+    return b
+      ? { src: { k: 'var', name: e.root, b }, steps }
+      : { src: { k: 'data', root: e.root }, steps }
+  }
+
+  /** A local's read, as a data read: its source's steps first. */
+  private resolve(
+    b: Binding,
+    steps: Step[],
+    modes: Mode[],
+  ): { root: string; steps: Step[]; modes: Mode[] } | null {
+    const chain: Binding[] = []
+    for (let cur = b; ; cur = cur.src.b) {
+      if (!cur.src) return null
+      chain.push(cur)
+      if (cur.src.k === 'data') return joined(cur.src.root, chain, steps, modes)
+    }
+  }
+
+  /**
+   * A local's read as fragment `depth` sees it: a need (by the first name
+   * bound around it), or page data.
+   */
+  private resolveFor(
+    depth: number,
+    name: string,
+    b: Binding,
+    steps: Step[],
+    modes: Mode[],
+  ): { need: boolean; read: { root: string; steps: Step[]; modes: Mode[] } } | null {
+    const chain: Binding[] = []
+    let curName = name
+    for (let cur = b; ;) {
+      if (cur.depth < depth) return { need: true, read: joined(curName, chain, steps, modes) }
+      if (!cur.src) return null
+      chain.push(cur)
+      if (cur.src.k === 'data') {
+        return { need: false, read: joined(cur.src.root, chain, steps, modes) }
+      }
+      curName = cur.src.name
+      cur = cur.src.b
+    }
+  }
+
+  /** Levels a condition tested (for the branch it protects) count as tested, not used. */
+  private guarded(r: Read): Read {
+    const modes = [...r.modes]
     for (const frame of this.tested) {
       for (const t of frame) {
-        if (t.root !== root || t.steps.length > full.length) continue
-        if (t.steps.every((s, i) => sameStep(s, full[i]!))) shifted.add(t.steps.length)
+        if (t.root !== r.root || t.steps.length > r.steps.length) continue
+        if (!t.steps.every((s, i) => sameStep(s, r.steps[i]!))) continue
+        for (let i = 0; i <= t.steps.length; i++) if (modes[i] === 'use') modes[i] = 'test'
       }
     }
-    const read: Read = { root, steps: full, guarded: shifted, all, opaqueEnd }
-    this.recordInto(this.roots, read)
-    for (const f of this.frags) {
-      // A name bound around the fragment is one of its needs, by its own
-      // name; anything else is page data the fragment reads.
-      if (b && b.depth < f.depth) {
-        this.recordInto(f.roots, { root: e.root, steps, guarded, all, opaqueEnd })
-      } else this.recordInto(f.roots, read)
-    }
-    return opaqueEnd ? null : { root, steps: full }
+    return { ...r, modes }
   }
 
   private recordInto(roots: Map<string, Level>, r: Read): void {
     let lv = roots.get(r.root)
     if (!lv) roots.set(r.root, (lv = level()))
-    const touch = (l: Level, at: number) => {
-      if (!r.all && !r.guarded.has(at)) l.required = true
+    const touch = (l: Level, m: Mode | undefined) => {
+      if (m === 'use' || m === 'test') l.present = true
+      if (m === 'use') l.nonNull = true
     }
-    touch(lv, 0)
+    touch(lv, r.modes[0])
     for (const [i, s] of r.steps.entries()) {
       let next: Level | undefined
       if ('p' in s) {
@@ -169,77 +249,73 @@ class Summarizer {
       } else if ('item' in s) next = lv.item ??= level()
       else next = lv.pair ??= level()
       lv = next
-      touch(lv, i + 1)
+      touch(lv, r.modes[i + 1])
     }
     if (r.opaqueEnd) lv.opaque = true
-  }
-
-  /** Mark an origin as a loop source (nullable list or pairs). */
-  private loopSource(o: Origin, pairs: boolean): Origin {
-    if (!o) return null
-    let lv = this.roots.get(o.root)
-    for (const s of o.steps) {
-      if (!lv) break
-      lv = 'p' in s ? lv.props.get(s.p) : 'item' in s ? lv.item : lv.pair
-    }
-    if (lv) {
-      lv.nullable = true
-      if (pairs) lv.pair ??= level()
+    if (r.loop) {
+      lv.loop = true
+      if (r.loop === 'pair') lv.pair ??= level()
       else lv.item ??= level()
     }
-    return { root: o.root, steps: [...o.steps, pairs ? { pair: true } : { item: true }] }
   }
 
   // ── expressions ──
 
-  /** Walk an expression; `all`: every read in it is guarded (a condition, `??` left side). */
-  expr(e: Expr, all: boolean): Origin {
+  /** Walk an expression; returns what a binding to it points at (plain paths only). */
+  expr(e: Expr, mode: Mode): Target | null {
     switch (e.kind) {
       case 'literal':
         return null
       case 'path':
-        return this.path(e, all)
+        return this.path(e, mode)
       case 'unary':
-        // `!x` tests x.
-        this.expr(e.arg, all || e.op === '!')
+        this.expr(e.arg, e.op === '!' && mode === 'use' ? 'test' : mode)
         return null
       case 'binary':
-        this.expr(e.left, all)
-        this.expr(e.right, all)
+        this.expr(e.left, mode)
+        this.expr(e.right, mode)
         return null
       case 'logical':
         if (e.op === '??') {
-          this.expr(e.left, true)
-          this.expr(e.right, all)
+          this.expr(e.left, 'soft')
+          this.expr(e.right, mode)
         } else if (e.op === '&&') {
           // `a && a.b`: the right side runs only when the left held.
-          this.expr(e.left, true)
-          this.guardedBy(e.left, () => this.expr(e.right, all))
+          this.expr(e.left, mode === 'use' ? 'test' : mode)
+          this.guardedBy([e.left], () => this.expr(e.right, mode))
         } else {
-          this.expr(e.left, true)
-          this.expr(e.right, all)
+          this.expr(e.left, mode === 'use' ? 'test' : mode)
+          this.expr(e.right, mode)
         }
         return null
       case 'conditional':
-        this.expr(e.test, true)
-        this.guardedBy(e.test, () => this.expr(e.whenTrue, all))
-        this.expr(e.whenFalse, all)
+        this.expr(e.test, mode === 'use' ? 'test' : mode)
+        this.guardedBy([e.test], () => this.expr(e.whenTrue, mode))
+        this.expr(e.whenFalse, mode)
         return null
       case 'pipe':
-        this.expr(e.input, all)
-        for (const a of e.args) this.expr(a, all)
+        this.expr(e.input, mode)
+        for (const a of e.args) this.expr(a, 'use')
         return null
     }
   }
 
-  /** Run `fn` with the paths `cond` tests guarding their levels. */
-  private guardedBy(cond: Expr, fn: () => void): void {
-    this.tested.push(testedPaths(cond, (n) => this.lookup(n)))
+  /** Run `fn` with the paths `conds` test guarding their levels. */
+  private guardedBy(conds: Expr[], fn: () => void): void {
+    this.tested.push(conds.flatMap((c) => testedPaths(c, (n) => this.lookup(n), this)))
     try {
       fn()
     } finally {
       this.tested.pop()
     }
+  }
+
+  /** A path as data: through locals to their data root (for guards). */
+  dataPath(root: string, steps: Step[]): { root: string; steps: Step[] } | null {
+    const b = this.lookup(root)
+    if (!b) return FORM_GLOBALS.has(root) || LOOP_VARS.has(root) ? null : { root, steps }
+    const r = this.resolve(b, steps, steps.map((): Mode => 'use').concat('use'))
+    return r ? { root: r.root, steps: r.steps } : null
   }
 
   // ── nodes ──
@@ -256,42 +332,52 @@ class Summarizer {
       const n = f.list[f.i++]!
       if (n.k === 'element') {
         for (const a of n.attrs) {
-          if (a.expr) this.expr(a.expr, false)
-          for (const p of a.parts ?? []) if (typeof p !== 'string') this.expr(p, false)
+          if (a.expr) this.expr(a.expr, 'use')
+          for (const p of a.parts ?? []) if (typeof p !== 'string') this.expr(p, 'use')
         }
         stack.push({ list: n.children, i: 0 })
       } else this.node(n)
     }
   }
 
+  private bindTo(name: string, to: Target | null, extra: Step[] = []): void {
+    if (!to) this.bind(name, null)
+    else this.bind(name, to.src, [...to.steps, ...extra])
+  }
+
   private node(n: Node): void {
     switch (n.k) {
       case 'interp':
-        this.expr(n.expr, false)
+        this.expr(n.expr, 'use')
         return
       case 'comment':
         this.nodes(n.children)
         return
       case 'if': {
         // A branch runs when its condition held and the earlier ones didn't:
-        // only its own condition guards it.
+        // its condition guards it, and so does the x of an earlier `@if (!x)`.
+        const negated: Expr[] = []
         for (const br of n.branches) {
-          const origin = br.cond ? this.expr(br.cond, true) : null
+          const to = br.cond ? this.expr(br.cond, 'test') : null
+          const guards = [...(br.cond ? [br.cond] : []), ...negated]
           this.scoped(() => {
-            if (br.alias) this.bind(br.alias, origin)
-            if (br.cond) this.guardedBy(br.cond, () => this.nodes(br.body))
-            else this.nodes(br.body)
+            if (br.alias) this.bindTo(br.alias, to)
+            this.guardedBy(guards, () => this.nodes(br.body))
           })
+          if (br.cond?.kind === 'unary' && br.cond.op === '!') negated.push(br.cond.arg)
         }
         return
       }
       case 'for': {
-        const source = this.loopSource(this.expr(n.of, false), Array.isArray(n.item))
+        const pairs = Array.isArray(n.item)
+        this.loopNext = pairs ? 'pair' : 'item'
+        const to = this.expr(n.of, 'test')
+        this.loopNext = undefined
         this.scoped(() => {
-          if (Array.isArray(n.item)) {
+          if (pairs) {
             this.bind(n.item[0], null)
-            this.bind(n.item[1], source)
-          } else this.bind(n.item, source)
+            this.bindTo(n.item[1], to, [{ pair: true }])
+          } else this.bindTo(n.item as string, to, [{ item: true }])
           for (const name of Object.keys(n.lets)) this.bind(name, null)
           this.nodes(n.body)
         })
@@ -299,18 +385,19 @@ class Summarizer {
         return
       }
       case 'switch':
-        this.expr(n.on, false)
+        this.expr(n.on, 'use')
         for (const c of n.cases) {
-          this.expr(c.value, false)
+          this.expr(c.value, 'use')
           this.scoped(() => this.nodes(c.body))
         }
         if (n.default) this.scoped(() => this.nodes(n.default!))
         return
       case 'let':
-        this.bind(n.name, this.expr(n.expr, false))
+        // An alias reads its source (present), but only its uses decide more.
+        this.bindTo(n.name, this.expr(n.expr, 'test'))
         return
       case 'slot-outlet':
-        for (const o of n.offers) this.expr(o.expr, false)
+        for (const o of n.offers) this.expr(o.expr, 'use')
         this.scoped(() => {
           for (const o of n.offers) this.bind(o.name, null)
           this.nodes(n.fallback)
@@ -326,9 +413,9 @@ class Summarizer {
         this.scoped(() => this.nodes(n.body))
         return
       case 'fragment': {
-        const roots = this.fragments.get(n.name) ?? new Map<string, Level>()
-        this.fragments.set(n.name, roots)
-        this.frags.push({ roots, depth: this.scopes.length })
+        const own = this.fragments.get(n.name) ?? { needs: new Map(), reads: new Map() }
+        this.fragments.set(n.name, own)
+        this.frags.push({ ...own, depth: this.scopes.length })
         try {
           this.scoped(() => this.nodes(n.body))
         } finally {
@@ -349,7 +436,7 @@ class Summarizer {
         return
       }
       case 'render':
-        for (const a of n.args) this.expr(a, false)
+        for (const a of n.args) this.expr(a, 'use')
         return
       default:
         return
@@ -357,27 +444,50 @@ class Summarizer {
   }
 }
 
+/**
+ * A read through `chain` (innermost binding first): each binding's own steps
+ * go before the read's, outermost first. A binding's steps were read when it
+ * was bound — present, maybe null — so they count as tested.
+ */
+function joined(
+  root: string,
+  chain: Binding[],
+  steps: Step[],
+  modes: Mode[],
+): { root: string; steps: Step[]; modes: Mode[] } {
+  const outer = chain.toReversed()
+  const allSteps = [...outer.flatMap((c) => c.steps), ...steps]
+  const allModes = [...outer.flatMap((c) => c.steps.map((): Mode => 'test')), ...modes]
+  return { root, steps: allSteps, modes: fixModes(allModes, allSteps.length) }
+}
+
+/** `modes` for `n` steps plus the root, padded with 'use'. */
+function fixModes(modes: Mode[], n: number): Mode[] {
+  const out = modes.slice(modes.length - (n + 1))
+  while (out.length < n + 1) out.unshift('use')
+  return out
+}
+
 const sameStep = (a: Step, b: Step): boolean =>
   'p' in a ? 'p' in b && a.p === b.p : 'item' in a ? 'item' in b : 'pair' in b
 
-/** The data paths a condition tests (resolved through aliases): `a`, `a.b`, each side of `&&`. */
+/** The data paths a condition tests (resolved through locals): `a`, `a.b`, each side of `&&`, `!a`'s a when negated. */
 function testedPaths(
   cond: Expr,
-  lookup: (name: string) => Binding | undefined,
+  _lookup: (name: string) => Binding | undefined,
+  s: Summarizer,
 ): Array<{ root: string; steps: Step[] }> {
   const out: Array<{ root: string; steps: Step[] }> = []
   const visit = (e: Expr) => {
     if (e.kind === 'logical' && e.op === '&&') {
       visit(e.left)
       visit(e.right)
-    } else if (e.kind === 'path' && e.segments.every((s) => !s.computed)) {
-      const b = lookup(e.root)
-      if (b && !b.origin) return
-      const base = b?.origin ?? { root: e.root, steps: [] }
-      out.push({
-        root: base.root,
-        steps: [...base.steps, ...e.segments.map((s) => ({ p: s.name! }))],
-      })
+    } else if (e.kind === 'path' && e.segments.every((x) => !x.computed)) {
+      const p = s.dataPath(
+        e.root,
+        e.segments.map((x) => ({ p: x.name! })),
+      )
+      if (p) out.push(p)
     }
   }
   visit(cond)
@@ -401,7 +511,7 @@ function shapeOf(l: Level): Shape {
 }
 
 function fieldOf(l: Level): Field {
-  return { shape: shapeOf(l), optional: !l.required, nullable: !l.required || l.nullable }
+  return { shape: shapeOf(l), optional: !l.present, nullable: !l.nonNull || l.loop }
 }
 
 function fieldsOf(roots: Map<string, Level>): Record<string, Field> {
@@ -420,7 +530,9 @@ export function summarize(ast: TemplateAst): DataSummary {
     declared[i.name] = { ...(i.type ? { type: i.type } : {}), optional: i.default !== undefined }
   }
   const fragments: DataSummary['fragments'] = {}
-  for (const [name, roots] of s.fragments) fragments[name] = fieldsOf(roots)
+  for (const [name, f] of s.fragments) {
+    fragments[name] = { needs: fieldsOf(f.needs), reads: fieldsOf(f.reads) }
+  }
   return {
     fields: fieldsOf(s.roots),
     declared,
@@ -463,6 +575,7 @@ export function mergeSummary(into: DataSummary, from: DataSummary): DataSummary 
     ...into,
     fields,
     declared: { ...from.declared, ...into.declared },
-    imports: [...new Set([...into.imports, ...from.imports])],
+    // Imports stay with the template that wrote them: typegen emits each
+    // template's, resolved from that template's own folder.
   }
 }

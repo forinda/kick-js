@@ -705,6 +705,13 @@ export function render(
     if (base && base !== template.name && !chain.some((t) => t.name === base))
       chain.push(env.resolve(base))
   }
+  // Layouts' @input defaults sit under everything else, outer layouts first.
+  const layoutDefaults: Record<string, unknown> = {}
+  for (const t of chain.toReversed()) if (t.defaults) Object.assign(layoutDefaults, t.defaults)
+  if (Object.keys(layoutDefaults).length) {
+    page.data = { ...layoutDefaults, ...page.data }
+    r.rootData = page.data
+  }
   // The page and its layouts always render; components report as they do.
   if (template.validates || chain.some((t) => t.validates)) env.validation?.()
   if (!chain.length) {

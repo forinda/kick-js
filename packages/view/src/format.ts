@@ -180,6 +180,8 @@ function reindent(source: string, ranges: Range[], unit: string): string {
       if (from < to) line = line.slice(0, from) + '\u0000'.repeat(to - from) + line.slice(to)
     }
     line = line.replace(/\{\{[\s\S]*?\}\}/g, (m) => '\u0000'.repeat(m.length))
+    // `@input u: Array<User>` / `@import type …`: a type, not markup.
+    line = line.replace(/^\s*@(?:input|import)\b.*$/, (m) => '\u0000'.repeat(m.length))
     const content = raw.trim()
     if (!content) {
       out.push('')

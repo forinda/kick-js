@@ -3,20 +3,18 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { parse } from '../src/parse/template'
-import { check } from '../src/check/check'
-import { BUILTIN_PIPES } from '../src/pipes/builtins'
+import { summarize } from '../src/check/summary'
 import { renderViewTypes, viewsTypegen } from '../src/typegen'
 import { kickViewsCli } from '../src/cli'
 
 function summaries(files: Record<string, string>) {
-  const project = {
-    templates: new Map(Object.entries(files).map(([n, s]) => [n, parse(s, `${n}.kick`).ast])),
-    pipes: new Set(BUILTIN_PIPES),
-    componentsDir: 'components',
-  }
-  return Object.keys(files)
-    .filter((n) => !n.startsWith('components/'))
-    .map((n) => ({ name: n, file: `src/views/${n}.kick`, summary: check(n, project).data! }))
+  return Object.entries(files)
+    .filter(([n]) => !n.startsWith('components/'))
+    .map(([n, src]) => ({
+      name: n,
+      file: `src/views/${n}.kick`,
+      summary: summarize(parse(src, `${n}.kick`).ast),
+    }))
 }
 
 const root = '/app'
@@ -43,8 +41,8 @@ describe('renderViewTypes', () => {
     expect(out).toContain('user: User')
     expect(out).toContain('title?: string')
     expect(out).toContain('posts: Iterable<{ title: unknown }> | null | undefined')
-    expect(out).toContain('me?: { name: unknown } | null | undefined')
-    expect(out).toContain('row: { p: { title: unknown } }')
+    expect(out).toContain('me: { name: unknown } | null | undefined')
+    expect(out).toContain('row: { needs: { p: { title: unknown } }; reads: {} }')
     expect(out).toContain('home: {\n      data: { greeting: unknown }')
     expect(out).toContain('export {}')
   })

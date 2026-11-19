@@ -259,3 +259,16 @@ describe('page @input defaults', () => {
     expect(await shared.render('page', { title: 'C' })).toBe('<title>C</title><p>x</p>')
   })
 })
+
+describe("a layout's @input defaults", () => {
+  it('apply under the page, which overrides them', async () => {
+    const files = {
+      'layouts/main': "@input title = 'Site'\n<title>{{ title }}</title><slot />",
+      plain: "@layout('layouts/main')\n<p>x</p>",
+      own: "@layout('layouts/main')\n@input title = 'Own'\n<p>x</p>",
+    }
+    const views = createViews({ viewsDir: dir(files), warn: () => {} })
+    expect(await views.render('plain')).toBe('<title>Site</title><p>x</p>')
+    expect(await views.render('own')).toBe('<title>Own</title><p>x</p>')
+  })
+})
