@@ -96,6 +96,8 @@ class Checker {
   private readonly loops: number[] = []
   private readonly warned = new Set<string>()
   private readonly stackNames = new Set<string>()
+  /** Inside a `@push` body, where a `<stack>` would be filled into the wrong buffer. */
+  private inPush = 0
   /** Each `@fragment`'s standalone unit, by name. */
   readonly fragments: Record<string, CheckedFragment> = {}
   /**
@@ -390,12 +392,22 @@ class Checker {
       case 'fragment':
         this.fragment(n, out, parent)
         return
-      case 'push':
-        out.push({ k: 'push', n: n.name, b: this.scoped(() => this.nodes(n.body, parent)) })
+      case 'push': {
+        this.inPush++
+        try {
+          out.push({ k: 'push', n: n.name, b: this.scoped(() => this.nodes(n.body, parent)) })
+        } finally {
+          this.inPush--
+        }
         return
+      }
       case 'stack':
         if (this.component) {
           this.err(n.span, '<stack> goes in a page or layout, not in components')
+          return
+        }
+        if (this.inPush) {
+          this.err(n.span, "<stack> can't go inside @push: put it in the layout itself")
           return
         }
         if (this.stackNames.has(n.name)) {

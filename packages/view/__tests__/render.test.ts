@@ -564,3 +564,25 @@ describe('fragments', () => {
     expect(part).toContain('selected')
   })
 })
+
+describe('stack warnings across renders', () => {
+  const files = {
+    'layouts/main': '<main><slot /></main>',
+    'components/x-c': '@push(\'head\') {<link rel="stylesheet" href="/x.css">}<b></b>',
+    page: "@layout('layouts/main')<x-c />",
+  }
+
+  it('stays silent for a render without a layout', () => {
+    const s = setup(files)
+    for (let i = 0; i < 3; i++) render(s.resolve('page'), {}, s.env, { layout: false })
+    expect(s.warn).not.toHaveBeenCalled()
+  })
+
+  it('warns once per page and stack, however many renders', () => {
+    const s = setup(files)
+    // One checked template, as views' cache hands out.
+    const page = s.resolve('page')
+    for (let i = 0; i < 3; i++) render(page, {}, s.env)
+    expect(s.warn).toHaveBeenCalledTimes(1)
+  })
+})

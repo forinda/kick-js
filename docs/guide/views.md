@@ -826,7 +826,7 @@ An htmx swap usually needs one piece of a page. Mark it with `@fragment`, and re
 ```kick
 {{-- src/views/users/index.kick --}}
 @layout('layouts/main')
-<h1>Users <span id="count">@fragment('count') {{{ users.length }}}</span></h1>
+<h1>Users @fragment('count') {<span id="count" hx-swap-oob="true">{{ users.length }}</span>}</h1>
 <table>
   <tbody id="rows">
     @fragment('rows') {
@@ -848,7 +848,7 @@ await ctx.render('users/index', { users }, { fragment: ['rows', 'count'] }) // o
 ```
 
 - **In the full page** the wrapper changes nothing: the block renders where it is.
-- **On its own** it renders without any layout. A list renders each fragment in the order given, for htmx's `hx-swap-oob`.
+- **On its own** it renders without any layout. A list renders each fragment in the order given, for htmx's out-of-band swaps: the extra fragments carry their own `id` and `hx-swap-oob`, like `count` above, so htmx puts each where it belongs.
 - **Names from around it.** A fragment inside `@for`, `@if (…; as x)` or after `@let` reads those names from the data you pass: the `row` above needs `user`. Leaving one out fails the render naming it. `share()` data doesn't count, so a shared `user` can't silently fill a row's. An enclosing loop's `$index` and friends can't be read directly: alias them (`let i = $index`) and pass `i`.
 - **Names are unique** in a template, made of letters, digits, `-` and `_`. Asking for one the template doesn't have fails the render, listing the ones it has.
 - **Anywhere but components.** Pages and layouts can have fragments; components can't.

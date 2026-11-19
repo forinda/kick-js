@@ -101,13 +101,18 @@ class Renderer {
 
   /**
    * Write each stack's content at its first `<stack>`. Content for a stack no
-   * template placed is dropped, with one warning naming `page`.
+   * template placed is dropped; with `warn`, the page's first render that does
+   * so says which stack.
    */
-  fillStacks(page: string): void {
+  fillStacks(page: CheckedTemplate, warn: boolean): void {
     for (const [name, s] of this.stacks) {
       if (s.at.length) this.out[s.at[0]!] = s.items.join('')
-      else if (s.items.length) {
-        this.env.warn(`${page}: content pushed to stack '${name}', which no layout has`)
+      else if (s.items.length && warn) {
+        let seen = warnedNames.get(page)
+        if (!seen) warnedNames.set(page, (seen = new Set()))
+        if (seen.has(`stack:${name}`)) continue
+        seen.add(`stack:${name}`)
+        this.env.warn(`${page.file}: content pushed to stack '${name}', which no layout has`)
       }
     }
   }
@@ -596,7 +601,8 @@ export function render(
   if (template.validates || chain.some((t) => t.validates)) env.validation?.()
   if (!chain.length) {
     r.nodes(template.body, page)
-    r.fillStacks(template.file)
+    // No layout (a partial): pushes have nowhere to go, and that's expected.
+    r.fillStacks(template, false)
     return r.html()
   }
   // Each layout renders the one inside it into its default slot; named fills
@@ -619,6 +625,6 @@ export function render(
     fills = outer
   }
   r.nodes(inst.t.body, inst)
-  r.fillStacks(template.file)
+  r.fillStacks(template, true)
   return r.html()
 }

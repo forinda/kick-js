@@ -334,3 +334,11 @@ describe('fragments', () => {
     )
   })
 })
+
+describe('stacks inside pushes', () => {
+  it('refuses a <stack> inside @push', () => {
+    expect(errs({ page: '@push(\'h\') {<stack name="z" />}' })).toEqual([
+      expect.stringContaining('@push'),
+    ])
+  })
+})
