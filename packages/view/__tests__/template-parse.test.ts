@@ -266,10 +266,9 @@ describe('fragments and stacks', () => {
     expect(flat(ok('<stack name="head"></stack>').ast.body)).toBe('<stack:head>')
   })
 
-  it('rejects a stack without a plain name, or with content', () => {
+  it('rejects a stack without a plain name', () => {
     expect(errors('<stack />')).toHaveLength(1)
     expect(errors('<stack name="{{ x }}" />')).toHaveLength(1)
-    expect(errors('<stack name="a">x</stack>')).toHaveLength(1)
   })
 
   it('leaves <stack-panel> an element', () => {

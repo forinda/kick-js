@@ -111,8 +111,8 @@ export type Node =
   | { k: 'fragment'; name: string; body: Node[]; span: Span }
   /** `@push('name') { }`: content for a layout's `<stack name>` */
   | { k: 'push'; name: string; body: Node[]; span: Span }
-  /** `<stack name="…" />`: where pushed content goes */
-  | { k: 'stack'; name: string; span: Span }
+  /** `<stack name="…" />`: where pushed content goes; `children` must be blank (checked) */
+  | { k: 'stack'; name: string; children: Node[]; span: Span }
 
 /** An `@input` declaration, with its default when given. */
 export interface InputDecl {

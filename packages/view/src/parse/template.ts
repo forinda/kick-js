@@ -353,8 +353,13 @@ class TemplateParser {
       if (!PLAIN_NAME.test(name)) {
         this.err(i, j, '<stack> needs name="…" in letters, digits, - and _')
       }
-      this.emit({ k: 'stack', name, span: el.span })
-      if (!selfClosing) this.frames.push({ type: 'slot', children: [], tag: 'stack', start: i })
+      const node: Node = { k: 'stack', name, children: [], span: el.span }
+      this.emit(node)
+      // Kept, so the check sees content however the element ends (closed,
+      // closed by an ancestor, or never).
+      if (!selfClosing) {
+        this.frames.push({ type: 'slot', children: node.children, tag: 'stack', start: i })
+      }
       return
     }
     this.emit(el)
@@ -492,13 +497,6 @@ class TemplateParser {
             : frame.name === tag.toLowerCase()
       if (matches) {
         this.flush()
-        if (
-          frame.type === 'slot' &&
-          frame.tag === 'stack' &&
-          frame.children.some((c) => c.k !== 'text' || c.value.trim())
-        ) {
-          this.err(frame.start, this.i, "<stack> can't have content: @push adds it")
-        }
         this.frames.length = f
         return
       }

@@ -99,7 +99,8 @@ class Checker {
   /** Inside a `@push` body, where a `<stack>` would be filled into the wrong buffer. */
   private inPush = 0
   /** Each `@fragment`'s standalone unit, by name. */
-  readonly fragments: Record<string, CheckedFragment> = {}
+  // Null prototype: `constructor`, `toString` and `__proto__` are fragment names too.
+  readonly fragments: Record<string, CheckedFragment> = Object.create(null)
   /**
    * Set while compiling a fragment's standalone unit: the names enclosing
    * blocks bound (read from data there, and recorded as needs), and whether
@@ -402,6 +403,10 @@ class Checker {
         return
       }
       case 'stack':
+        if (n.children.some((c) => c.k !== 'text' || c.value.trim())) {
+          this.err(n.span, "<stack> can't have content: @push adds it")
+          return
+        }
         if (this.component) {
           this.err(n.span, '<stack> goes in a page or layout, not in components')
           return

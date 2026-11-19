@@ -342,3 +342,28 @@ describe('stacks inside pushes', () => {
     ])
   })
 })
+
+describe('review fixes', () => {
+  it('accepts fragment names that are Object.prototype members', () => {
+    const t = clean({
+      page: "@fragment('constructor') {x}@fragment('__proto__') {y}@fragment('toString') {z}",
+    })
+    expect(Object.keys(t.fragments ?? {}).toSorted()).toEqual([
+      '__proto__',
+      'constructor',
+      'toString',
+    ])
+  })
+
+  it('refuses content in a <stack>, however the stack ends', () => {
+    for (const page of [
+      '<stack name="a">x</stack>',
+      '<stack name="a">lost',
+      '<div><stack name="a">lost</div>',
+      '@if (t) {<stack name="a">lost}',
+    ]) {
+      expect(errs({ page }), page).toEqual([expect.stringContaining("can't have content")])
+    }
+    clean({ page: '<stack name="a">\n  </stack>' })
+  })
+})

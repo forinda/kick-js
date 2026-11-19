@@ -82,6 +82,8 @@ const warnedNames = new WeakMap<CheckedTemplate, Set<string>>()
 class Renderer {
   private out: string[] = []
   /** Per stack: where `<stack>`s sit in `out`, and the pushed content, deduped. */
+  /** Rendering a `@push` body: a `<stack>` reached here (through a slot) has no place. */
+  private pushing = 0
   private readonly stacks = new Map<string, { at: number[]; items: string[]; seen: Set<string> }>()
 
   constructor(private readonly env: RenderEnv) {}
@@ -339,13 +341,24 @@ class Renderer {
         return
       }
       case 'stk':
+        if (this.pushing) {
+          this.fail(
+            inst,
+            `<stack name="${n.n}"> renders inside @push content (through a slot): a stack has to be in the page or layout itself`,
+          )
+        }
         this.stack(n.n).at.push(this.out.length)
         this.out.push('')
         return
       case 'push': {
         const outer = this.out
         this.out = []
-        this.nodes(n.b, inst)
+        this.pushing++
+        try {
+          this.nodes(n.b, inst)
+        } finally {
+          this.pushing--
+        }
         const html = this.out.join('')
         this.out = outer
         const s = this.stack(n.n)

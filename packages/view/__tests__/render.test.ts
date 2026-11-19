@@ -586,3 +586,15 @@ describe('stack warnings across renders', () => {
     expect(s.warn).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('a stack reached inside a push', () => {
+  it('fails the render instead of overwriting the page', () => {
+    expect(() =>
+      r({
+        'components/x-box':
+          '@if (false) {<slot name="head" />}@push(\'head\') {<slot name="head" />}<b>box</b>',
+        page: '<p>before</p><x-box>@slot(\'head\') {<stack name="head" />}</x-box>',
+      }),
+    ).toThrow(/@push/)
+  })
+})
