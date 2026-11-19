@@ -120,3 +120,15 @@ it('ctn is createToken under a short name', () => {
   expect(ctn).toBe(createToken)
   expect(container.resolve(MAILER).send()).toBe('sent')
 })
+
+it('registerInstance survives Container.reset() unless told not to persist', () => {
+  const KEPT = createToken<string>('standalone/kept')
+  const DROPPED = createToken<string>('standalone/dropped')
+  Container.getInstance().registerInstance(KEPT, 'kept')
+  Container.getInstance().registerInstance(DROPPED, 'old')
+  // Re-bound without persisting: the earlier persisted value goes too.
+  Container.getInstance().registerInstance(DROPPED, 'new', { persist: false })
+  Container.reset()
+  expect(Container.getInstance().resolve(KEPT)).toBe('kept')
+  expect(Container.getInstance().has(DROPPED)).toBe(false)
+})

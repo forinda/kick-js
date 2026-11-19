@@ -395,6 +395,15 @@ describe('value origins', () => {
 })
 
 describe('a failed rebuild', () => {
+  it('keeps serving the previous values through get()', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://env/app')
+    const app = new Application({ modules: [], settings: [DbSettings] })
+    await app.setup()
+    vi.stubEnv('KT_DB_URL', 'not a url')
+    await app.rebuild() // fails; the old app stays
+    expect(DbSettings.get().url).toBe('postgres://env/app')
+  })
+
   it('keeps the previous app’s config origins', async () => {
     vi.stubEnv('KT_DB_URL', 'postgres://env/app')
     const app = new Application({ modules: [], settings: [DbSettings] })
@@ -470,6 +479,21 @@ describe('values after a reload', () => {
     vi.stubEnv('KT_RL_OPT_V', 'two')
     await app.rebuild()
     expect([Bound.get().v, Optional.get().v]).toEqual(['two', 'two'])
+  })
+
+  it.each([
+    ['made optional', (s: typeof DbSettings) => [s.optional()]],
+    ['no longer declared', () => []],
+  ])('a section bound, then %s on an HMR reload, reads the new env', async (_, declare) => {
+    vi.stubEnv('KT_DB_URL', 'postgres://env/one')
+    await new Application({ modules: [], settings: [DbSettings] }).setup()
+    vi.stubEnv('KT_DB_URL', 'postgres://env/two')
+    // What `kick dev` does on a save: reset the container, start a fresh app.
+    Container.reset()
+    const app = new Application({ modules: [], settings: declare(DbSettings) })
+    await app.setup()
+    expect(app.getContainer().has(DbSettings)).toBe(false)
+    expect(DbSettings.get().url).toBe('postgres://env/two')
   })
 
   it('reloadEnv() makes an unbound section read the environment again', () => {

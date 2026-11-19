@@ -189,7 +189,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
     [...(options.settings ?? []), ...modules.flatMap((mod) => mod.settings?.() ?? [])],
     settingsEnv,
   )) {
-    container.registerInstance(section, value)
+    container.registerInstance(section, value, { persist: false })
   }
   for (const mod of modules) mod.register?.(container)
   container.bootstrap()
