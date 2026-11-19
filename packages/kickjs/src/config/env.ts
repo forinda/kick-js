@@ -370,6 +370,9 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
   const s = schema ?? cachedSchema ?? getBaseEnvSchema()
   // Re-parse if schema changed or no cache yet
   if (cachedEnv && cachedSchema === s) return overlaid(cachedEnv)
+  // The sticky schema may be a Valibot / Yup / Standard one that
+  // loadEnvFromSchema() registered: it has no Zod `.parse()`.
+  if (typeof s.parse !== 'function') return loadEnvFromSchema(s)
   cachedSchema = s
   if (describingConfig()) return describedEnv(s)
   cachedEnv = s.parse(withSecretFiles(process.env, Object.keys(s.shape ?? {})))
@@ -486,13 +489,17 @@ export function reloadEnv(): void {
   // resolvers that may already hold references to the env state) see
   // the new values on their very next read instead of having to
   // re-trigger any cache-population step.
+  const previous = cachedEnv
   cachedEnv = null
-  if (cachedSchema) {
-    if (typeof cachedSchema.parse === 'function') {
-      loadEnv(cachedSchema)
-    } else {
-      loadEnvFromSchema(cachedSchema)
-    }
+  if (!cachedSchema) return
+  try {
+    loadEnv(cachedSchema)
+  } catch (err) {
+    // An invalid .env (a save mid-edit) keeps the last good values, as a
+    // failed rebuild keeps the previous app: reads would otherwise get
+    // undefined (`@Value()`) or a fresh validation error (`getEnv()`).
+    cachedEnv = previous
+    throw err
   }
 }
 
