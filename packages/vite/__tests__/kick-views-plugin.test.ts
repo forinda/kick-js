@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url'
 import { build, createServer, type Plugin, type Rollup } from 'vite'
 import { describe, expect, it, vi } from 'vitest'
 import { kickViewsPlugin, type KickViewsPluginOptions } from '../src/kick-views-plugin'
+import { AST_FORMAT_VERSION } from '@forinda/kickjs-view'
 
 function project(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'kick-views-build-'))
@@ -226,7 +227,7 @@ describe('kickViewsPlugin', () => {
       'src/views/pipes.ts': 'export const initials = (v: string) => v[0]',
     })
     const code = await bundle(root)
-    expect(code).toContain('"v": 1')
+    expect(code).toContain(`"v": ${AST_FORMAT_VERSION}`)
     expect(code).toContain('"layouts/main"')
     expect(code).toMatch(/initials/)
     // the template body is data: no functions generated from it
