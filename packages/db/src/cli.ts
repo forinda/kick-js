@@ -131,15 +131,23 @@ export function mergeKickDbConfig(
   return Object.assign({}, ...configs.filter(Boolean))
 }
 
-/** Apply defaults to a {@link KickDbConfigInput}, yielding a resolved {@link DbConfig}. */
-export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbConfig {
+/**
+ * Apply defaults to a {@link KickDbConfigInput}, yielding a resolved {@link DbConfig}.
+ * `envFallback: false` leaves `connectionString` unset rather than reading
+ * `DATABASE_URL` — for a named `--config` file, which says its own connection.
+ */
+export function resolveKickDbConfig(
+  block: KickDbConfigInput | undefined,
+  opts: { envFallback?: boolean } = {},
+): DbConfig {
   const db = block ?? {}
+  const env = opts.envFallback === false ? undefined : process.env.DATABASE_URL
   return {
     schemaPath: db.schemaPath ?? 'src/db/schema.ts',
     migrationsDir: db.migrationsDir ?? 'db/migrations',
     seedsDir: db.seedsDir ?? 'db/seeds',
     dialect: db.dialect ?? 'postgres',
-    connectionString: db.connectionString ?? process.env.DATABASE_URL,
+    connectionString: db.connectionString ?? env,
     adapter: db.adapter,
     driftCheck: db.driftCheck,
     driftIgnore: db.driftIgnore,
@@ -247,7 +255,9 @@ export function registerDbCommands(parent: Command, fallback: DbConfigResolver):
     if (!file) return fallback()
     const input = await loadDbConfigFile(file)
     console.log(`db config: ${file}`)
-    return resolveKickDbConfig(input)
+    // Not DATABASE_URL: an unset STAGING_URL in the file mustn't quietly
+    // become whatever database DATABASE_URL points at.
+    return resolveKickDbConfig(input, { envFallback: false })
   }
   parent
     .command('generate <name>')

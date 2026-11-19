@@ -111,7 +111,22 @@ describe('kick db --config', () => {
       "export default { connectionString: 'postgres://127.0.0.1:1/none' }",
     )
     const r = await run(['migrate', 'status', '-c', p])
+    expect(r.lines[0]).toBe(`db config: ${p}`)
     expect(r.err?.message).not.toBe('base used')
+    expect(r.err?.message).toMatch(/ECONNREFUSED|connect/)
+  })
+
+  it("doesn't fall back to DATABASE_URL when the named file sets no connection", async () => {
+    const p = await file(
+      'staging.mjs',
+      'export default { connectionString: process.env.STAGING_URL_UNSET }',
+    )
+    vi.stubEnv('DATABASE_URL', 'postgres://127.0.0.1:1/other-database')
+    const r = await run(['migrate', 'status', '-c', p])
+    vi.unstubAllEnvs()
+    expect(r.lines[0]).toBe(`db config: ${p}`)
+    expect(r.err?.message).toMatch(/connectionString|adapter/)
+    expect(r.err?.message).not.toMatch(/ECONNREFUSED/)
   })
 
   it('reads KICK_DB_CONFIG, and the base config without either', async () => {
