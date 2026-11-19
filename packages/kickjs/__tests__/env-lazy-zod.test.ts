@@ -16,6 +16,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { Container, getEnv, loadEnvFromSchema, reloadEnv, resetEnvCache } from '../src'
+import { DESCRIBE_CONFIG } from '../src/config/env'
 
 afterEach(() => {
   resetEnvCache()
@@ -53,8 +54,26 @@ describe('env validation without zod (loadEnvFromSchema)', () => {
     loadEnvFromSchema(schema)
     delete process.env.LAZY_ZOD_PORT
     expect(() => reloadEnv()).toThrow(/LAZY_ZOD_PORT/)
+    // The last good values stay readable, through getEnv() and @Value() alike.
+    expect(getEnv('LAZY_ZOD_PORT' as never)).toBe(1)
+    expect(Container.envResolver?.('LAZY_ZOD_PORT')).toBe(1)
     process.env.LAZY_ZOD_PORT = '2'
-    // Read through the sticky schema — once called its Zod `.parse()`.
+    reloadEnv()
     expect(getEnv('LAZY_ZOD_PORT' as never)).toBe(2)
+  })
+
+  it('reads through the sticky non-Zod schema when nothing is parsed yet', () => {
+    const schema = (env: Record<string, unknown>) => ({ LAZY_ZOD_PORT: Number(env.LAZY_ZOD_PORT) })
+    process.env.LAZY_ZOD_PORT = '3'
+    // Describing (`kick env example`) registers the schema without parsing it.
+    const g = globalThis as Record<symbol, unknown>
+    g[DESCRIBE_CONFIG] = true
+    try {
+      loadEnvFromSchema(schema)
+    } finally {
+      delete g[DESCRIBE_CONFIG]
+    }
+    // Nothing parsed, a non-Zod schema registered: this once called Zod's `.parse()`.
+    expect(getEnv('LAZY_ZOD_PORT' as never)).toBe(3)
   })
 })

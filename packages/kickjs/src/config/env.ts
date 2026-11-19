@@ -489,8 +489,18 @@ export function reloadEnv(): void {
   // resolvers that may already hold references to the env state) see
   // the new values on their very next read instead of having to
   // re-trigger any cache-population step.
+  const previous = cachedEnv
   cachedEnv = null
-  if (cachedSchema) loadEnv(cachedSchema)
+  if (!cachedSchema) return
+  try {
+    loadEnv(cachedSchema)
+  } catch (err) {
+    // An invalid .env (a save mid-edit) keeps the last good values, as a
+    // failed rebuild keeps the previous app: reads would otherwise get
+    // undefined (`@Value()`) or a fresh validation error (`getEnv()`).
+    cachedEnv = previous
+    throw err
+  }
 }
 
 /**
