@@ -6,7 +6,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 /** The guide's toast component script, as readers copy it. */
 function guideToastScript(): string {
-  const guide = readFileSync(join(import.meta.dirname, '../../../docs/guide/views.md'), 'utf8')
+  const guide = readFileSync(
+    join(import.meta.dirname, '../../../docs/guide/views/client-scripts.md'),
+    'utf8',
+  )
   const start = guide.indexOf(
     '{{-- src/views/components/flash-toast.kick --}}\n@input message\n@input kind',
   )
