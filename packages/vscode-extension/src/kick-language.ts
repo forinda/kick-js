@@ -39,7 +39,9 @@ function startClient(context: vscode.ExtensionContext): void {
   client = new LanguageClient('kickjs.views', 'KickJS Views', serverOptions, {
     documentSelector: [{ language: 'kick' }],
     initializationOptions: {
-      viewsDir: config.get<string>('dir', 'src/views'),
+      // Unset: kick.config's `views.dir`, else src/views (the server decides).
+      viewsDir: config.get<string>('dir') || undefined,
+      roots: nonEmpty(config.get<Record<string, string>>('roots')),
       componentsDir: config.get<string>('components', 'components'),
       pipesFile: config.get<string>('pipes') || undefined,
       layout: config.get<string | Record<string, string>>('layout') || undefined,
@@ -183,4 +185,9 @@ export async function deactivateKickLanguage(): Promise<void> {
   await starting
   await client?.stop()
   client = undefined
+}
+
+/** A settings object with entries, else `undefined` (the server then reads kick.config). */
+function nonEmpty<T extends object>(value: T | undefined): T | undefined {
+  return value && Object.keys(value).length ? value : undefined
 }

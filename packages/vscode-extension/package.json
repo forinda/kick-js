@@ -357,8 +357,16 @@
         },
         "kickjs.views.dir": {
           "type": "string",
-          "default": "src/views",
-          "description": "Views folder, relative to the workspace folder."
+          "default": "",
+          "markdownDescription": "Views folder, relative to the workspace folder. Empty: `views.dir` in kick.config.ts (trusted workspaces), else `src/views`."
+        },
+        "kickjs.views.roots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "markdownDescription": "Named view roots, as kick.config.ts's `views.roots` writes them: `{ \"billing\": \"./src/modules/billing/views\" }`. Empty: kick.config's (trusted workspaces)."
         },
         "kickjs.views.components": {
           "type": "string",

@@ -31,6 +31,7 @@ import {
   configuredLayouts,
   isComponent,
   layoutResolver,
+  resolveRef,
   templateName,
   type Project,
 } from './project'
@@ -169,7 +170,7 @@ class Checker {
    * it sits in a loop (whose `$index` etc. it can't read).
    */
   private unit?: { outer: Set<string>; inLoop: boolean; needs: string[]; errors: Diagnostic[] }
-  private readonly tags = new Map<string, string[]>()
+  readonly tags = new Map<string, string[]>()
   private readonly signatures = new Map<string, Signature>()
 
   constructor(
@@ -1307,6 +1308,11 @@ class Checker {
 
   // ── layouts ───────────────────────────────────────────────────────────
 
+  /** What `ref`, written in template `from`, names (its view root first). */
+  ref(from: string, ref: string): string {
+    return resolveRef(from, ref, (n) => this.project.templates.has(n))
+  }
+
   /** The outlets a page can fill: its layout chain's. Reports bad names and cycles. */
   layoutChain(
     start: string | undefined,
@@ -1332,7 +1338,7 @@ class Checker {
       }
       seen.push(name)
       mergeOutlets(outlets, this.signature(name).outlets)
-      name = ast.layout ?? undefined
+      name = ast.layout ? this.ref(name, ast.layout) : undefined
     }
     return outlets
   }
@@ -1393,6 +1399,17 @@ export function check(name: string, project: Project): CheckResult {
   }
   const component = isComponent(name, project.componentsDir)
   const c = new Checker(project, ast, component)
+  // Two components with one tag (`components/ui/button` and the `ui` root's
+  // `components/button`): reported on each, used or not.
+  if (component) {
+    const tag = componentTag(name, project.componentsDir)
+    const same = c.tags.get(tag) ?? []
+    if (same.length > 1) {
+      c.diagnostics.push(
+        error(ast.file, zero, `<${tag}> is the tag of more than one component: ${same.join(', ')}`),
+      )
+    }
+  }
 
   // A page's @inputs declare its render data (typed for typegen); its reads
   // stay data reads, so its layouts see the same values. A component's are
@@ -1530,7 +1547,9 @@ export function check(name: string, project: Project): CheckResult {
     component || configuredLayouts(project).has(name)
       ? undefined
       : layoutResolver(project.layouts)(name)
-  const layoutName = ast.layout === undefined ? mapped : (ast.layout ?? undefined)
+  // A root's template means its own root's layout first (`resolveRef`).
+  const declared = ast.layout ? c.ref(name, ast.layout) : ast.layout
+  const layoutName = declared === undefined ? mapped : (declared ?? undefined)
   let outlets =
     layoutName === undefined ? undefined : c.layoutChain(layoutName, ast.layoutSpan ?? zero, name)
   // The base layout wraps the chain, so its outlets are fillable too.
@@ -1604,7 +1623,7 @@ export function check(name: string, project: Project): CheckResult {
     body: optimize(c.nodes(body)),
   }
   template.slots = c.slots
-  if (ast.layout !== undefined) template.layout = ast.layout
+  if (declared !== undefined) template.layout = declared
   if (client) template.client = client
   if (c.validates) template.validates = true
   if (Object.keys(pageDefaults).length) template.defaults = pageDefaults

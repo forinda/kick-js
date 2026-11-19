@@ -92,3 +92,53 @@ describe('kick fmt:views / check:views', () => {
     process.exitCode = 0
   })
 })
+
+describe('kick fmt:views / check:views — view roots', () => {
+  const BILLING = 'src/modules/billing/views'
+
+  it('checks a root, naming its real file', async () => {
+    const root = project({
+      'src/views/home.kick': '<p>ok</p>\n',
+      [`${BILLING}/invoices/show.kick`]: '<p>{{ y | nopipe }}</p>\n',
+    })
+    const log = vi.fn()
+    const roots = [{ name: 'billing', dir: join(root, BILLING), readOnly: false }]
+    expect(await checkViews({ root, roots, log })).toBe(1)
+    expect(log.mock.calls.flat().join('\n')).toContain(`${BILLING}/invoices/show.kick:1:`)
+  })
+
+  it("formats a folder root and leaves an installed package's alone", async () => {
+    const messy = '@if(a){\n<p>x</p>\n}\n'
+    const root = project({
+      [`${BILLING}/a.kick`]: messy,
+      'node_modules/@acme/ui/views/b.kick': messy,
+    })
+    const roots = [
+      { name: 'billing', dir: join(root, BILLING), readOnly: false },
+      { name: 'ui', dir: join(root, 'node_modules/@acme/ui/views'), readOnly: true },
+    ]
+    expect(await fmtViews({ root, roots, log: vi.fn() })).toBe(0)
+    expect(readFileSync(join(root, BILLING, 'a.kick'), 'utf8')).not.toBe(messy)
+    expect(readFileSync(join(root, 'node_modules/@acme/ui/views/b.kick'), 'utf8')).toBe(messy)
+  })
+
+  it("reads the roots from kick.config's views block", async () => {
+    const root = project({
+      'src/views/home.kick': '<p>ok</p>\n',
+      [`${BILLING}/x.kick`]: '<p>{{ y | nopipe }}</p>\n',
+    })
+    const program = new Command()
+    const log = vi.fn()
+    await viewCliPlugin.register!(program, {
+      cwd: root,
+      projectRoot: root,
+      config: { views: { roots: { billing: `./${BILLING}` } } },
+      log,
+    })
+    process.exitCode = 0
+    await program.parseAsync(['node', 'kick', 'check:views'])
+    expect(process.exitCode).toBe(1)
+    process.exitCode = 0
+    expect(log.mock.calls.flat().join('\n')).toContain(`${BILLING}/x.kick`)
+  })
+})

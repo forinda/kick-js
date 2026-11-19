@@ -9,9 +9,16 @@ const view = JSON.parse(
 export default defineConfig({
   define: { __KICK_VIEW_VERSION__: JSON.stringify(view.version) },
   resolve: {
-    alias: {
-      '@forinda/kickjs-view': path.resolve(import.meta.dirname, '../view/src/index.ts'),
-    },
+    alias: [
+      {
+        find: /^@forinda\/kickjs-view\/cli$/,
+        replacement: path.resolve(import.meta.dirname, '../view/src/cli.ts'),
+      },
+      {
+        find: /^@forinda\/kickjs-view$/,
+        replacement: path.resolve(import.meta.dirname, '../view/src/index.ts'),
+      },
+    ],
   },
   test: {
     environment: 'node',

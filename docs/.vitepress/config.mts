@@ -129,6 +129,7 @@ const guideSidebar = [
           { text: 'On the Edge', link: '/guide/views/edge' },
           { text: 'Formatting, Checking & Editors', link: '/guide/views/tooling' },
           { text: '.kick in Other Editors', link: '/guide/view-editors' },
+          { text: 'View Roots', link: '/guide/views/roots' },
           { text: 'Options', link: '/guide/views/options' },
           { text: 'Other View Engines', link: '/guide/view-engines' },
         ],

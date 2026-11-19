@@ -10,7 +10,7 @@ const TOP = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }
 
 export function definition(
   ws: Workspace,
-  _uri: string,
+  uri: string,
   text: string,
   offset: number,
 ): LocationLink | null {
@@ -29,7 +29,13 @@ export function definition(
     return name === undefined ? null : link(ws.uriOf(name))
   }
   if (c.kind === 'template-name') {
-    return ws.astOf(word) ? link(ws.uriOf(word)) : null
+    // The whole quoted name (`ui::layouts/main`: `wordAt` stops at `:`); in a
+    // view root's template, its own root's template first.
+    const before = /['"]([^'"\n]*)$/.exec(text.slice(0, offset))
+    const after = /^[^'"\n]*/.exec(text.slice(offset))
+    const written = before ? before[1] + (after?.[0] ?? '') : word
+    const name = ws.refOf(ws.nameOf(uri), written)
+    return ws.astOf(name) ? link(ws.uriOf(name)) : null
   }
   if (c.kind === 'pipe') {
     const decl = ws.pipeDeclaration(word)

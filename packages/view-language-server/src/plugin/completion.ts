@@ -43,7 +43,7 @@ const KEYWORDS: Record<string, string> = {
 /** The template a component tag names, if any. */
 export function componentOf(ws: Workspace, tag: string): string | undefined {
   const dir = ws.componentsDir()
-  return ws.names().find((n) => n.startsWith(`${dir}/`) && ws.view.componentTag(n, dir) === tag)
+  return ws.names().find((n) => ws.isComponent(n) && ws.view.componentTag(n, dir) === tag)
 }
 
 /** Slot names the layouts above `name` declare, nearest first. */
@@ -64,7 +64,7 @@ function layoutSlots(ws: Workspace, name: string | undefined): string[] {
     base !== undefined &&
     name !== undefined &&
     page?.layout !== null &&
-    !name.startsWith(`${ws.componentsDir()}/`) &&
+    !ws.isComponent(name) &&
     name !== base &&
     !seen.has(base)
   )
@@ -93,9 +93,8 @@ function layoutSlots(ws: Workspace, name: string | undefined): string[] {
 /** Every `<stack name>` in the project's pages and layouts. */
 function stackNames(ws: Workspace): string[] {
   const out = new Set<string>()
-  const dir = `${ws.componentsDir()}/`
   for (const name of ws.names()) {
-    if (name.startsWith(dir)) continue
+    if (ws.isComponent(name)) continue
     const ast = ws.astOf(name)
     if (!ast) continue
     const stack = [ast.body]
@@ -161,7 +160,7 @@ export function completions(
       const dir = ws.componentsDir()
       return ws
         .names()
-        .filter((n) => n.startsWith(`${dir}/`))
+        .filter((n) => ws.isComponent(n))
         .map((n) => {
           const tag = ws.view.componentTag(n, dir)
           const required = (ws.astOf(n)?.inputs ?? []).filter((i) => !i.default)
@@ -198,10 +197,9 @@ export function completions(
       ]
     }
     case 'template-name': {
-      const dir = ws.componentsDir()
       return ws
         .names()
-        .filter((n) => !n.startsWith(`${dir}/`))
+        .filter((n) => !ws.isComponent(n))
         .map((label) => ({ label, kind: FILE }))
     }
     case 'slot-name':
@@ -221,7 +219,7 @@ export function completions(
       const dir = ws.componentsDir()
       return ws
         .names()
-        .filter((n) => n.startsWith(`${dir}/`))
+        .filter((n) => ws.isComponent(n))
         .map((n) => ({ label: ws.view.componentTag(n, dir), kind: CLASS }))
     }
     case 'expr':

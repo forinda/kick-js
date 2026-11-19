@@ -428,6 +428,20 @@ export interface DeployConfig {
  */
 export interface KickConfig {
   /**
+   * `.kick` views: the app's folder and named roots (`billing::invoices/show`).
+   * A root value starting with `.` or `/` is a folder (from this file's
+   * directory); otherwise an installed package whose package.json has
+   * `"kick": { "views": "<folder>" }`. Read by the view CLI, typegen, the Vite
+   * plugin and the editor.
+   *
+   * @see https://kickjs.app/guide/views/roots
+   */
+  views?: {
+    /** Default `src/views`. */
+    dir?: string
+    roots?: Record<string, string>
+  }
+  /**
    * Project pattern — the module shape `kick g module` produces by default.
    * `--pattern` overrides it per call.
    * - 'rest' — flat module: controller, service, DTOs, repository (default)
