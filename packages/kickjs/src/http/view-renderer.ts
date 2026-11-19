@@ -19,6 +19,13 @@ export interface ViewRenderOptions {
   headers?: Record<string, string>
   /** A layout for this render, or `false` for none — a partial response. */
   layout?: boolean | string
+  /**
+   * Render only these `@fragment`s of the template, without layouts — an htmx
+   * swap, or several for out-of-band swaps. `.kick` views only.
+   *
+   * @see https://kickjs.app/guide/views#fragments
+   */
+  fragment?: string | string[]
   locale?: string
   timeZone?: string
 }

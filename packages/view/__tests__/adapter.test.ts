@@ -45,6 +45,7 @@ const FILES = {
   'components/flash-toast':
     "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
   island: '<flash-toast />',
+  rows: "<table>@for (u of users; track u) {@fragment('row') {<tr>{{ u }}</tr>}}</table>",
   links: `<a href="{{ 'PagesController.home' | kvRoute }}">h</a>|{{ 'PagesController.item' | kvRoute:id }}`,
 }
 
@@ -80,6 +81,10 @@ class PagesController {
   @Get('/links')
   async links(ctx: RequestContext) {
     await ctx.render('links', { id: 'a b' }, { layout: false })
+  }
+  @Get('/row')
+  async row(ctx: RequestContext) {
+    await ctx.render('rows', { u: 'Ada' }, { fragment: 'row' })
   }
   @Get('/items/:id')
   item(ctx: RequestContext) {
@@ -135,6 +140,11 @@ for (const rt of RUNTIMES)
     it("kvRoute links to the app's routes by name", async () => {
       const res = await (await app(rt.make, views)).get('/links').expect(200)
       expect(res.text).toBe('<a href="/home">h</a>|/items/a%20b')
+    })
+
+    it('renders a fragment with ctx.render(…, { fragment })', async () => {
+      const res = await (await app(rt.make, views)).get('/row').expect(200)
+      expect(res.text).toBe('<tr>Ada</tr>')
     })
 
     it('renders a .kick page', async () => {
