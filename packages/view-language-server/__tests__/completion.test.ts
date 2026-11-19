@@ -6,6 +6,7 @@ const FILES = {
   'src/views/page.kick': '',
   'src/views/layouts/main.kick':
     '<head><slot name="head" /><stack name="styles" /></head><slot /><stack name="scripts" />',
+  'src/views/layouts/shell.kick': '@fragment(\'shell\') {<nav><slot name="nav" /></nav><slot />}',
   'src/views/components/user-card.kick':
     '@input user\n@input compact = false\n<div>{{ user.name }}</div>',
   'src/views/pipes.ts': 'export const initials = (name: string) => name[0]',
@@ -95,5 +96,9 @@ describe('completions', () => {
       "@for (u of us; track u) {@fragment('row') {<tr>{{ u }}</tr>}<p>{{ §",
     )
     expect(names).toContain('u')
+  })
+
+  it("offers slot names inside a layout's @fragment", async () => {
+    expect(await labels("@layout('layouts/shell')\n@slot('§")).toEqual(['nav'])
   })
 })

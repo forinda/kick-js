@@ -80,7 +80,7 @@ function layoutSlots(ws: Workspace, name: string | undefined): string[] {
         else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
         else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
         else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
-        else if (n.k === 'slot-fill') stack.push(n.body)
+        else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push') stack.push(n.body)
       }
     }
   }

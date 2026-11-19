@@ -367,3 +367,19 @@ describe('review fixes', () => {
     clean({ page: '<stack name="a">\n  </stack>' })
   })
 })
+
+describe('slots inside fragments and pushes', () => {
+  it("finds a layout's slot inside its @fragment", () => {
+    clean({
+      'layouts/main': '@fragment(\'shell\') {<head><slot name="head" /></head><slot />}',
+      page: "@layout('layouts/main')\n@slot('head') {<title>t</title>}\n<p>x</p>",
+    })
+  })
+
+  it("finds a component's slot inside its @push", () => {
+    clean({
+      'components/x-box': '@push(\'h\') {<slot name="extra" />}<b>box</b>',
+      page: "<x-box>@slot('extra') {<i>e</i>}</x-box>",
+    })
+  })
+})
