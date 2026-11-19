@@ -187,6 +187,17 @@ describe('activateKickLanguage', () => {
     expect(client.ctor.mock.calls[0]![3].initializationOptions).toMatchObject(settings)
   })
 
+  it("passes view roots, and leaves the folder to kick.config when it isn't set", async () => {
+    const settings: Record<string, unknown> = { dir: '', roots: { ui: './ui/views' } }
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValueOnce({
+      get: vi.fn((key: string, fallback: unknown) => settings[key] ?? fallback),
+    } as never)
+    await activateKickLanguage(context)
+    const opts = client.ctor.mock.calls[0]![3].initializationOptions
+    expect(opts.roots).toEqual({ ui: './ui/views' })
+    expect(opts.viewsDir).toBeUndefined()
+  })
+
   it("tells the server whether the workspace is trusted, and restarts when it's granted", async () => {
     ;(vscode.workspace as { isTrusted: boolean }).isTrusted = false
     await activateKickLanguage(context)

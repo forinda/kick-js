@@ -141,6 +141,7 @@ Without Vite (plain Node, Bun, Deno), `createViews()` reads `src/views` itself.
   - [Formatting, checking and editors](./views/tooling.md): `kick fmt:views`, `kick check:views`, the VS Code extension
   - [`.kick` in other editors](./view-editors.md)
 - **Reference**
+  - [View roots](./views/roots.md): templates from module folders and packages, `billing::invoices/show`
   - [Options](./views/options.md): `createViews` and the Vite plugin
 
 ## Mixing with EJS or Pug
