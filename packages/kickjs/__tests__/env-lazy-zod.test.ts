@@ -15,7 +15,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { Container, loadEnvFromSchema, resetEnvCache } from '../src'
+import { Container, getEnv, loadEnvFromSchema, reloadEnv, resetEnvCache } from '../src'
 
 afterEach(() => {
   resetEnvCache()
@@ -42,5 +42,19 @@ describe('env validation without zod (loadEnvFromSchema)', () => {
     }))
     // _envResolver is what @Value() / ConfigService read through.
     expect(Container.envResolver?.('LAZY_ZOD_PORT')).toBe(9999)
+  })
+
+  it('reads again after a failed reload (an HMR save mid-edit), without Zod', () => {
+    const schema = (env: Record<string, unknown>) => {
+      if (!env.LAZY_ZOD_PORT) throw new Error('LAZY_ZOD_PORT is required')
+      return { LAZY_ZOD_PORT: Number(env.LAZY_ZOD_PORT) }
+    }
+    process.env.LAZY_ZOD_PORT = '1'
+    loadEnvFromSchema(schema)
+    delete process.env.LAZY_ZOD_PORT
+    expect(() => reloadEnv()).toThrow(/LAZY_ZOD_PORT/)
+    process.env.LAZY_ZOD_PORT = '2'
+    // Read through the sticky schema — once called its Zod `.parse()`.
+    expect(getEnv('LAZY_ZOD_PORT' as never)).toBe(2)
   })
 })
