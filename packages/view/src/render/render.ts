@@ -62,6 +62,8 @@ interface Resolved {
   attrs: Array<[string, string | true]>
   cls: string[]
   style: string[]
+  /** Bound to null/undefined/false: on a forwarded set, removes the root's own attribute. */
+  off?: string[]
 }
 
 /** One template being rendered: its scope slots, data, slot fills and the template stack. */
@@ -363,7 +365,7 @@ class Renderer {
         if (hit?.k !== 'cmp') {
           this.fail(
             inst,
-            `<component> got ${JSON.stringify(v)} — it renders one of ${Object.keys(n.c).join(', ')}`,
+            `<component> got ${typeof v === 'string' ? JSON.stringify(v) : `a ${typeof v}`} — it renders one of ${Object.keys(n.c).join(', ')}`,
           )
         }
         this.component(hit, inst)
@@ -477,7 +479,10 @@ class Renderer {
         }
         case 'b': {
           const v = this.value(a.e, inst)
-          if (v === null || v === undefined || v === false) break
+          if (v === null || v === undefined || v === false) {
+            ;(r.off ??= []).push(a.n.toLowerCase())
+            break
+          }
           if (v === true) {
             put(a.n, true)
             break
@@ -519,7 +524,8 @@ class Renderer {
     if (fall) {
       // The caller's attributes win over the root's own, except class and
       // style, which merge.
-      const names = new Set(fall.attrs.map(([n]) => n.toLowerCase()))
+      // `[disabled]="false"` from the caller turns the root's own off.
+      const names = new Set([...fall.attrs.map(([n]) => n.toLowerCase()), ...(fall.off ?? [])])
       attrs = [...attrs.filter(([n]) => !names.has(n.toLowerCase())), ...fall.attrs]
       cls = [...cls, ...fall.cls]
       style = [...style, ...fall.style]
@@ -598,11 +604,14 @@ class Renderer {
 
 /** `outer` over `inner`: same-named attributes replaced, classes and styles combined. */
 function mergeResolved(inner: Resolved, outer: Resolved): Resolved {
-  const names = new Set(outer.attrs.map(([n]) => n.toLowerCase()))
+  const names = new Set([...outer.attrs.map(([n]) => n.toLowerCase()), ...(outer.off ?? [])])
+  const set = new Set(outer.attrs.map(([n]) => n.toLowerCase()))
+  const off = [...(inner.off ?? []).filter((n) => !set.has(n)), ...(outer.off ?? [])]
   return {
     attrs: [...inner.attrs.filter(([n]) => !names.has(n.toLowerCase())), ...outer.attrs],
     cls: [...inner.cls, ...outer.cls],
     style: [...inner.style, ...outer.style],
+    ...(off.length ? { off } : {}),
   }
 }
 

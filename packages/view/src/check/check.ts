@@ -92,7 +92,10 @@ interface Signature {
   /** Root nodes, not counting a lifted `<script client>`. */
   roots: number
   /** The single root, when there is one: where forwarded attributes go. */
-  root?: { k: 'el'; tag: string } | { k: 'cmp'; name: string } | { k: 'slot' }
+  root?:
+    | { k: 'el'; tag: string; /** for a `<component>` root: its candidate tags */ of?: string[] }
+    | { k: 'cmp'; name: string }
+    | { k: 'slot' }
 }
 
 /**
@@ -954,8 +957,15 @@ class Checker {
       const tag = el?.tag.toLowerCase()
       if (el && !el.foreign && tag!.includes('-') && this.tags.get(tag!)?.length === 1) {
         root = { k: 'cmp', name: this.tags.get(tag!)![0]! }
-      } else if (el) root = { k: 'el', tag: tag! }
-      else if (top.some((n) => n.k === 'slot-outlet')) root = { k: 'slot' }
+      } else if (el) {
+        root = { k: 'el', tag: tag! }
+        if (tag === 'component' && !el.foreign) {
+          const of = el.attrs.find((a) => a.name.toLowerCase() === 'of' && a.kind === 'static')
+          root.of = String(of?.parts?.[0] ?? '')
+            .split(/\s+/)
+            .filter(Boolean)
+        }
+      } else if (top.some((n) => n.k === 'slot-outlet')) root = { k: 'slot' }
     }
     const sig: Signature = {
       name,
@@ -1085,6 +1095,20 @@ class Checker {
         tagDependent[0]!.span,
         `<${el.tag}> passes ${tagDependent.map((a) => a.name).join(', ')} to its root, but ${leaf.name}.kick's root is a <component>, whose element is only chosen at render time — declare them as inputs and pass them on`,
       )
+    } else if (fallthrough.length && leaf.root?.k === 'el' && leaf.root.of) {
+      // class/id/… go to whichever candidate renders: each needs an element root.
+      const without = leaf.root.of.filter((tag) => {
+        const names = this.tags.get(tag.toLowerCase())
+        if (names?.length !== 1) return false
+        const cand = this.signature(names[0]!)
+        return cand.roots !== 1 || !cand.root || cand.root.k === 'slot'
+      })
+      if (without.length) {
+        this.err(
+          fallthrough[0]!.span,
+          `<${el.tag}> passes ${passed} on to its <component>'s candidates, but ${without.join(', ')} has no single root element to take them`,
+        )
+      }
     } else if (fallthrough.length && leaf.root?.k === 'slot') {
       this.err(
         fallthrough[0]!.span,
@@ -1092,7 +1116,10 @@ class Checker {
       )
     } else if (leaf.root?.k === 'el' && Object.hasOwn(GUARDED, leaf.root.tag)) {
       const names = GUARDED[leaf.root.tag]!
-      const guarded = fallthrough.filter((a) => names.has(a.name.toLowerCase()))
+      // `[class.type]` adds a class; only real attributes of that name count.
+      const guarded = fallthrough.filter(
+        (a) => a.kind !== 'class' && a.kind !== 'style' && names.has(a.name.toLowerCase()),
+      )
       for (const a of guarded) {
         this.err(
           a.span,
@@ -1152,8 +1179,9 @@ class Checker {
    * render time. Fills and their `let`s are checked across the candidates.
    */
   private dynamic(el: Element, out: CNode[]): void {
-    const isA = el.attrs.find((a) => a.name.toLowerCase() === 'is')
-    const ofA = el.attrs.find((a) => a.name.toLowerCase() === 'of')
+    const plain = (a: Attr) => a.kind !== 'class' && a.kind !== 'style'
+    const isA = el.attrs.find((a) => plain(a) && a.name.toLowerCase() === 'is')
+    const ofA = el.attrs.find((a) => plain(a) && a.name.toLowerCase() === 'of')
     if (!ofA || ofA.kind !== 'static') {
       this.err(
         ofA?.span ?? el.span,
@@ -1193,11 +1221,12 @@ class Checker {
         continue
       }
       const one: CNode[] = []
-      this.recompiling = sigs.length > 0
+      const outerRecompiling = this.recompiling
+      this.recompiling = outerRecompiling || sigs.length > 0
       try {
         this.call({ ...el, tag: lower, attrs: rest }, names[0]!, one, el === this.rootElement, true)
       } finally {
-        this.recompiling = false
+        this.recompiling = outerRecompiling
       }
       const cmp = one.find((n) => n.k === 'cmp')
       if (cmp) c[lower] = cmp
@@ -1310,13 +1339,18 @@ function rootElements(body: Node[]): Array<Element | null> {
   return roots
 }
 
-/** Slot names from `more` added to `into`, each with every name any of them offers. */
+/**
+ * Slot names from `more` added to `into`. A name both have keeps only the
+ * values both offer: a page's fill renders in each, so a `let` must be
+ * offered by every outlet it reaches.
+ */
 function mergeOutlets(
   into: Map<string, string[]>,
   more: ReadonlyMap<string, readonly string[]>,
 ): Map<string, string[]> {
   for (const [name, offers] of more) {
-    into.set(name, [...new Set([...(into.get(name) ?? []), ...offers])])
+    const had = into.get(name)
+    into.set(name, had ? had.filter((o) => offers.includes(o)) : [...offers])
   }
   return into
 }
@@ -1369,7 +1403,6 @@ export function check(name: string, project: Project): CheckResult {
     c.snippetDefs.set(n.name, n.params)
     snippetNodes.push(n)
   }
-  for (const n of snippetNodes) c.snippet(n, inputs)
 
   // `<script client>`: the component's browser code, shipped as a module of
   // its own — lifted out of the template before anything else looks at it.
@@ -1438,6 +1471,8 @@ export function check(name: string, project: Project): CheckResult {
   }
 
   c.hasClientScript = client !== undefined
+  // After hasClientScript: a snippet may use the client script's custom elements.
+  for (const n of snippetNodes) c.snippet(n, inputs)
   if (component) {
     const roots = rootElements(top)
     if (roots.length === 1 && roots[0]) c.rootElement = roots[0]
@@ -1516,6 +1551,22 @@ export function check(name: string, project: Project): CheckResult {
     }
     if (!outlets.has(f.name)) {
       c.diagnostics.push(error(ast.file, f.span, `the layout has no slot '${f.name}'`))
+      continue
+    }
+    // The default fill goes to the page's own layout (outer layouts' default
+    // slots get the layout inside them), so that one must have a default slot.
+    const first =
+      layoutName ??
+      (base !== undefined && ast.layout !== null && !component && name !== base ? base : undefined)
+    if (
+      f.name === '' &&
+      first &&
+      project.templates.has(first) &&
+      !c.signature(first).outlets.has('')
+    ) {
+      c.diagnostics.push(
+        error(ast.file, f.span, `layout '${first}' has no default <slot /> for @slot(default …)`),
+      )
       continue
     }
     const fill = c.fill(f, outlets.get(f.name))

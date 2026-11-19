@@ -43,6 +43,15 @@ describe('KickVirtualCode', () => {
     const verbatim = '@verbatim { "}" <b> }\n<i></i>'
     expect(html(verbatim)).toBe(`${' '.repeat(21)}\n<i></i>`)
   })
+  it('@render headers are blank, quoted markup in their arguments included', () => {
+    const src = "@render s('<style>')<p></p>"
+    expect(html(src)).toBe(`${' '.repeat(20)}<p></p>`)
+  })
+
+  it('@snippet headers and closers are blank, bodies are kept', () => {
+    expect(html('@snippet s(a) {<b></b>}')).toBe(`${' '.repeat(15)}<b></b> `)
+  })
+
   it('verbatim blocks are blank', () => {
     expect(html('@verbatim { {{ v }} }<p></p>')).toBe(`${' '.repeat(21)}<p></p>`)
   })

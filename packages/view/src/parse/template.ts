@@ -124,16 +124,22 @@ class TemplateParser {
     if (f.type === 'switch') return []
     return f.children
   }
+  /** Inside a `@snippet` body: its markup isn't page output (it may never render). */
+  private get inSnippetBody(): boolean {
+    return this.frames.some((f) => f.type === 'block' && f.keyword === 'snippet')
+  }
   private flush(): void {
     if (this.text) {
-      if (/\S/.test(this.text)) this.seenOutput = true
+      if (/\S/.test(this.text) && !this.inSnippetBody) this.seenOutput = true
       this.children().push({ k: 'text', value: this.text, span: this.span(this.textStart, this.i) })
       this.text = ''
     }
   }
   private emit(node: Node): void {
     this.flush()
-    if (node.k !== 'let' && node.k !== 'slot-fill' && node.k !== 'snippet') this.seenOutput = true
+    if (node.k !== 'let' && node.k !== 'slot-fill' && node.k !== 'snippet' && !this.inSnippetBody) {
+      this.seenOutput = true
+    }
     this.children().push(node)
   }
   private addText(chunk: string, at: number): void {
@@ -332,7 +338,8 @@ class TemplateParser {
       span: this.span(i, j),
     }
     if (!foreign && lower === 'slot') {
-      const nameAttr = attrs.find((a) => a.name === 'name')
+      // `name="…"` picks the slot; `[name]="…"` offers a value called name.
+      const nameAttr = attrs.find((a) => a.name === 'name' && a.kind !== 'bind')
       const slotName = nameAttr?.kind === 'static' ? String(nameAttr.parts?.[0] ?? '') : undefined
       if (nameAttr && nameAttr.kind !== 'static') {
         this.err(
@@ -550,7 +557,8 @@ class TemplateParser {
       if (pm[2] !== undefined) {
         const at = a.at + a.src.indexOf(pm[2], pm[1]!.length)
         const e = this.expr(pm[2], at)
-        if (e?.kind === 'literal') param.default = e.value
+        const literal = literalOf(e)
+        if (literal !== undefined) param.default = literal
         else if (e) this.err(at, at + pm[2].length, 'a parameter default must be a literal')
       }
       if (param.default === undefined && params.some((q) => q.default !== undefined)) {
@@ -1006,15 +1014,7 @@ class TemplateParser {
     if (m[2] !== undefined) {
       const at = after + line.indexOf(m[2], m[0].indexOf('=') + 1)
       const e = this.expr(m[2], at)
-      const literal =
-        e?.kind === 'literal'
-          ? e.value
-          : e?.kind === 'unary' &&
-              e.op === '-' &&
-              e.arg.kind === 'literal' &&
-              typeof e.arg.value === 'number'
-            ? -e.arg.value
-            : undefined
+      const literal = literalOf(e)
       if (e && literal === undefined) {
         this.err(
           at,
@@ -1086,4 +1086,18 @@ function splitArgs(src: string, at: number): Array<{ src: string; at: number }> 
   }
   out.push({ src: src.slice(start), at: at + start })
   return out
+}
+
+/** A literal, or a negative number written `-1` (parsed as unary minus). */
+function literalOf(e: Expr | undefined): Literal | undefined {
+  if (e?.kind === 'literal') return e.value
+  if (
+    e?.kind === 'unary' &&
+    e.op === '-' &&
+    e.arg.kind === 'literal' &&
+    typeof e.arg.value === 'number'
+  ) {
+    return -e.arg.value
+  }
+  return undefined
 }

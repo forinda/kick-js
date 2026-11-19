@@ -787,3 +787,19 @@ describe('final review fixes', () => {
     expect(out).toBe('<p class="mt-2">a</p>')
   })
 })
+
+describe('PR review render fixes', () => {
+  it('lets a forwarded false binding remove the root attribute', () => {
+    const files = { 'components/x-btn': '<button disabled>go</button>' }
+    expect(r({ ...files, page: '<x-btn [disabled]="false" />' }).html).toBe('<button>go</button>')
+    expect(r({ ...files, page: '<x-btn />' }).html).toBe('<button disabled>go</button>')
+  })
+
+  it('reports a bad [is] value without serialising it', () => {
+    const files = { 'components/x-a': '<p>a</p>', page: '<component [is]="k" of="x-a" />' }
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect(() => r(files, { k: cyclic })).toThrow(/x-a/)
+    expect(() => r(files, { k: 10n })).toThrow(/x-a/)
+  })
+})

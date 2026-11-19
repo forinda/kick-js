@@ -81,6 +81,8 @@ function headerNames(kw: string, header: string): string[] {
 export function scopeAt(s: string, stop: number): string[] {
   const inputs: string[] = []
   const frames: string[][] = [[]]
+  /** Frame indexes where a `@snippet` body starts: only its own names are in scope there. */
+  const snippets: number[] = []
   let i = 0
   while (i < stop) {
     const c = s[i]!
@@ -134,6 +136,7 @@ export function scopeAt(s: string, stop: number): string[] {
         while (j < stop && /\s/.test(s[j]!)) j++
         if (s[j] === '{') {
           frames.push(headerNames(kw, header))
+          if (kw === 'snippet') snippets.push(frames.length - 1)
           i = j + 1
           continue
         }
@@ -141,10 +144,15 @@ export function scopeAt(s: string, stop: number): string[] {
         continue
       }
     }
-    if (c === '}' && frames.length > 1) frames.pop()
+    if (c === '}' && frames.length > 1) {
+      if (snippets.at(-1) === frames.length - 1) snippets.pop()
+      frames.pop()
+    }
     i++
   }
-  return [...inputs, ...frames.flat()]
+  // Inside a snippet: inputs and its own names, not the template's @lets.
+  const from = snippets.at(-1)
+  return [...inputs, ...(from === undefined ? frames : frames.slice(from)).flat()]
 }
 
 function exprContext(segment: string, s: string, offset: number): CursorContext {

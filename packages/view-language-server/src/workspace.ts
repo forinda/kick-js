@@ -203,6 +203,12 @@ export class Workspace {
       for (const n of stack.pop()!) {
         if (n.k === 'element') {
           if (!n.foreign && n.tag.includes('-')) tags.add(n.tag.toLowerCase())
+          // `<component of="a-b c-d">` depends on each candidate.
+          if (!n.foreign && n.tag.toLowerCase() === 'component') {
+            const of = n.attrs.find((a) => a.name.toLowerCase() === 'of' && a.kind === 'static')
+            for (const t of String(of?.parts?.[0] ?? '').split(/\s+/))
+              if (t) tags.add(t.toLowerCase())
+          }
           stack.push(n.children)
         } else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
         else if (n.k === 'for') stack.push(n.body, n.empty ?? [])

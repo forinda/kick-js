@@ -15,5 +15,6 @@ The editor completes snippet names, a slot's values and `of` tags; the formatter
 Compatibility:
 
 - An attribute that isn't an input used to fail the check ("unknown input"); it now goes to the root element. `type`, `name`, `value`, `checked` and `validate` on a form-field root, and `http-equiv` and `content` on a `<meta>` root, still fail: declare them as inputs.
+- A `<slot>` takes only `name="…"` and `[value]="…"` bindings: other attributes on it, which used to be ignored, are now an error.
 - `<component>` is reserved; `@snippet name(` and `@render name(` in template text start blocks.
 - Compiled templates use bundle format v3: rebuild edge bundles.

@@ -129,4 +129,10 @@ describe('completions', () => {
   it('keeps loop names in scope after a @snippet closes', async () => {
     expect(await labels('@for (u of us; track u) {@snippet s() {x}<p>{{ §')).toContain('u')
   })
+
+  it("doesn't offer top-level @let names inside a snippet", async () => {
+    const names = await labels('@let secret = 1;\n@snippet s(p) {{{ §')
+    expect(names).toContain('p')
+    expect(names).not.toContain('secret')
+  })
 })

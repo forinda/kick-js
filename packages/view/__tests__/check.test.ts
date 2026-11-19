@@ -685,3 +685,65 @@ describe('final review fixes', () => {
     ])
   })
 })
+
+describe('PR review fixes', () => {
+  it('refuses inherited attributes when a <component> root candidate has no element root', () => {
+    expect(
+      errs({
+        'components/x-s': '<slot />',
+        'components/x-p': '<p>p</p>',
+        'components/x-w': '@input k\n<component [is]="k" of="x-s x-p" />',
+        page: '<x-w k="x-p" class="wide" />',
+      }),
+    ).toEqual([expect.stringContaining('x-s')])
+  })
+
+  it('lets [class.type] through to a form-field root', () => {
+    clean({ 'components/x-f': '<input name="a">', page: '<x-f [class.type]="on" />' })
+  })
+
+  it('does not take [class.is] for the dispatch binding', () => {
+    clean({ 'components/x-a': '<p>a</p>', page: '<component [class.is]="on" [is]="t" of="x-a" />' })
+  })
+
+  it('compiles a fragment in nested <component> fills once', () => {
+    const files = {
+      'components/x-a': '<div><slot /></div>',
+      'components/x-b': '<p><slot /></p>',
+      page: '<component [is]="k" of="x-a x-b">@slot(default) {<component [is]="j" of="x-a x-b">@slot(default) {@fragment(\'f\') {hi}}</component>}</component>',
+    }
+    clean(files)
+  })
+
+  it("checks a page's let against every layout outlet that renders the fill", () => {
+    expect(
+      errs({
+        'layouts/inner': '@layout(\'layouts/outer\')\n<i><slot name="head" [x]="1" /></i><slot />',
+        'layouts/outer': '<o><slot name="head" [y]="2" /></o><slot />',
+        page: "@layout('layouts/inner')\n@slot('head'; let y) {{{ y }}}\n<p></p>",
+      }),
+    ).toEqual([expect.stringContaining('y')])
+  })
+
+  it("refuses a page default fill the immediate layout can't render", () => {
+    expect(
+      errs({
+        'layouts/inner': '@layout(\'layouts/outer\')\n<i><slot name="h" /></i>',
+        'layouts/outer': '<o><slot [item]="1" /></o>',
+        page: "@layout('layouts/inner')\n@slot(default; let item) {{{ item }}}",
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it('checks a snippet body knowing the component has a client script', () => {
+    expect(
+      warns(
+        {
+          'components/x-k':
+            '@snippet s() {<kick-el></kick-el>}\n<div>@render s()</div>\n<script client>customElements.define("kick-el", class extends HTMLElement {})</script>',
+        },
+        'components/x-k',
+      ),
+    ).toEqual([])
+  })
+})

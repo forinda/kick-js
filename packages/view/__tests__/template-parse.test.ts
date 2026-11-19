@@ -36,6 +36,10 @@ function flat(nodes: Node[]): string {
           return `@push:${n.name}[${flat(n.body)}]`
         case 'stack':
           return `<stack:${n.name}>`
+        case 'snippet':
+          return `@snippet:${n.name}(${n.params.map((p) => p.name).join(',')})[${flat(n.body)}]`
+        case 'render':
+          return `@render:${n.name}(${n.args.length})`
       }
     })
     .join('')
@@ -328,5 +332,25 @@ describe('snippets', () => {
 describe('snippet defaults', () => {
   it('requires defaults to be trailing', () => {
     expect(errors('@snippet s(a = 1, b) {x}')).toHaveLength(1)
+  })
+})
+
+describe('PR review parse fixes', () => {
+  it('takes <slot [name]> as an offered value, not the selector', () => {
+    expect(ok('<slot [name]="user.name" />').ast.body[0]).toMatchObject({
+      k: 'slot-outlet',
+      name: undefined,
+      offers: [{ name: 'name' }],
+    })
+  })
+
+  it('accepts a negative number default', () => {
+    expect(ok('@snippet s(n = -1) {x}').ast.body[0]).toMatchObject({
+      params: [{ name: 'n', default: -1 }],
+    })
+  })
+
+  it("doesn't count a snippet body as page output before @layout", () => {
+    ok('@snippet s() {<b>x</b>}\n@layout(none)\n<p></p>')
   })
 })

@@ -339,6 +339,7 @@ A component can hand values to the content its caller puts in a slot: a list tha
 </user-list>
 ```
 
+- A `<slot>` takes only `name="…"`, which picks the slot, and `[value]="expr"` bindings, which offer values (`[name]="…"` offers one called `name`). Any other attribute is an error: a template that used to put `class` on a `<slot>`, where it was ignored, should move it to a real element.
 - `[name]="expr"` on a `<slot>` offers a value. The default slot offers values the same way (`<slot [item]="x" />`) and is filled with `@slot(default; let item) { … }`.
 - `let user` takes an offered value, and `let u = user` renames it. Taking a name the slot doesn't offer fails the check, listing what it offers. Content written between the tags without `@slot` receives nothing.
 - The slot's fallback content can read the values it offers.
@@ -354,7 +355,7 @@ To pick a component from data, such as a dashboard widget's type, list the ones 
 ```
 
 - `of` names the candidate tags, and the check covers every one of them: each must exist, and each one's required inputs must be given. An attribute that one candidate declares as an input goes to that candidate's root on the others.
-- At render time, `null` renders nothing. Any value outside the list fails the render, listing the candidates, so data can't reach a component you didn't list.
+- At render time, `null` or `undefined` renders nothing. Any value outside the list fails the render, listing the candidates, so data can't reach a component you didn't list.
 - Slot content works as for any component. A fill only some candidates have renders for those, and a value only some offer is `undefined` for the rest.
 
 ## Components with a script

@@ -79,6 +79,15 @@ describe('Workspace', () => {
     expect(ws.dependentsOf('components/x-card')).toEqual(new Set(['page']))
   })
 
+  it("counts a <component>'s candidates as dependents", async () => {
+    const { ws } = workspace({
+      'src/views/page.kick': '<component [is]="k" of="x-card" />',
+      'src/views/components/x-card.kick': '<b>card</b>',
+    })
+    await ws.load()
+    expect(ws.dependentsOf('components/x-card')).toEqual(new Set(['page']))
+  })
+
   it('re-checks pages when their layout disappears', async () => {
     const { ws, disk, uri } = workspace({
       'src/views/page.kick': "@layout('layouts/main')\n<p>x</p>",
