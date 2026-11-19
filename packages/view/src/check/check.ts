@@ -31,6 +31,7 @@ import {
   configuredLayouts,
   isComponent,
   layoutResolver,
+  resolveRef,
   templateName,
   type Project,
 } from './project'
@@ -1307,6 +1308,11 @@ class Checker {
 
   // ── layouts ───────────────────────────────────────────────────────────
 
+  /** What `ref`, written in template `from`, names (its view root first). */
+  ref(from: string, ref: string): string {
+    return resolveRef(from, ref, (n) => this.project.templates.has(n))
+  }
+
   /** The outlets a page can fill: its layout chain's. Reports bad names and cycles. */
   layoutChain(
     start: string | undefined,
@@ -1332,7 +1338,7 @@ class Checker {
       }
       seen.push(name)
       mergeOutlets(outlets, this.signature(name).outlets)
-      name = ast.layout ?? undefined
+      name = ast.layout ? this.ref(name, ast.layout) : undefined
     }
     return outlets
   }
@@ -1530,7 +1536,9 @@ export function check(name: string, project: Project): CheckResult {
     component || configuredLayouts(project).has(name)
       ? undefined
       : layoutResolver(project.layouts)(name)
-  const layoutName = ast.layout === undefined ? mapped : (ast.layout ?? undefined)
+  // A root's template means its own root's layout first (`resolveRef`).
+  const declared = ast.layout ? c.ref(name, ast.layout) : ast.layout
+  const layoutName = declared === undefined ? mapped : (declared ?? undefined)
   let outlets =
     layoutName === undefined ? undefined : c.layoutChain(layoutName, ast.layoutSpan ?? zero, name)
   // The base layout wraps the chain, so its outlets are fillable too.
@@ -1604,7 +1612,7 @@ export function check(name: string, project: Project): CheckResult {
     body: optimize(c.nodes(body)),
   }
   template.slots = c.slots
-  if (ast.layout !== undefined) template.layout = ast.layout
+  if (declared !== undefined) template.layout = declared
   if (client) template.client = client
   if (c.validates) template.validates = true
   if (Object.keys(pageDefaults).length) template.defaults = pageDefaults
