@@ -13,6 +13,11 @@ export type CursorContext =
   | { kind: 'template-name'; prefix: string }
   | { kind: 'slot-name'; prefix: string }
   | { kind: 'stack-name'; prefix: string }
+  | { kind: 'snippet-name'; prefix: string }
+  /** `@slot('row'; let …`: the names slot `slot` of component `tag` passes */
+  | { kind: 'slot-let'; slot: string; tag?: string; prefix: string }
+  /** inside `<component of="…"` */
+  | { kind: 'component-tag'; prefix: string }
   | { kind: 'other' }
 
 export const LOOP_VARS = ['$index', '$first', '$last', '$even', '$odd', '$count']
@@ -53,6 +58,22 @@ function headerNames(kw: string, header: string): string[] {
     const as = /;\s*as\s+([\w$]+)/.exec(header)
     return as ? [as[1]!] : []
   }
+  // `@snippet name(a, b = 1)`: its parameters.
+  if (kw === 'snippet')
+    return header
+      .split(',')
+      .map((p) => p.split('=')[0]!.trim())
+      .filter(Boolean)
+  // `@slot('row'; let a, b = c)`: the names it binds.
+  if (kw === 'slot') {
+    const lets = /;\s*let\s+(.*)$/s.exec(header)
+    return lets
+      ? lets[1]!
+          .split(',')
+          .map((d) => d.split('=')[0]!.trim())
+          .filter(Boolean)
+      : []
+  }
   return []
 }
 
@@ -60,6 +81,8 @@ function headerNames(kw: string, header: string): string[] {
 export function scopeAt(s: string, stop: number): string[] {
   const inputs: string[] = []
   const frames: string[][] = [[]]
+  /** Frame indexes where a `@snippet` body starts: only its own names are in scope there. */
+  const snippets: number[] = []
   let i = 0
   while (i < stop) {
     const c = s[i]!
@@ -77,7 +100,7 @@ export function scopeAt(s: string, stop: number): string[] {
     }
     if (c === '@' && !/[\w@.-]/.test(s[i - 1] ?? '')) {
       const m =
-        /^@(else\s+if|for|if|switch|case|slot|error|fragment|push|else|empty|default|let|input)(?![\w$-])/.exec(
+        /^@(else\s+if|for|if|switch|case|slot|error|fragment|push|snippet|else|empty|default|let|input)(?![\w$-])/.exec(
           s.slice(i, i + 16),
         )
       if (m) {
@@ -98,6 +121,12 @@ export function scopeAt(s: string, stop: number): string[] {
         }
         let header = ''
         while (j < stop && /\s/.test(s[j]!)) j++
+        // `@snippet name(…)`: the name comes before the parameters.
+        if (kw === 'snippet') {
+          const name = /^[A-Za-z_$][\w$]*/.exec(s.slice(j, j + 64))
+          if (name) j += name[0].length
+          while (j < stop && /\s/.test(s[j]!)) j++
+        }
         if (s[j] === '(') {
           const end = closeParen(s, j, stop)
           if (end < 0) break
@@ -107,6 +136,7 @@ export function scopeAt(s: string, stop: number): string[] {
         while (j < stop && /\s/.test(s[j]!)) j++
         if (s[j] === '{') {
           frames.push(headerNames(kw, header))
+          if (kw === 'snippet') snippets.push(frames.length - 1)
           i = j + 1
           continue
         }
@@ -114,10 +144,15 @@ export function scopeAt(s: string, stop: number): string[] {
         continue
       }
     }
-    if (c === '}' && frames.length > 1) frames.pop()
+    if (c === '}' && frames.length > 1) {
+      if (snippets.at(-1) === frames.length - 1) snippets.pop()
+      frames.pop()
+    }
     i++
   }
-  return [...inputs, ...frames.flat()]
+  // Inside a snippet: inputs and its own names, not the template's @lets.
+  const from = snippets.at(-1)
+  return [...inputs, ...(from === undefined ? frames : frames.slice(from)).flat()]
 }
 
 function exprContext(segment: string, s: string, offset: number): CursorContext {
@@ -136,6 +171,29 @@ export function cursorContext(s: string, offset: number): CursorContext {
   if (open >= 0 && open > before.lastIndexOf('}}') && !before.startsWith('{{--', open)) {
     return exprContext(before.slice(open + 2), s, offset)
   }
+
+  // @render na…
+  const rnd = /@render\s+([\w$]*)$/.exec(before)
+  if (rnd) return { kind: 'snippet-name', prefix: rnd[1]! }
+
+  // @slot('row'; let a, …
+  const slotLet =
+    /@slot\s*\(\s*(?:['"]([^'"]*)['"]|default)\s*;\s*let\s+(?:[\w$]+\s*(?:=\s*[\w$]+\s*)?,\s*)*([\w$]*)$/.exec(
+      before,
+    )
+  if (slotLet) {
+    const tag = enclosingComponent(before)
+    return {
+      kind: 'slot-let',
+      slot: slotLet[1] ?? '',
+      prefix: slotLet[2]!,
+      ...(tag ? { tag } : {}),
+    }
+  }
+
+  // <component of="a b…
+  const ofAttr = /<component\b[^>]*\bof\s*=\s*"([^"]*)$/.exec(before)
+  if (ofAttr) return { kind: 'component-tag', prefix: ofAttr[1]!.split(/\s+/).at(-1)! }
 
   // @layout('… / @slot('… / @push('…
   const named = /@(layout|slot|push)\s*\(\s*['"]([^'"]*)$/.exec(before)
@@ -190,4 +248,17 @@ export function wordAt(s: string, offset: number): { word: string; start: number
   while (start > 0 && /[\w$/-]/.test(s[start - 1]!)) start--
   while (end < s.length && /[\w$/-]/.test(s[end]!)) end++
   return { word: s.slice(start, end), start, end }
+}
+
+/** The innermost component tag (one with a `-`) still open in `before`. */
+function enclosingComponent(before: string): string | undefined {
+  const open: string[] = []
+  for (const m of before.matchAll(/<(\/?)([a-z][\w]*-[\w-]*)\b[^>]*?(\/?)>/gi)) {
+    const tag = m[2]!.toLowerCase()
+    if (m[1]) {
+      const at = open.lastIndexOf(tag)
+      if (at >= 0) open.splice(at)
+    } else if (!m[3]) open.push(tag)
+  }
+  return open.at(-1)
 }

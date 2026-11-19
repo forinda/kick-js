@@ -306,10 +306,57 @@ A page or component often needs something in the `<head>`, such as a stylesheet,
   - `[name]="expr"` passes an expression, `name="text"` a string, and a bare `name` `true`.
   - `compact="false"` passes the string `"false"`, which is truthy, so write `[compact]="false"`.
   - Kebab-case (`user-id="1"`) binds `userId`.
-  - A missing or unknown input fails the check.
-- `class`, `id`, `style`, `role`, `aria-*` and `data-*` on the tag go to the component's single root element, with classes merged.
+  - A missing required input fails the check.
+- Every other attribute goes to the component's single root element. That covers `class`, `id`, `hx-*`, `x-*`, `type`, `[disabled]="…"` and anything else. Classes and styles merge with the root's own; any other attribute replaces the root's attribute of the same name.
+  - Each one is checked as if written on that element, so `<ui-link href="{{ url }}">` gets the URL check of the `<a>` it lands on.
+  - A name close to an input warns: `compcat` asks whether you meant `compact`.
+  - When the root is itself a component (a wrapper such as `primary-button` around `<ui-button>`), the attributes pass on: one the inner component declares becomes its input, and the rest go to its root.
+  - Some attributes decide how their element is checked, so the component must declare them as inputs: `type`, `name`, `value`, `checked` and `validate` on an `<input>`, `<select>`, `<textarea>` or `<option>` root (they control form refill), and `http-equiv` and `content` on a `<meta>` root.
+  - A component whose root isn't a single element (several roots, a block such as `@if`, a `<slot>`) can't take extra attributes: the check names them. A `<component>` root takes only `class`, `id`, `style`, `role`, `aria-*` and `data-*`, which no check depends on; its element is only chosen at render time.
+  - `type` on a `<script>` root is refused too: it decides how `{{ }}` inside the script is checked.
 - A component sees only its inputs. Content passed between its tags uses the page's data.
 - Components can include themselves (trees), up to 64 levels deep.
+
+### Slots that receive data {#scoped-slots}
+
+A component can hand values to the content its caller puts in a slot: a list that leaves each row's markup to the page, say.
+
+```kick
+{{-- src/views/components/user-list.kick --}}
+@input users
+<ul>
+  @for (u of users; track u.id) {
+    <li><slot name="row" [user]="u">{{ user.name }}</slot></li>
+  }
+</ul>
+```
+
+```kick
+<user-list [users]="team">
+  @slot('row'; let user) {
+    <a href="/users/{{ user.id }}">{{ user.name }}</a>
+  }
+</user-list>
+```
+
+- A `<slot>` takes only `name="…"`, which picks the slot, and `[value]="expr"` bindings, which offer values (`[name]="…"` offers one called `name`). Any other attribute is an error: a template that used to put `class` on a `<slot>`, where it was ignored, should move it to a real element.
+- `[name]="expr"` on a `<slot>` offers a value. The default slot offers values the same way (`<slot [item]="x" />`) and is filled with `@slot(default; let item) { … }`.
+- `let user` takes an offered value, and `let u = user` renames it. Taking a name the slot doesn't offer fails the check, listing what it offers. Content written between the tags without `@slot` receives nothing.
+- The slot's fallback content can read the values it offers.
+- Every `<slot>` with one name must offer the same names.
+- A layout's slots can offer values to a page's `@slot` the same way.
+
+### Dynamic components {#dynamic-components}
+
+To pick a component from data, such as a dashboard widget's type, list the ones it may be:
+
+```kick
+<component [is]="widget.type" of="chart-bar chart-line stat-card" [data]="widget" />
+```
+
+- `of` names the candidate tags, and the check covers every one of them: each must exist, and each one's required inputs must be given. An attribute that one candidate declares as an input goes to that candidate's root on the others.
+- At render time, `null` or `undefined` renders nothing. Any value outside the list fails the render, listing the candidates, so data can't reach a component you didn't list.
+- Slot content works as for any component. A fill only some candidates have renders for those, and a value only some offer is `undefined` for the rest.
 
 ## Components with a script
 
@@ -441,6 +488,23 @@ kick-toast[kind='error'] {
 - **Several toasts** stack in the order they render; give later ones an offset in CSS if they share a corner.
 - **Screen readers** announce what changes in a `role="status"` region; a toast already in the page when it loads usually isn't read out. For flash messages after a redirect, fill the `<p>` from the script after `showPopover()` (keep the text in an attribute) if announcements matter.
 - **Without JavaScript** a `popover` element stays hidden. Leave `popover` off and position the toast with CSS alone if the message must show without scripts.
+
+## Snippets {#snippets}
+
+A piece of markup used several times in one template, with parameters:
+
+```kick
+@snippet badge(label, tone = 'info') {
+  <span class="badge" [class.warn]="tone == 'warn'">{{ label }}</span>
+}
+
+<p>@render badge(user.role) @render badge('Overdue', 'warn')</p>
+```
+
+- `@snippet` goes at the top level of a page, layout or component. It can come after the `@render`s that use it, and its definition prints nothing.
+- Arguments are given by position. A parameter with a literal default (`tone = 'info'`) can be left out; too few or too many arguments fail the check.
+- A snippet sees its parameters and what the template sees at its top level: page data in a page, inputs in a component. It doesn't see loop variables from where it's rendered, or top-level `@let`s: pass those as parameters. So it renders the same everywhere, including in a [fragment](#fragments).
+- A snippet can render itself, up to 64 levels deep. Markup shared between files is a [component](#components).
 
 ## Pipes
 
@@ -917,7 +981,7 @@ The KickJS VS Code extension understands `.kick` files:
 - highlighting for `{{ }}`, `@if` / `@for` / `@switch`, bindings and comments, on top of HTML;
 - errors as you type, from the same checks as `kick check:views`, including in unsaved files;
 - snippets for whole blocks — type `kick-` for `kick-page`, `kick-layout`, `kick-component`, `kick-component-script`, `kick-for`, `kick-form`, `kick-field` and `kick-flash`;
-- completion for `@` keywords, pipes after `|`, components and their inputs, layout, slot and stack names, and the names in scope inside `{{ }}`;
+- completion for `@` keywords, pipes after `|`, components and their inputs, layout, slot and stack names, snippet names after `@render`, the values a slot passes after `@slot('…'; let`, component tags in `of="…"`, and the names in scope inside `{{ }}`;
 - HTML, CSS and Emmet completion inside templates;
 - hover on a pipe or a component to see its parameters or inputs;
 - go to definition on a component tag, `@layout('…')` or a pipe;

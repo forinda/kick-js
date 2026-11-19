@@ -29,7 +29,7 @@ const ALL: CodeInformation = {
 const EMBEDDED: CodeInformation = { ...ALL, format: false }
 
 export const KEYWORD =
-  /^@(else\s+if|if|for|switch|case|slot|error|layout|assets|fragment|push|verbatim|let|input|else|empty|default)(?![\w$-])/
+  /^@(else\s+if|if|for|switch|case|slot|error|layout|assets|fragment|push|snippet|render|verbatim|let|input|else|empty|default)(?![\w$-])/
 
 const snapshotOf = (text: string): IScriptSnapshot => ({
   getText: (start, end) => text.slice(start, end),
@@ -166,13 +166,23 @@ function scan(s: string): Scan {
             continue
           }
         }
+        // `@snippet name(…)` / `@render name(…)`: the name comes before the
+        // parentheses, whose arguments may quote markup.
+        if (kw === 'snippet' || kw === 'render') {
+          const name = /^\s+[A-Za-z_$][\w$]*/.exec(s.slice(j, j + 128))
+          if (!name) {
+            i++
+            continue
+          }
+          j += name[0].length
+        }
         const p = skipWs(j)
         if (s[p] === '(') j = closeParen(s, p)
         else if (kw !== 'else' && kw !== 'empty' && kw !== 'default') {
           i++
           continue
         }
-        if (kw === 'layout' || kw === 'assets') {
+        if (kw === 'layout' || kw === 'assets' || kw === 'render') {
           out.blank.push([i, j])
           i = j
           continue

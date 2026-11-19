@@ -36,6 +36,10 @@ function flat(nodes: Node[]): string {
           return `@push:${n.name}[${flat(n.body)}]`
         case 'stack':
           return `<stack:${n.name}>`
+        case 'snippet':
+          return `@snippet:${n.name}(${n.params.map((p) => p.name).join(',')})[${flat(n.body)}]`
+        case 'render':
+          return `@render:${n.name}(${n.args.length})`
       }
     })
     .join('')
@@ -273,5 +277,80 @@ describe('fragments and stacks', () => {
 
   it('leaves <stack-panel> an element', () => {
     expect(ok('<stack-panel></stack-panel>').ast.body[0]!.k).toBe('element')
+  })
+})
+
+describe('slots that receive data', () => {
+  it('parses lets on a fill, with renames, and the default slot', () => {
+    const fill = ok("<x-a>@slot('row'; let user, u2 = index) {x}</x-a>").ast.body[0] as Element
+    expect(fill.children[0]).toMatchObject({
+      k: 'slot-fill',
+      name: 'row',
+      lets: [
+        { name: 'user', from: 'user' },
+        { name: 'u2', from: 'index' },
+      ],
+    })
+    const def = ok('<x-a>@slot(default; let item) {x}</x-a>').ast.body[0] as Element
+    expect(def.children[0]).toMatchObject({
+      k: 'slot-fill',
+      name: '',
+      lets: [{ name: 'item', from: 'item' }],
+    })
+  })
+
+  it('parses the values a <slot> offers, and refuses other static attributes', () => {
+    const out = ok('<slot name="a" [user]="u" />').ast.body[0]
+    expect(out).toMatchObject({ k: 'slot-outlet', name: 'a', offers: [{ name: 'user' }] })
+    expect(errors('<slot name="a" foo="1" />')).toHaveLength(1)
+  })
+})
+
+describe('snippets', () => {
+  it('parses @snippet with params and defaults, and @render with arguments', () => {
+    const body = ok(
+      "@snippet badge(label, tone = 'info') {<b>{{ label }}</b>}\n@render badge(user.role, 'warn')",
+    ).ast.body
+    expect(body[0]).toMatchObject({
+      k: 'snippet',
+      name: 'badge',
+      params: [{ name: 'label' }, { name: 'tone', default: 'info' }],
+    })
+    expect(body.find((n) => n.k === 'render')).toMatchObject({ k: 'render', name: 'badge' })
+    expect((body.find((n) => n.k === 'render') as { args: unknown[] }).args).toHaveLength(2)
+  })
+
+  it('keeps @snippet and @render without a call as text', () => {
+    expect(flat(ok('a @render b @snippet').ast.body)).toBe('a @render b @snippet')
+  })
+
+  it('refuses a snippet that is not at the top level', () => {
+    expect(errors('<div>@snippet b() {x}</div>')).toHaveLength(1)
+  })
+})
+
+describe('snippet defaults', () => {
+  it('requires defaults to be trailing', () => {
+    expect(errors('@snippet s(a = 1, b) {x}')).toHaveLength(1)
+  })
+})
+
+describe('PR review parse fixes', () => {
+  it('takes <slot [name]> as an offered value, not the selector', () => {
+    expect(ok('<slot [name]="user.name" />').ast.body[0]).toMatchObject({
+      k: 'slot-outlet',
+      name: undefined,
+      offers: [{ name: 'name' }],
+    })
+  })
+
+  it('accepts a negative number default', () => {
+    expect(ok('@snippet s(n = -1) {x}').ast.body[0]).toMatchObject({
+      params: [{ name: 'n', default: -1 }],
+    })
+  })
+
+  it("doesn't count a snippet body as page output before @layout", () => {
+    ok('@snippet s() {<b>x</b>}\n@layout(none)\n<p></p>')
   })
 })

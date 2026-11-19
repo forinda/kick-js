@@ -1,7 +1,7 @@
 import type { Span } from './diagnostics'
 
 /** Bumped when the shape of a checked template changes; builds and runtimes must agree. */
-export const AST_FORMAT_VERSION = 2
+export const AST_FORMAT_VERSION = 3
 
 /** A literal value in a template expression. */
 export type Literal = string | number | boolean | null
@@ -104,13 +104,37 @@ export type Node =
     }
   | { k: 'let'; name: string; expr: Expr; span: Span }
   | { k: 'verbatim'; text: string; span: Span }
-  | { k: 'slot-outlet'; name?: string; fallback: Node[]; span: Span }
-  | { k: 'slot-fill'; name: string; body: Node[]; span: Span }
+  /** `<slot name="n" [x]="expr">`: the values (`offers`) it hands the caller's content */
+  | {
+      k: 'slot-outlet'
+      name?: string
+      offers: Array<{ name: string; expr: Expr; span: Span }>
+      fallback: Node[]
+      span: Span
+    }
+  /** `@slot('n'; let a, b = c) { }`: `lets` bind offered values (`from`) to names */
+  | {
+      k: 'slot-fill'
+      name: string
+      lets: Array<{ name: string; from: string }>
+      body: Node[]
+      span: Span
+    }
   | { k: 'assets'; entry: string; span: Span }
   /** `@fragment('name') { }`: a block a render can ask for on its own */
   | { k: 'fragment'; name: string; body: Node[]; span: Span }
   /** `@push('name') { }`: content for a layout's `<stack name>` */
   | { k: 'push'; name: string; body: Node[]; span: Span }
+  /** `@snippet name(a, b = 'x') { }`: a block of markup with parameters, top level only */
+  | {
+      k: 'snippet'
+      name: string
+      params: Array<{ name: string; default?: Literal }>
+      body: Node[]
+      span: Span
+    }
+  /** `@render name(args)`: run a snippet of this file */
+  | { k: 'render'; name: string; args: Expr[]; span: Span }
   /** `<stack name="…" />`: where pushed content goes; `children` must be blank (checked) */
   | { k: 'stack'; name: string; children: Node[]; span: Span }
 
@@ -171,6 +195,15 @@ export type CAttr =
   | { t: 'y'; n: string; e: CExpr; x?: string }
 
 /** A checked template node, as the renderer walks it. */
+/**
+ * Slot content: its nodes, compiled in the caller's scope, and the offered
+ * values it takes (`let x = from`), each bound to caller slot `s`.
+ */
+export interface CFill {
+  nodes: CNode[]
+  params?: Array<{ from: string; s: number }>
+}
+
 export type CNode =
   /** static output */
   | { k: 's'; t: string }
@@ -195,12 +228,27 @@ export type CNode =
       k: 'cmp'
       n: string
       in: Array<{ s: number; e: CExpr }>
+      /** inputs of wrapped components further down the chain, by name */
+      ci?: Array<{ n: string; e: CExpr }>
       fa: CAttr[]
-      f: Record<string, CNode[]>
+      f: Record<string, CFill>
+      /** this call is its template's root: it takes the caller's chained attributes */
+      r?: 1
       at: At
     }
-  /** `<slot name="n">fallback</slot>` */
-  | { k: 'o'; n: string; fb: CNode[] }
+  /**
+   * `<slot name="n" [x]="e">fallback</slot>`: `v` are the values it offers;
+   * while the fallback renders they sit in slots `fs` (same order).
+   */
+  | { k: 'o'; n: string; fb: CNode[]; v?: Array<{ n: string; e: CExpr }>; fs?: number[] }
+  /**
+   * `<component [is]="e" of="…">`: one compiled call per candidate tag, picked
+   * by `e`. The slot content `f` is compiled once, here, and given to whichever
+   * candidate renders (it's in the caller's scope, the same for all).
+   */
+  | { k: 'dyn'; e: CExpr; c: Record<string, CNode>; f: Record<string, CFill>; at: At }
+  /** `@render n(args)`: run snippet `n` of the current template */
+  | { k: 'rnd'; n: string; a: CExpr[]; at: At }
   /** `@push('n') { }`: rendered, then added to stack `n` */
   | { k: 'push'; n: string; b: CNode[] }
   /** `<stack name="n" />`: filled once the render is done */
@@ -208,6 +256,19 @@ export type CNode =
   | { k: 'as'; en: string }
 
 /** A template after `check`: plain JSON the renderer walks, which a build can ship as data. */
+/**
+ * A `@snippet`, in its own slot space: the template's inputs first (same
+ * indexes as in the template), then `params`, then its own variables.
+ */
+export interface CSnippet {
+  params: number[]
+  defaults: Array<Literal | undefined>
+  slots: number
+  body: CNode[]
+  /** a field in it has `validate` */
+  validates?: true
+}
+
 /** A page's `@fragment`, compiled to render on its own. */
 export interface CheckedFragment {
   /** names enclosing blocks bound (loop items, aliases, `@let`): the caller passes them */
@@ -230,12 +291,14 @@ export interface CheckedTemplate {
   /** a component's inputs: name, slot, default, required */
   inputs: Array<{ n: string; s: number; d?: Literal; r: boolean }>
   /** `@slot('name') { }` fills a page passes to its layout */
-  fills: Record<string, CNode[]>
+  fills: Record<string, CFill>
   body: CNode[]
   /** a component's `<script client>`: TypeScript as written (`js: false`), or plain JS once a build stripped it */
   client?: { code: string; js: boolean }
   /** a field in it has `validate`: pages rendering it ship the validator script */
   validates?: true
+  /** its `@snippet`s, by name */
+  snippets?: Record<string, CSnippet>
   /** its `@fragment`s, by name */
   fragments?: Record<string, CheckedFragment>
 }

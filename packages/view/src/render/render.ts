@@ -62,6 +62,8 @@ interface Resolved {
   attrs: Array<[string, string | true]>
   cls: string[]
   style: string[]
+  /** Bound to null/undefined/false: on a forwarded set, removes the root's own attribute. */
+  off?: string[]
 }
 
 /** One template being rendered: its scope slots, data, slot fills and the template stack. */
@@ -69,8 +71,10 @@ interface Inst {
   t: CheckedTemplate
   data: Record<string, unknown>
   slots: unknown[]
-  fills: Record<string, { nodes: CNode[]; inst: Inst }>
+  fills: Record<string, { nodes: CNode[]; inst: Inst; params?: Array<{ from: string; s: number }> }>
   fall?: Resolved
+  /** Inputs for components further down a wrapper chain, not taken yet, by name. */
+  chain?: Record<string, unknown>
   stack: string[]
   depth: number
   /** The node being rendered, for error positions. */
@@ -336,10 +340,42 @@ class Renderer {
         return
       case 'o': {
         const fill = inst.fills[n.n]
-        if (fill) this.nodes(fill.nodes, fill.inst)
-        else this.nodes(n.fb, inst)
+        // The values this slot offers, by name.
+        const offered: Record<string, unknown> = Object.create(null)
+        for (const v of n.v ?? []) offered[v.n] = this.value(v.e, inst)
+        if (fill?.params) {
+          // On its own copy of the caller's scope: a nested render of the same
+          // content (a recursive component) can't overwrite this one's values.
+          const own: Inst = { ...fill.inst, slots: [...fill.inst.slots] }
+          for (const p of fill.params) own.slots[p.s] = offered[p.from]
+          this.nodes(fill.nodes, own)
+        } else if (fill) this.nodes(fill.nodes, fill.inst)
+        else {
+          n.fs?.forEach((s, i) => (inst.slots[s] = offered[n.v![i]!.n]))
+          this.nodes(n.fb, inst)
+        }
         return
       }
+      case 'dyn': {
+        inst.at = n.at
+        const v = this.value(n.e, inst)
+        if (v === null || v === undefined) return
+        // Own keys only: 'constructor' or '__proto__' from data is no candidate.
+        const hit = typeof v === 'string' && Object.hasOwn(n.c, v) ? n.c[v] : undefined
+        if (hit?.k !== 'cmp') {
+          this.fail(
+            inst,
+            `<component> got ${typeof v === 'string' ? JSON.stringify(v) : `a ${typeof v}`} — it renders one of ${Object.keys(n.c).join(', ')}`,
+          )
+        }
+        // The slot content is the <component>'s, compiled once for every candidate.
+        this.component({ ...hit, f: n.f }, inst)
+        return
+      }
+      case 'rnd':
+        inst.at = n.at
+        this.snippet(n, inst)
+        return
       case 'stk':
         if (this.pushing) {
           this.fail(
@@ -444,7 +480,10 @@ class Renderer {
         }
         case 'b': {
           const v = this.value(a.e, inst)
-          if (v === null || v === undefined || v === false) break
+          if (v === null || v === undefined || v === false) {
+            ;(r.off ??= []).push(a.n.toLowerCase())
+            break
+          }
           if (v === true) {
             put(a.n, true)
             break
@@ -486,7 +525,8 @@ class Renderer {
     if (fall) {
       // The caller's attributes win over the root's own, except class and
       // style, which merge.
-      const names = new Set(fall.attrs.map(([n]) => n.toLowerCase()))
+      // `[disabled]="false"` from the caller turns the root's own off.
+      const names = new Set([...fall.attrs.map(([n]) => n.toLowerCase()), ...(fall.off ?? [])])
       attrs = [...attrs.filter(([n]) => !names.has(n.toLowerCase())), ...fall.attrs]
       cls = [...cls, ...fall.cls]
       style = [...style, ...fall.style]
@@ -498,6 +538,29 @@ class Renderer {
 
   // ── components and layouts ────────────────────────────────────────────
 
+  /**
+   * `@render`: the snippet's body on fresh slots — the template's inputs
+   * copied across, then the arguments (or defaults). Counts toward the depth
+   * limit like a component.
+   */
+  private snippet(n: Extract<CNode, { k: 'rnd' }>, caller: Inst): void {
+    if (caller.depth >= MAX_DEPTH) {
+      this.fail(
+        caller,
+        `snippets nest more than ${MAX_DEPTH} deep — is ${n.n} rendering itself forever?`,
+      )
+    }
+    const def = caller.t.snippets?.[n.n]
+    if (!def) return this.fail(caller, `no snippet '${n.n}' in ${caller.t.name}`)
+    if (def.validates) this.env.validation?.()
+    const slots: unknown[] = Array.from({ length: def.slots })
+    for (let i = 0; i < caller.t.inputs.length; i++) slots[i] = caller.slots[i]
+    def.params.forEach((s, i) => {
+      slots[s] = i < n.a.length ? this.value(n.a[i]!, caller) : def.defaults[i]
+    })
+    this.nodes(def.body, { ...caller, slots, depth: caller.depth + 1 })
+  }
+
   private component(n: Extract<CNode, { k: 'cmp' }>, caller: Inst): void {
     if (caller.depth >= MAX_DEPTH) {
       this.fail(caller, `components nest more than ${MAX_DEPTH} deep — is ${n.n} including itself?`)
@@ -508,18 +571,48 @@ class Renderer {
     const slots: unknown[] = Array.from({ length: t.slots })
     for (const i of t.inputs) if (i.d !== undefined) slots[i.s] = i.d
     for (const i of n.in) slots[i.s] = this.value(i.e, caller)
+    // Chained inputs: those written further up (the caller's own wins), then
+    // the ones this template declares are taken; the rest go on down.
+    let chain: Record<string, unknown> | undefined
+    if (n.ci || (n.r && caller.chain)) {
+      chain = Object.create(null) as Record<string, unknown>
+      for (const c of n.ci ?? []) chain[c.n] = this.value(c.e, caller)
+      if (n.r && caller.chain) Object.assign(chain, caller.chain)
+      for (const i of t.inputs) {
+        if (!(i.n in chain)) continue
+        slots[i.s] = chain[i.n]
+        delete chain[i.n]
+      }
+    }
+    let fall = this.resolve(n.fa, caller)
+    // The root call of a wrapper: the caller's forwarded attributes win.
+    if (n.r && caller.fall) fall = mergeResolved(fall, caller.fall)
     const fills: Inst['fills'] = {}
-    for (const [name, nodes] of Object.entries(n.f)) fills[name] = { nodes, inst: caller }
+    for (const [name, f] of Object.entries(n.f)) fills[name] = { ...f, inst: caller }
     const inst: Inst = {
       t,
       data: Object.create(null),
       slots,
       fills,
-      fall: this.resolve(n.fa, caller),
+      fall,
+      ...(chain ? { chain } : {}),
       stack: [...caller.stack, n.n],
       depth: caller.depth + 1,
     }
     this.nodes(t.body, inst)
+  }
+}
+
+/** `outer` over `inner`: same-named attributes replaced, classes and styles combined. */
+function mergeResolved(inner: Resolved, outer: Resolved): Resolved {
+  const names = new Set([...outer.attrs.map(([n]) => n.toLowerCase()), ...(outer.off ?? [])])
+  const set = new Set(outer.attrs.map(([n]) => n.toLowerCase()))
+  const off = [...(inner.off ?? []).filter((n) => !set.has(n)), ...(outer.off ?? [])]
+  return {
+    attrs: [...inner.attrs.filter(([n]) => !names.has(n.toLowerCase())), ...outer.attrs],
+    cls: [...inner.cls, ...outer.cls],
+    style: [...inner.style, ...outer.style],
+    ...(off.length ? { off } : {}),
   }
 }
 
@@ -621,7 +714,7 @@ export function render(
   // Each layout renders the one inside it into its default slot; named fills
   // pass outward until a layout's own fill replaces them.
   let fills: Inst['fills'] = { '': { nodes: template.body, inst: page } }
-  for (const [name, nodes] of Object.entries(template.fills)) fills[name] = { nodes, inst: page }
+  for (const [name, f] of Object.entries(template.fills)) fills[name] = { ...f, inst: page }
   let inst: Inst = page
   for (const [i, t] of chain.entries()) {
     inst = {
@@ -634,7 +727,7 @@ export function render(
     }
     if (i === chain.length - 1) break
     const outer: Inst['fills'] = { ...fills, '': { nodes: t.body, inst } }
-    for (const [name, nodes] of Object.entries(t.fills)) outer[name] = { nodes, inst }
+    for (const [name, f] of Object.entries(t.fills)) outer[name] = { ...f, inst }
     fills = outer
   }
   r.nodes(inst.t.body, inst)

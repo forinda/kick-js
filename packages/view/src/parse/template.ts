@@ -10,6 +10,7 @@ import type {
   Expr,
   IfBranch,
   InputDecl,
+  Literal,
   LoopVar,
   Node,
   TemplateAst,
@@ -36,7 +37,7 @@ const RCDATA = new Set(['title', 'textarea'])
  */
 const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml'])
 const KEYWORDS =
-  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push)(?![\w$-])/
+  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push|snippet|render)(?![\w$-])/
 /** Fragment and stack names. */
 const PLAIN_NAME = /^[\w-]+$/
 const LOOP_VARS = new Set<LoopVar>(['$index', '$first', '$last', '$even', '$odd', '$count'])
@@ -123,16 +124,22 @@ class TemplateParser {
     if (f.type === 'switch') return []
     return f.children
   }
+  /** Inside a `@snippet` body: its markup isn't page output (it may never render). */
+  private get inSnippetBody(): boolean {
+    return this.frames.some((f) => f.type === 'block' && f.keyword === 'snippet')
+  }
   private flush(): void {
     if (this.text) {
-      if (/\S/.test(this.text)) this.seenOutput = true
+      if (/\S/.test(this.text) && !this.inSnippetBody) this.seenOutput = true
       this.children().push({ k: 'text', value: this.text, span: this.span(this.textStart, this.i) })
       this.text = ''
     }
   }
   private emit(node: Node): void {
     this.flush()
-    if (node.k !== 'let' && node.k !== 'slot-fill') this.seenOutput = true
+    if (node.k !== 'let' && node.k !== 'slot-fill' && node.k !== 'snippet' && !this.inSnippetBody) {
+      this.seenOutput = true
+    }
     this.children().push(node)
   }
   private addText(chunk: string, at: number): void {
@@ -331,7 +338,8 @@ class TemplateParser {
       span: this.span(i, j),
     }
     if (!foreign && lower === 'slot') {
-      const nameAttr = attrs.find((a) => a.name === 'name')
+      // `name="…"` picks the slot; `[name]="…"` offers a value called name.
+      const nameAttr = attrs.find((a) => a.name === 'name' && a.kind !== 'bind')
       const slotName = nameAttr?.kind === 'static' ? String(nameAttr.parts?.[0] ?? '') : undefined
       if (nameAttr && nameAttr.kind !== 'static') {
         this.err(
@@ -340,7 +348,20 @@ class TemplateParser {
           'a slot name must be plain text',
         )
       }
-      const node: Node = { k: 'slot-outlet', name: slotName, fallback: [], span: el.span }
+      // `[name]="expr"`: a value for the caller's content.
+      const offers: Array<{ name: string; expr: Expr; span: Span }> = []
+      for (const a of attrs) {
+        if (a === nameAttr) continue
+        if (a.kind === 'bind' && a.expr) offers.push({ name: a.name, expr: a.expr, span: a.span })
+        else if (a.kind !== 'bind') {
+          this.err(
+            a.span.start.offset,
+            a.span.end.offset,
+            `<slot> takes name="…" and [value]="…" bindings only, not ${a.name}`,
+          )
+        }
+      }
+      const node: Node = { k: 'slot-outlet', name: slotName, offers, fallback: [], span: el.span }
       this.emit(node)
       if (!selfClosing) {
         this.frames.push({ type: 'slot', children: node.fallback, tag: 'slot', start: i })
@@ -506,6 +527,71 @@ class TemplateParser {
 
   // ── blocks ────────────────────────────────────────────────────────────
 
+  /**
+   * `@snippet name(a, b = 'lit') { … }` (top level only) or `@render name(args)`.
+   * False — text after all — unless a name and `(` follow.
+   */
+  private snippetOrRender(kw: 'snippet' | 'render', i: number, after: number): boolean {
+    const m = /^\s+([A-Za-z_$][\w$]*)\s*\(/.exec(this.s.slice(after, after + 200))
+    if (!m) return false
+    const name = m[1]!
+    const p = this.parens(after + m[0].length - 1, `@${kw} ${name}`)
+    const parts = splitArgs(p.src, p.at)
+    if (kw === 'render') {
+      const args = parts.flatMap((a) => {
+        const e = this.expr(a.src, a.at)
+        return e ? [e] : []
+      })
+      this.i = this.standalone(i, p.end)
+      this.emit({ k: 'render', name, args, span: this.span(i, p.end) })
+      return true
+    }
+    const params: Array<{ name: string; default?: Literal }> = []
+    for (const a of parts) {
+      const pm = /^\s*([A-Za-z_$][\w$]*)\s*(?:=\s*([\s\S]+?))?\s*$/.exec(a.src)
+      if (!pm) {
+        this.err(a.at, a.at + a.src.length, 'expected a parameter name, or name = literal')
+        continue
+      }
+      const param: { name: string; default?: Literal } = { name: pm[1]! }
+      if (pm[2] !== undefined) {
+        const at = a.at + a.src.indexOf(pm[2], pm[1]!.length)
+        const e = this.expr(pm[2], at)
+        const literal = literalOf(e)
+        if (literal !== undefined) param.default = literal
+        else if (e) this.err(at, at + pm[2].length, 'a parameter default must be a literal')
+      }
+      if (param.default === undefined && params.some((q) => q.default !== undefined)) {
+        this.err(
+          a.at,
+          a.at + a.src.length,
+          'a parameter without a default must come before those with one',
+        )
+      }
+      params.push(param)
+    }
+    if (this.frames.length > 1) {
+      this.err(
+        i,
+        p.end,
+        '@snippet goes at the top level of a template, not inside an element or block',
+      )
+    }
+    const brace = this.openBrace(p.end, `@snippet ${name}(…)`)
+    const resume = this.standalone(i, brace)
+    const node: Extract<Node, { k: 'snippet' }> = {
+      k: 'snippet',
+      name,
+      params,
+      body: [],
+      span: this.span(i, brace),
+    }
+    this.emit(node)
+    this.frames.push({ type: 'block', children: node.body, node, keyword: 'snippet', start: i })
+    this.i = resume
+    return true
+  }
+
   /** `( … )` from `j` (at `(`): the inside and the offset after `)`. */
   private parens(j: number, what: string): { src: string; at: number; end: number } {
     if (this.s[j] !== '(') this.fatal(j, j + 1, `expected ( after ${what}`)
@@ -604,6 +690,7 @@ class TemplateParser {
     if (kw === 'input') return this.input(i, after)
     if (kw === 'let') return this.let(i, after)
     if (kw === 'verbatim') return this.verbatim(i, next)
+    if (kw === 'snippet' || kw === 'render') return this.snippetOrRender(kw, i, after)
     if (kw === 'assets') {
       const p = this.parens(next, '@assets')
       const entry = this.stringArg(p.src, p.at, '@assets')
@@ -704,8 +791,29 @@ class TemplateParser {
       this.emit(node)
       this.frames.push({ type: 'block', children: node.body, node, keyword: kw, start: i })
     } else {
-      const name = this.stringArg(p.src, p.at, '@slot')
-      const node: Node = { k: 'slot-fill', name, body: [], span: this.span(i, brace) }
+      const [head, letPart, extra] = this.splitHeader(p.src, p.at)
+      // `default` (unquoted, like `@layout(none)`) is the default slot.
+      const name = /^\s*default\s*$/.test(head!.src)
+        ? ''
+        : this.stringArg(head!.src, head!.at, '@slot')
+      const lets: Array<{ name: string; from: string }> = []
+      if (letPart) {
+        const m = /^\s*let\s+(.*)$/s.exec(letPart.src)
+        const items = m
+          ? m[1]!
+              .split(',')
+              .map((x) => /^\s*([A-Za-z_$][\w$]*)\s*(?:=\s*([A-Za-z_$][\w$]*)\s*)?$/.exec(x))
+          : []
+        if (!m || items.some((x) => !x)) {
+          this.err(
+            letPart.at,
+            letPart.at + letPart.src.length,
+            'expected `let name` or `let name = offered` after ;',
+          )
+        } else for (const x of items) lets.push({ name: x![1]!, from: x![2] ?? x![1]! })
+      }
+      if (extra) this.err(extra.at, extra.at + 1, 'unexpected ; in @slot')
+      const node: Node = { k: 'slot-fill', name, lets, body: [], span: this.span(i, brace) }
       this.emit(node)
       this.frames.push({ type: 'block', children: node.body, node, keyword: 'slot', start: i })
     }
@@ -906,15 +1014,7 @@ class TemplateParser {
     if (m[2] !== undefined) {
       const at = after + line.indexOf(m[2], m[0].indexOf('=') + 1)
       const e = this.expr(m[2], at)
-      const literal =
-        e?.kind === 'literal'
-          ? e.value
-          : e?.kind === 'unary' &&
-              e.op === '-' &&
-              e.arg.kind === 'literal' &&
-              typeof e.arg.value === 'number'
-            ? -e.arg.value
-            : undefined
+      const literal = literalOf(e)
       if (e && literal === undefined) {
         this.err(
           at,
@@ -962,4 +1062,42 @@ export function parse(source: string, file: string): ParseResult {
   const p = new TemplateParser(source.charCodeAt(0) === 0xfeff ? source.slice(1) : source, file)
   p.run()
   return { ast: p.ast, diagnostics: p.diagnostics }
+}
+
+/** Comma-separated arguments at the top level of `src` (quotes and brackets respected). */
+function splitArgs(src: string, at: number): Array<{ src: string; at: number }> {
+  if (!src.trim()) return []
+  const out: Array<{ src: string; at: number }> = []
+  let depth = 0
+  let quote = ''
+  let start = 0
+  for (let k = 0; k < src.length; k++) {
+    const c = src[k]!
+    if (quote) {
+      if (c === '\\') k++
+      else if (c === quote) quote = ''
+    } else if (c === "'" || c === '"') quote = c
+    else if (c === '(' || c === '[') depth++
+    else if (c === ')' || c === ']') depth--
+    else if (c === ',' && depth === 0) {
+      out.push({ src: src.slice(start, k), at: at + start })
+      start = k + 1
+    }
+  }
+  out.push({ src: src.slice(start), at: at + start })
+  return out
+}
+
+/** A literal, or a negative number written `-1` (parsed as unary minus). */
+function literalOf(e: Expr | undefined): Literal | undefined {
+  if (e?.kind === 'literal') return e.value
+  if (
+    e?.kind === 'unary' &&
+    e.op === '-' &&
+    e.arg.kind === 'literal' &&
+    typeof e.arg.value === 'number'
+  ) {
+    return -e.arg.value
+  }
+  return undefined
 }

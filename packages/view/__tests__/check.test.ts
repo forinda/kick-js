@@ -168,9 +168,10 @@ describe('check', () => {
     expect(errs({ page: '<user-card />', 'components/user-card': card })[0]).toContain(
       "missing input 'user'",
     )
+    // Not an input: forwarded to the root element.
     expect(
-      errs({ page: '<user-card [user]="u" nope="1" />', 'components/user-card': card })[0],
-    ).toContain("unknown input 'nope'")
+      errs({ page: '<user-card [user]="u" nope="1" />', 'components/user-card': card }),
+    ).toEqual([])
     // Fallthrough attributes are not inputs.
     expect(
       errs({
@@ -188,11 +189,9 @@ describe('check', () => {
     expect(
       warns({ page: '<user-card [user]="u" compact="false" />', 'components/user-card': card })[0],
     ).toContain('"false"')
-    // Only class/id/style/role/aria-*/data-* fall through; a URL or event attribute is an unknown input.
+    // Any non-input falls through, checked as written on the root.
     for (const attr of ['href="{{ u }}"', '[href]="u"', 'onclick="x"', 'src="a"', 'data="x"']) {
-      expect(errs({ page: `<x-a ${attr} />`, 'components/x-a': '<a>x</a>' })[0], attr).toContain(
-        'unknown input',
-      )
+      expect(errs({ page: `<x-a ${attr} />`, 'components/x-a': '<a>x</a>' }), attr).toEqual([])
     }
     // kebab-case binds the camelCase input
     expect(
@@ -381,5 +380,385 @@ describe('slots inside fragments and pushes', () => {
       'components/x-box': '@push(\'h\') {<slot name="extra" />}<b>box</b>',
       page: "<x-box>@slot('extra') {<i>e</i>}</x-box>",
     })
+  })
+})
+
+describe('passthrough', () => {
+  const btn = { 'components/x-btn': '<button>go</button>' }
+
+  it('forwards non-inputs, bindings included', () => {
+    clean({ ...btn, page: '<x-btn type="submit" hx-post="/s" [disabled]="!ok" />' })
+  })
+
+  it('refuses an interpolated event handler, as on the root itself', () => {
+    expect(errs({ ...btn, page: '<x-btn onclick="{{ js }}" />' })).toEqual([
+      expect.stringContaining('onclick'),
+    ])
+  })
+
+  it('warns about a name close to an input', () => {
+    const c = { 'components/x-c': '@input compact = false\n<p>{{ compact }}</p>' }
+    expect(warns({ ...c, page: '<x-c compcat />' })).toEqual([
+      expect.stringContaining("did you mean 'compact'"),
+    ])
+    expect(warns({ ...c, page: '<x-c hx-get="/a" />' })).toEqual([])
+  })
+
+  it('refuses guarded names on a form-field root', () => {
+    const input = { 'components/x-in': '<input name="pw">' }
+    for (const attr of [
+      'type="password"',
+      'name="x"',
+      'value="v"',
+      'checked',
+      'validate="required"',
+    ]) {
+      expect(errs({ ...input, page: `<x-in ${attr} />` }), attr).toEqual([
+        expect.stringContaining('@input'),
+      ])
+    }
+  })
+
+  it('refuses attributes for a <slot> root', () => {
+    expect(errs({ 'components/x-s': '<slot />', page: '<x-s x="1" />' })).toEqual([
+      expect.stringContaining('x'),
+    ])
+  })
+
+  it('lets a client-script component with one element take attributes', () => {
+    clean({
+      'components/x-k': '<b>k</b>\n<script client>customElements.get("x-b")</script>',
+      page: '<x-k hx-get="/a" />',
+    })
+  })
+
+  it('names the forwarded attributes when there are several roots', () => {
+    expect(errs({ 'components/x-2': '<p></p><p></p>', page: '<x-2 hx-get="/a" />' })).toEqual([
+      expect.stringContaining('hx-get'),
+    ])
+  })
+})
+
+describe('wrapper components', () => {
+  it('refuses guarded names on a form field at the end of the chain', () => {
+    expect(
+      errs({
+        'components/x-in': '<input name="pw">',
+        'components/x-w': '<x-in />',
+        page: '<x-w type="password" />',
+      }),
+    ).toEqual([expect.stringContaining('@input')])
+  })
+
+  it("leaves a wrapper's missing inner input to the wrapper's own check", () => {
+    const files = {
+      'components/ui-b': '@input size\n<b>{{ size }}</b>',
+      'components/x-w': '<ui-b />',
+      page: '<x-w size="lg" />',
+    }
+    expect(errs(files, 'components/x-w')).toEqual([expect.stringContaining("missing input 'size'")])
+  })
+})
+
+describe('passthrough to a <meta> root', () => {
+  it('refuses forwarding content or http-equiv, whose safety depends on the pair', () => {
+    const meta = { 'components/x-m': '<meta http-equiv="refresh">' }
+    expect(errs({ ...meta, page: '<x-m content="{{ url }}" />' })).toEqual([
+      expect.stringContaining('@input'),
+    ])
+    expect(
+      errs({ 'components/x-n': '<meta content="0">', page: '<x-n http-equiv="refresh" />' }),
+    ).toEqual([expect.stringContaining('@input')])
+  })
+})
+
+describe('slots that receive data', () => {
+  const list = {
+    'components/x-list':
+      '@input users\n<ul>@for (u of users; track u.id) {<li><slot name="row" [user]="u" /></li>}</ul>',
+  }
+
+  it('refuses taking a name the slot does not offer, listing what it offers', () => {
+    expect(
+      errs({ ...list, page: '<x-list [users]="us">@slot(\'row\'; let nope) {x}</x-list>' }),
+    ).toEqual([expect.stringContaining('user')])
+  })
+
+  it('refuses one slot offering different names in two places', () => {
+    expect(
+      errs(
+        { 'components/x-d': '<div><slot name="a" [x]="1" /><slot name="a" [y]="2" /></div>' },
+        'components/x-d',
+      ),
+    ).toEqual([expect.stringContaining("slot 'a'")])
+  })
+
+  it('refuses filling the default slot twice', () => {
+    expect(
+      errs({
+        'components/x-b': '<div><slot [item]="1" /></div>',
+        page: '<x-b>text @slot(default; let item) {{{ item }}}</x-b>',
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it("checks a page's lets against its layout's slot", () => {
+    const layout = { 'layouts/main': '<head><slot name="head" [t]="title" /></head><slot />' }
+    clean({
+      ...layout,
+      page: "@layout('layouts/main')\n@slot('head'; let t) {<title>{{ t }}</title>}\n<p></p>",
+    })
+    expect(
+      errs({ ...layout, page: "@layout('layouts/main')\n@slot('head'; let z) {x}\n<p></p>" }),
+    ).toEqual([expect.stringContaining('t')])
+  })
+})
+
+describe('snippets', () => {
+  it('checks arity, names and duplicates', () => {
+    const def = '@snippet b(x, y = 1) {{{ x }}{{ y }}}\n'
+    expect(errs({ page: `${def}@render b()` })).toEqual([expect.stringContaining('b')])
+    expect(errs({ page: `${def}@render b(1, 2, 3)` })).toEqual([expect.stringContaining('b')])
+    expect(errs({ page: `${def}@render nope(1)` })).toEqual([expect.stringContaining('b')])
+    expect(errs({ page: `${def}${def}@render b(1)` })).toEqual([expect.stringContaining("'b'")])
+  })
+
+  it('refuses a top-level @let inside a snippet', () => {
+    expect(errs({ page: '@let t = 1;\n@snippet b() {{{ t }}}\n@render b()' })).toEqual([
+      expect.stringContaining('pass it as a parameter'),
+    ])
+  })
+
+  it('lets @render come before @snippet', () => {
+    clean({ page: '@render b(1)\n@snippet b(x) {{{ x }}}' })
+  })
+})
+
+describe('dynamic components', () => {
+  const charts = {
+    'components/chart-bar': '@input data\n<b>{{ data.v }}</b>',
+    'components/chart-line': '@input data\n@input color = "red"\n<i>{{ data.v }}</i>',
+  }
+
+  it('needs of and a bound is', () => {
+    expect(errs({ ...charts, page: '<component [is]="k" [data]="d" />' })).toEqual([
+      expect.stringContaining('of'),
+    ])
+    expect(errs({ ...charts, page: '<component of="chart-bar" [data]="d" />' })).toEqual([
+      expect.stringContaining('is'),
+    ])
+    expect(
+      errs({ ...charts, page: '<component is="chart-bar" of="chart-bar" [data]="d" />' }),
+    ).toEqual([expect.stringContaining('is')])
+  })
+
+  it('names an unknown candidate, and warns about a repeated one', () => {
+    expect(
+      errs({ ...charts, page: '<component [is]="k" of="chart-bar nope-x" [data]="d" />' }),
+    ).toEqual([expect.stringContaining('nope-x')])
+    expect(
+      warns({ ...charts, page: '<component [is]="k" of="chart-bar chart-bar" [data]="d" />' }),
+    ).toEqual([expect.stringContaining('chart-bar')])
+  })
+
+  it("checks every candidate's required inputs", () => {
+    expect(errs({ ...charts, page: '<component [is]="k" of="chart-bar chart-line" />' })).toEqual([
+      expect.stringContaining('chart-bar'),
+      expect.stringContaining('chart-line'),
+    ])
+  })
+
+  it('refuses a fill no candidate has, and a let no candidate offers', () => {
+    const boxes = {
+      'components/box-a': '<div><slot name="h" [x]="1" /></div>',
+      'components/box-b': '<div></div>',
+    }
+    expect(
+      errs({
+        ...boxes,
+        page: '<component [is]="k" of="box-a box-b">@slot(\'nope\') {x}</component>',
+      }),
+    ).toEqual([expect.stringContaining('nope')])
+    clean({
+      ...boxes,
+      page: '<component [is]="k" of="box-a box-b">@slot(\'h\'; let x) {{{ x }}}</component>',
+    })
+    expect(
+      errs({
+        ...boxes,
+        page: '<component [is]="k" of="box-a box-b">@slot(\'h\'; let z) {x}</component>',
+      }),
+    ).toEqual([expect.stringContaining('z')])
+  })
+
+  it('refuses attributes for a component whose root is a <component>', () => {
+    expect(
+      errs({
+        ...charts,
+        'components/x-w': '@input k\n<component [is]="k" of="chart-bar" [data]="1" />',
+        page: '<x-w k="chart-bar" hx-get="/a" />',
+      }),
+    ).toEqual([expect.stringContaining('hx-get')])
+  })
+})
+
+describe('slots inside snippets', () => {
+  it("finds a component's slot declared inside its @snippet", () => {
+    clean({
+      'components/x-s': '@snippet s() {<slot name="x" />}\n<div>@render s()</div>',
+      page: "<x-s>@slot('x') {<i>x</i>}</x-s>",
+    })
+  })
+})
+
+describe('final review fixes', () => {
+  it('refuses attributes for a single root that is not an element', () => {
+    for (const body of ['@if (true) {<a>x</a>}', '@snippet s() {<a>x</a>}\n@render s()']) {
+      expect(errs({ 'components/x-a': body, page: '<x-a hx-get="/x" />' }), body).toEqual([
+        expect.stringContaining('hx-get'),
+      ])
+    }
+  })
+
+  it('compiles a @fragment inside <component> content once', () => {
+    clean({
+      'components/x-a': '<div><slot /></div>',
+      'components/x-b': '<p><slot /></p>',
+      page: '<component [is]="k" of="x-a x-b">@slot(default) {@fragment(\'f\') {hi}}</component>',
+    })
+  })
+
+  it('refuses <component> content no candidate has a default slot for', () => {
+    expect(
+      errs({
+        'components/x-a': '<p>a</p>',
+        'components/x-b': '<p>b</p>',
+        page: '<component [is]="k" of="x-a x-b">lost content</component>',
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it("refuses a page's @slot(default …) beside its own body", () => {
+    expect(
+      errs({
+        'layouts/main': '<main><slot [n]="1" /></main>',
+        page: "@layout('layouts/main')\n@slot(default; let n) {fill {{ n }}}\nbody text",
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it('refuses @render inside SVG or MathML', () => {
+    expect(errs({ page: '@snippet s() {<b>x</b>}\n<svg>@render s()</svg>' })).toEqual([
+      expect.stringContaining('@render'),
+    ])
+  })
+
+  it('refuses forwarding type to a <script> root', () => {
+    expect(
+      errs({
+        'components/x-j': '<script type="application/json">{{ v | json }}</script>',
+        page: '<x-j type="module" />',
+      }),
+    ).toEqual([expect.stringContaining('@input')])
+  })
+
+  it('refuses an empty of', () => {
+    expect(errs({ 'components/x-a': '<p>a</p>', page: '<component [is]="k" of="" />' })).toEqual([
+      expect.stringContaining('of'),
+    ])
+  })
+
+  it('refuses @fragment inside a snippet', () => {
+    expect(errs({ page: "@snippet s(v) {@fragment('f') {{{ v }}}}\n@render s(1)" })).toEqual([
+      expect.stringContaining('snippet'),
+    ])
+  })
+
+  it('lets class and data-* through to a <component> root, but not tag-dependent names', () => {
+    const files = {
+      'components/x-a': '<p>a</p>',
+      'components/x-w': '@input k\n<component [is]="k" of="x-a" />',
+    }
+    clean({ ...files, page: '<x-w k="x-a" class="mt-2" data-k="1" />' })
+    expect(errs({ ...files, page: '<x-w k="x-a" hx-get="/a" />' })).toEqual([
+      expect.stringContaining('hx-get'),
+    ])
+  })
+})
+
+describe('PR review fixes', () => {
+  it('refuses inherited attributes when a <component> root candidate has no element root', () => {
+    expect(
+      errs({
+        'components/x-s': '<slot />',
+        'components/x-p': '<p>p</p>',
+        'components/x-w': '@input k\n<component [is]="k" of="x-s x-p" />',
+        page: '<x-w k="x-p" class="wide" />',
+      }),
+    ).toEqual([expect.stringContaining('x-s')])
+  })
+
+  it('lets [class.type] through to a form-field root', () => {
+    clean({ 'components/x-f': '<input name="a">', page: '<x-f [class.type]="on" />' })
+  })
+
+  it('does not take [class.is] for the dispatch binding', () => {
+    clean({ 'components/x-a': '<p>a</p>', page: '<component [class.is]="on" [is]="t" of="x-a" />' })
+  })
+
+  it('compiles a fragment in nested <component> fills once', () => {
+    const files = {
+      'components/x-a': '<div><slot /></div>',
+      'components/x-b': '<p><slot /></p>',
+      page: '<component [is]="k" of="x-a x-b">@slot(default) {<component [is]="j" of="x-a x-b">@slot(default) {@fragment(\'f\') {hi}}</component>}</component>',
+    }
+    clean(files)
+  })
+
+  it("checks a page's let against every layout outlet that renders the fill", () => {
+    expect(
+      errs({
+        'layouts/inner': '@layout(\'layouts/outer\')\n<i><slot name="head" [x]="1" /></i><slot />',
+        'layouts/outer': '<o><slot name="head" [y]="2" /></o><slot />',
+        page: "@layout('layouts/inner')\n@slot('head'; let y) {{{ y }}}\n<p></p>",
+      }),
+    ).toEqual([expect.stringContaining('y')])
+  })
+
+  it("refuses a page default fill the immediate layout can't render", () => {
+    expect(
+      errs({
+        'layouts/inner': '@layout(\'layouts/outer\')\n<i><slot name="h" /></i>',
+        'layouts/outer': '<o><slot [item]="1" /></o>',
+        page: "@layout('layouts/inner')\n@slot(default; let item) {{{ item }}}",
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it('checks a snippet body knowing the component has a client script', () => {
+    expect(
+      warns(
+        {
+          'components/x-k':
+            '@snippet s() {<kick-el></kick-el>}\n<div>@render s()</div>\n<script client>customElements.define("kick-el", class extends HTMLElement {})</script>',
+        },
+        'components/x-k',
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('<component> slot content', () => {
+  it('compiles once however deeply <component>s nest', () => {
+    let page = '<i>leaf</i>'
+    for (let i = 0; i < 12; i++)
+      page = `<component [is]="k" of="x-a x-b">@slot(default) {${page}}</component>`
+    const t = clean({
+      'components/x-a': '<div><slot /></div>',
+      'components/x-b': '<p><slot /></p>',
+      page,
+    })
+    // 12 levels × 2 candidates: linear, not 2^12 copies of the leaf.
+    expect(JSON.stringify(t.body).split('leaf').length - 1).toBe(1)
   })
 })

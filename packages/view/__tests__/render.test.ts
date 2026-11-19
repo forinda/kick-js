@@ -598,3 +598,208 @@ describe('a stack reached inside a push', () => {
     ).toThrow(/@push/)
   })
 })
+
+describe('passthrough', () => {
+  it("checks a forwarded URL as the root's own attribute", () => {
+    const { html } = r(
+      { 'components/x-link': '<a>go</a>', page: '<x-link href="{{ u }}" />' },
+      { u: 'javascript:alert(1)' },
+    )
+    expect(html).toBe('<a href="#">go</a>')
+  })
+
+  it('forwards attributes to the root', () => {
+    const { html } = r({
+      'components/x-btn': '<button>go</button>',
+      page: '<x-btn type="submit" hx-post="/s" />',
+    })
+    expect(html).toBe('<button type="submit" hx-post="/s">go</button>')
+  })
+})
+
+describe('wrapper components', () => {
+  it('chains attributes: an input of the inner component, the rest to its root', () => {
+    const { html } = r({
+      'components/ui-button': '@input size = "md"\n<button data-size="{{ size }}">go</button>',
+      'components/primary-button': '<ui-button kind="primary" />',
+      page: '<primary-button size="lg" hx-post="/s" />',
+    })
+    expect(html).toBe('<button data-size="lg" kind="primary" hx-post="/s">go</button>')
+  })
+
+  it('checks a URL that reaches an <a> through two wrappers', () => {
+    const { html } = r(
+      {
+        'components/x-l2': '<a>go</a>',
+        'components/x-l1': '<x-l2 />',
+        page: '<x-l1 href="{{ u }}" />',
+      },
+      { u: 'javascript:alert(1)' },
+    )
+    expect(html).toBe('<a href="#">go</a>')
+  })
+})
+
+describe('slots that receive data', () => {
+  const list = {
+    'components/x-list':
+      '@input users\n<ul>@for (u of users; track u.id) {<li><slot name="row" [user]="u">{{ user.name }}?</slot></li>}</ul>',
+  }
+  const users = [
+    { id: 1, name: 'A' },
+    { id: 2, name: 'B' },
+  ]
+
+  it("passes each item to the caller's content", () => {
+    const { html } = r(
+      {
+        ...list,
+        page: '<x-list [users]="us">@slot(\'row\'; let user) {<i>{{ user.name }}</i>}</x-list>',
+      },
+      { us: users },
+    )
+    expect(html).toBe('<ul><li><i>A</i></li><li><i>B</i></li></ul>')
+  })
+
+  it('renames with let x = name', () => {
+    const { html } = r(
+      {
+        ...list,
+        page: '<x-list [users]="us">@slot(\'row\'; let p = user) {{{ p.name }}}</x-list>',
+      },
+      { us: users },
+    )
+    expect(html).toBe('<ul><li>A</li><li>B</li></ul>')
+  })
+
+  it('lets the fallback read the offered values', () => {
+    const { html } = r({ ...list, page: '<x-list [users]="us" />' }, { us: users })
+    expect(html).toBe('<ul><li>A?</li><li>B?</li></ul>')
+  })
+
+  it('keeps each level of a recursive component to its own values', () => {
+    const { html } = r(
+      {
+        'components/tree-node':
+          '@input node\n<li><slot name="label" [node]="node" />@for (c of node.kids; track c.name) {<tree-node [node]="c">@slot(\'label\'; let node) {[{{ node.name }}]}</tree-node>}</li>',
+        page: '<tree-node [node]="root">@slot(\'label\'; let node) {<b>{{ node.name }}</b>}</tree-node>',
+      },
+      { root: { name: 'r', kids: [{ name: 'a', kids: [{ name: 'a1', kids: [] }] }] } },
+    )
+    expect(html).toBe('<li><b>r</b><li>[a]<li>[a1]</li></li></li>')
+  })
+})
+
+describe('snippets', () => {
+  it('renders with arguments and defaults', () => {
+    expect(html("@snippet b(x, y = 'd') {[{{ x }}{{ y }}]}\n@render b(1)@render b(2, 'e')")).toBe(
+      '[1d][2e]',
+    )
+  })
+
+  it("reads a component's inputs", () => {
+    const { html: out } = r({
+      'components/x-c':
+        "@input who\n<p>@render hi('!')</p>\n@snippet hi(mark) {hi {{ who }}{{ mark }}}",
+      page: '<x-c who="A" />',
+    })
+    expect(out).toBe('<p>hi A!</p>')
+  })
+
+  it('renders itself, and stops runaway recursion at the depth limit', () => {
+    expect(
+      html(
+        '@snippet t(n) {{{ n.name }}@for (c of n.kids; track c.name) {(@render t(c))}}\n@render t(root)',
+        {
+          root: { name: 'a', kids: [{ name: 'b', kids: [] }] },
+        },
+      ),
+    ).toBe('a(b)')
+    expect(() => html('@snippet t() {@render t()}\n@render t()')).toThrow(/64/)
+  })
+
+  it("doesn't see loop variables where it's rendered", () => {
+    const { html: out, warn } = r(
+      { page: '@snippet b() {[{{ x }}]}\n@for (x of xs; track x) {@render b()}' },
+      { xs: [1] },
+    )
+    expect(out).toBe('[]')
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('renders inside a fragment-only render', () => {
+    const { html: out } = r(
+      {
+        page: "@snippet b(v) {{{ title }}:{{ v }}}\n@for (x of xs; track x) {@fragment('f') {@render b(x)}}",
+      },
+      { title: 'T', x: 7 },
+      {},
+      { fragment: 'f' },
+    )
+    expect(out).toBe('T:7')
+  })
+})
+
+describe('dynamic components', () => {
+  const files = {
+    'components/chart-bar': '@input data\n<b>{{ data.v }}</b>',
+    'components/chart-line': '@input data\n<i>{{ data.v }}</i>',
+    'components/box-a': '<div><slot name="h" [x]="1" /></div>',
+    'components/box-b': '<p><slot name="h" /></p>',
+  }
+  const page = '<component [is]="k" of="chart-bar chart-line" [data]="d" hx-get="/a" />'
+
+  it('renders the candidate named, forwarding non-inputs to its root', () => {
+    expect(r({ ...files, page }, { k: 'chart-bar', d: { v: 1 } }).html).toBe('<b hx-get="/a">1</b>')
+    expect(r({ ...files, page }, { k: 'chart-line', d: { v: 2 } }).html).toBe(
+      '<i hx-get="/a">2</i>',
+    )
+  })
+
+  it('renders nothing for null', () => {
+    expect(r({ ...files, page }, { k: null, d: {} }).html).toBe('')
+  })
+
+  it('fails for any other value, prototype names included, listing the candidates', () => {
+    for (const k of ['constructor', '__proto__', '../x', 'nope']) {
+      expect(() => r({ ...files, page }, { k, d: {} }), k).toThrow(/chart-bar, chart-line/)
+    }
+  })
+
+  it('binds undefined for a value only some candidates offer', () => {
+    const p =
+      '<component [is]="k" of="box-a box-b">@slot(\'h\'; let x) {[{{ x ?? \'none\' }}]}</component>'
+    expect(r({ ...files, page: p }, { k: 'box-a' }).html).toBe('<div>[1]</div>')
+    expect(r({ ...files, page: p }, { k: 'box-b' }).html).toBe('<p>[none]</p>')
+  })
+})
+
+describe('final review fixes', () => {
+  it('passes class through a <component> root to the chosen candidate', () => {
+    const { html: out } = r(
+      {
+        'components/x-a': '<p>a</p>',
+        'components/x-w': '@input k\n<component [is]="k" of="x-a" />',
+        page: '<x-w k="x-a" class="mt-2" />',
+      },
+      {},
+    )
+    expect(out).toBe('<p class="mt-2">a</p>')
+  })
+})
+
+describe('PR review render fixes', () => {
+  it('lets a forwarded false binding remove the root attribute', () => {
+    const files = { 'components/x-btn': '<button disabled>go</button>' }
+    expect(r({ ...files, page: '<x-btn [disabled]="false" />' }).html).toBe('<button>go</button>')
+    expect(r({ ...files, page: '<x-btn />' }).html).toBe('<button disabled>go</button>')
+  })
+
+  it('reports a bad [is] value without serialising it', () => {
+    const files = { 'components/x-a': '<p>a</p>', page: '<component [is]="k" of="x-a" />' }
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect(() => r(files, { k: cyclic })).toThrow(/x-a/)
+    expect(() => r(files, { k: 10n })).toThrow(/x-a/)
+  })
+})

@@ -31,9 +31,22 @@ function deep(n: CNode): CNode {
         ...(n.d ? { d: optimize(n.d) } : {}),
       }
     case 'cmp':
-      return { ...n, f: Object.fromEntries(Object.entries(n.f).map(([k, v]) => [k, optimize(v)])) }
+      return {
+        ...n,
+        f: Object.fromEntries(
+          Object.entries(n.f).map(([k, v]) => [k, { ...v, nodes: optimize(v.nodes) }]),
+        ),
+      }
     case 'o':
       return { ...n, fb: optimize(n.fb) }
+    case 'dyn':
+      return {
+        ...n,
+        c: Object.fromEntries(Object.entries(n.c).map(([k, v]) => [k, deep(v)])),
+        f: Object.fromEntries(
+          Object.entries(n.f).map(([k, v]) => [k, { ...v, nodes: optimize(v.nodes) }]),
+        ),
+      }
     case 's':
       return { ...n }
     default:
