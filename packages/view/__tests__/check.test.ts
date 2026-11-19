@@ -247,3 +247,24 @@ describe('check', () => {
     ])
   })
 })
+
+describe('stacks', () => {
+  it('refuses <stack> in a component', () => {
+    expect(errs({ 'components/x-y': '<stack name="a" /><b></b>' }, 'components/x-y')).toEqual([
+      expect.stringContaining('components'),
+    ])
+  })
+
+  it('warns about a stack named twice in one file', () => {
+    expect(warns({ page: '<stack name="a" /><stack name="a" />' })).toEqual([
+      expect.stringContaining("'a'"),
+    ])
+  })
+
+  it('accepts @push in pages, layouts and components', () => {
+    const push = '@push(\'head\') {<link rel="stylesheet" href="/a.css">}'
+    clean({ page: push })
+    clean({ 'layouts/main': `${push}<slot />` }, 'layouts/main')
+    clean({ 'components/x-y': `${push}<b></b>` }, 'components/x-y')
+  })
+})

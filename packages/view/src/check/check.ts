@@ -94,6 +94,7 @@ class Checker {
   private readonly scopes: Array<Map<string, Binding>> = [new Map()]
   private readonly loops: number[] = []
   private readonly warned = new Set<string>()
+  private readonly stackNames = new Set<string>()
   private readonly tags = new Map<string, string[]>()
   private readonly signatures = new Map<string, Signature>()
 
@@ -362,6 +363,23 @@ class Checker {
         return
       case 'assets':
         out.push({ k: 'as', en: n.entry })
+        return
+      case 'push':
+        out.push({ k: 'push', n: n.name, b: this.scoped(() => this.nodes(n.body, parent)) })
+        return
+      case 'stack':
+        if (this.component) {
+          this.err(n.span, '<stack> goes in a page or layout, not in components')
+          return
+        }
+        if (this.stackNames.has(n.name)) {
+          this.warn(
+            n.span,
+            `stack '${n.name}' is already placed above: only the first one is filled`,
+          )
+        }
+        this.stackNames.add(n.name)
+        out.push({ k: 'stk', n: n.name })
     }
   }
 
@@ -798,7 +816,7 @@ function rootElements(body: Node[]): Array<Element | null> {
   const roots: Array<Element | null> = []
   for (const n of body) {
     if (n.k === 'text' && !n.value.trim()) continue
-    if (n.k === 'comment' || n.k === 'let') continue
+    if (n.k === 'comment' || n.k === 'let' || n.k === 'push') continue
     roots.push(n.k === 'element' ? n : null)
   }
   return roots

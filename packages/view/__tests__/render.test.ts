@@ -422,3 +422,67 @@ describe('render', () => {
     }
   })
 })
+
+describe('stacks', () => {
+  const layout = '<head><stack name="head" /></head><body><slot /></body>'
+
+  it('fills a stack from the page, its layout and components, in document order', () => {
+    const { html } = r({
+      'layouts/main': `@push('head') {<i>layout</i>}${layout}`,
+      'components/x-c': "@push('head') {<i>component</i>}<b></b>",
+      page: "@layout('layouts/main')@push('head') {<i>page</i>}<x-c />",
+    })
+    expect(html).toBe('<head><i>layout</i><i>page</i><i>component</i></head><body><b></b></body>')
+  })
+
+  it('puts a layout push below its <slot /> after the page', () => {
+    const { html } = r({
+      'layouts/main': `${layout}@push('head') {<i>late</i>}`,
+      page: "@layout('layouts/main')@push('head') {<i>page</i>}",
+    })
+    expect(html).toBe('<head><i>page</i><i>late</i></head><body></body>')
+  })
+
+  it('keeps identical content once and distinct content in order', () => {
+    const { html } = r(
+      {
+        'layouts/main': layout,
+        'components/x-c': "@input x\n@push('head') {<i>{{ x }}</i>}<b></b>",
+        page: '@layout(\'layouts/main\')@for (x of xs; track x) {<x-c [x]="x" />}',
+      },
+      { xs: [1, 1, 2] },
+    )
+    expect(html).toContain('<head><i>1</i><i>2</i></head>')
+  })
+
+  it('pushes nothing from a false @if', () => {
+    const { html } = r({
+      'layouts/main': layout,
+      page: "@layout('layouts/main')@if (false) {@push('head') {<i>x</i>}}",
+    })
+    expect(html).toBe('<head></head><body></body>')
+  })
+
+  it('drops a push no stack takes, warning once', () => {
+    const { html, warn } = r({
+      'layouts/main': layout,
+      page: "@layout('layouts/main')@push('nope') {<i>1</i>}@push('nope') {<i>2</i>}",
+    })
+    expect(html).toBe('<head></head><body></body>')
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]![0]).toContain('nope')
+  })
+
+  it("doesn't count a component's @push as a root element", () => {
+    const { html } = r({
+      'components/x-c': "@push('head') {<i>x</i>}\n<b></b>",
+      page: '<x-c class="k" />',
+    })
+    expect(html).toContain('<b class="k"></b>')
+  })
+
+  it('fills the first of two stacks with one name', () => {
+    const { html } = r({ page: '<stack name="a" /><stack name="a" />@push(\'a\') {<i>x</i>}' })
+    expect(html).toBe('<i>x</i>')
+  })
+})

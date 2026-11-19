@@ -80,7 +80,9 @@ interface Inst {
 const warnedNames = new WeakMap<CheckedTemplate, Set<string>>()
 
 class Renderer {
-  private readonly out: string[] = []
+  private out: string[] = []
+  /** Per stack: where `<stack>`s sit in `out`, and the pushed content, deduped. */
+  private readonly stacks = new Map<string, { at: number[]; items: string[]; seen: Set<string> }>()
 
   constructor(private readonly env: RenderEnv) {}
 
@@ -89,6 +91,25 @@ class Renderer {
 
   html(): string {
     return this.out.join('')
+  }
+
+  private stack(name: string) {
+    let s = this.stacks.get(name)
+    if (!s) this.stacks.set(name, (s = { at: [], items: [], seen: new Set() }))
+    return s
+  }
+
+  /**
+   * Write each stack's content at its first `<stack>`. Content for a stack no
+   * template placed is dropped, with one warning naming `page`.
+   */
+  fillStacks(page: string): void {
+    for (const [name, s] of this.stacks) {
+      if (s.at.length) this.out[s.at[0]!] = s.items.join('')
+      else if (s.items.length) {
+        this.env.warn(`${page}: content pushed to stack '${name}', which no layout has`)
+      }
+    }
   }
 
   fail(inst: Inst, message: string): never {
@@ -312,6 +333,23 @@ class Renderer {
         else this.nodes(n.fb, inst)
         return
       }
+      case 'stk':
+        this.stack(n.n).at.push(this.out.length)
+        this.out.push('')
+        return
+      case 'push': {
+        const outer = this.out
+        this.out = []
+        this.nodes(n.b, inst)
+        const html = this.out.join('')
+        this.out = outer
+        const s = this.stack(n.n)
+        if (!s.seen.has(html)) {
+          s.seen.add(html)
+          s.items.push(html)
+        }
+        return
+      }
       case 'as':
         if (this.env.assets) this.out.push(this.env.assets(n.en, inst.data))
         else
@@ -526,6 +564,7 @@ export function render(
   if (template.validates || chain.some((t) => t.validates)) env.validation?.()
   if (!chain.length) {
     r.nodes(template.body, page)
+    r.fillStacks(template.file)
     return r.html()
   }
   // Each layout renders the one inside it into its default slot; named fills
@@ -548,5 +587,6 @@ export function render(
     fills = outer
   }
   r.nodes(inst.t.body, inst)
+  r.fillStacks(template.file)
   return r.html()
 }

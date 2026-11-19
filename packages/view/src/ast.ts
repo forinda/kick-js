@@ -201,6 +201,10 @@ export type CNode =
     }
   /** `<slot name="n">fallback</slot>` */
   | { k: 'o'; n: string; fb: CNode[] }
+  /** `@push('n') { }`: rendered, then added to stack `n` */
+  | { k: 'push'; n: string; b: CNode[] }
+  /** `<stack name="n" />`: filled once the render is done */
+  | { k: 'stk'; n: string }
   | { k: 'as'; en: string }
 
 /** A template after `check`: plain JSON the renderer walks, which a build can ship as data. */
