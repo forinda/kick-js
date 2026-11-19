@@ -56,6 +56,11 @@ export interface ViewsBundle {
 export interface RenderOptions {
   /** A layout for this render, or `false` for none at all (htmx and other partial responses). */
   layout?: boolean | string
+  /**
+   * Render only these `@fragment`s of the page, in order, without layouts —
+   * an htmx swap (several for out-of-band swaps).
+   */
+  fragment?: string | string[]
   locale?: string
   timeZone?: string
 }
@@ -402,7 +407,8 @@ export function createViews(options: ViewsOptions = {}): Views {
           }
         : (n: string) => checked(st!, n)
       const template = resolve(name)
-      rememberPage(opts.ctx, opts.layout)
+      // A fragment isn't a page a form posts back to.
+      if (opts.fragment === undefined) rememberPage(opts.ctx, opts.layout)
       const shared = options.share ? await options.share(opts.ctx as ShareContext | undefined) : {}
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
@@ -426,7 +432,7 @@ export function createViews(options: ViewsOptions = {}): Views {
           clientScript: (t) => used.set(t.name, t),
           validation: () => (validation = true),
         },
-        { layout: opts.layout },
+        { layout: opts.layout, fragment: opts.fragment, callerData: data },
       )
       if (!used.size && !validation) return html
       // The nonce `@assets` gets too: often from share().

@@ -532,7 +532,13 @@ export function render(
   template: CheckedTemplate,
   data: object,
   env: RenderEnv,
-  opts: { layout?: boolean | string } = {},
+  opts: {
+    layout?: boolean | string
+    /** Render only these fragments of the page, without layouts. */
+    fragment?: string | string[]
+    /** The caller's own data, which a fragment's needs are checked against (default `data`). */
+    callerData?: object
+  } = {},
 ): string {
   const r = new Renderer(env)
   r.rootData = data as Record<string, unknown>
@@ -543,6 +549,32 @@ export function render(
     fills: {},
     stack: [template.name],
     depth: 0,
+  }
+  if (opts.fragment !== undefined) {
+    const all = template.fragments ?? {}
+    const given = opts.callerData ?? data
+    for (const name of Array.isArray(opts.fragment) ? opts.fragment : [opts.fragment]) {
+      const unit = Object.hasOwn(all, name) ? all[name] : undefined
+      if (!unit) {
+        const names = Object.keys(all).toSorted()
+        return r.fail(
+          page,
+          `'${name}' isn't a fragment of ${template.name}, which has ${names.length ? names.join(', ') : 'no fragments'}`,
+        )
+      }
+      for (const need of unit.needs) {
+        if (!(need in given)) {
+          r.fail(
+            page,
+            `fragment '${name}' needs '${need}' — it comes from a block around the fragment; pass it in the data`,
+          )
+        }
+      }
+      if (unit.validates) env.validation?.()
+      r.nodes(unit.body, { ...page, slots: Array.from({ length: unit.slots }) })
+    }
+    // No layout, so no stack: pushes are dropped (the full page loaded them).
+    return r.html()
   }
   const none = opts.layout === false || (opts.layout === undefined && template.layout === null)
   const chain: CheckedTemplate[] = []

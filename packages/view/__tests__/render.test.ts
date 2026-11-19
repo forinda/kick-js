@@ -46,7 +46,7 @@ function r(
   files: Record<string, string>,
   data: object = {},
   env: SetupEnv = {},
-  opts?: { layout?: boolean | string },
+  opts?: { layout?: boolean | string; fragment?: string | string[]; callerData?: object },
 ) {
   const s = setup(files, env)
   return { html: render(s.resolve('page'), data, s.env, opts), warn: s.warn }
@@ -484,5 +484,83 @@ describe('stacks', () => {
   it('fills the first of two stacks with one name', () => {
     const { html } = r({ page: '<stack name="a" /><stack name="a" />@push(\'a\') {<i>x</i>}' })
     expect(html).toBe('<i>x</i>')
+  })
+})
+
+describe('fragments', () => {
+  const files = {
+    'layouts/main': '<main><slot /></main>',
+    page:
+      "@layout('layouts/main')" +
+      "<p>@fragment('count') {<span>{{ users.length }}</span>}</p>" +
+      "<table>@fragment('rows') {@for (user of users; track user.name) {@fragment('row') {<tr>{{ user.name }}</tr>}}}</table>",
+  }
+  const users = [{ name: 'A' }, { name: 'B' }]
+
+  it('renders one fragment without layouts', () => {
+    expect(r(files, { users }, {}, { fragment: 'rows' }).html).toBe('<tr>A</tr><tr>B</tr>')
+  })
+
+  it('renders several, in the order asked', () => {
+    expect(r(files, { users }, {}, { fragment: ['count', 'rows'] }).html).toBe(
+      '<span>2</span><tr>A</tr><tr>B</tr>',
+    )
+  })
+
+  it('renders a loop row from the data passed', () => {
+    expect(r(files, { user: { name: 'A' } }, {}, { fragment: 'row' }).html).toBe('<tr>A</tr>')
+  })
+
+  it('fails when a needed name is missing', () => {
+    expect(() => r(files, {}, {}, { fragment: 'row' })).toThrow(/needs 'user'/)
+  })
+
+  it("doesn't take a needed name from data the caller didn't pass", () => {
+    expect(() =>
+      r(files, { user: { name: 'signed-in' } }, {}, { fragment: 'row', callerData: {} }),
+    ).toThrow(/needs 'user'/)
+  })
+
+  it("lists the page's fragments for an unknown name, or says it has none", () => {
+    expect(() => r(files, { users }, {}, { fragment: ['rows', 'nope'] })).toThrow(
+      /'nope'.*count, row, rows/,
+    )
+    expect(() => r({ page: '<p></p>' }, {}, {}, { fragment: 'x' })).toThrow(/no fragments/)
+  })
+
+  it('drops pushes in a fragment render, without a warning', () => {
+    const { html, warn } = r(
+      { page: "@fragment('f') {@push('head') {<i>x</i>}<b></b>}" },
+      {},
+      {},
+      { fragment: 'f' },
+    )
+    expect(html).toBe('<b></b>')
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('reports a component with a client script', () => {
+    const clientScript = vi.fn()
+    r(
+      {
+        'components/x-c':
+          '<b></b>\n<script client>customElements.define("x-b", class extends HTMLElement {})</script>',
+        page: "@fragment('f') {<x-c />}",
+      },
+      {},
+      { clientScript },
+      { fragment: 'f' },
+    )
+    expect(clientScript).toHaveBeenCalledTimes(1)
+  })
+
+  it('refills a <select> as the full page does', () => {
+    const page =
+      '<select name="s">@fragment(\'o\') {<option value="a">A</option><option value="b">B</option>}</select>'
+    const data = { $old: { s: 'b' }, $errors: {}, $flash: {} }
+    const full = r({ page }, data).html
+    const part = r({ page }, data, {}, { fragment: 'o' }).html
+    expect(full).toContain(part)
+    expect(part).toContain('selected')
   })
 })

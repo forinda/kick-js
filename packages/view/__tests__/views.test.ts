@@ -168,3 +168,49 @@ describe('createViews', () => {
     await expect(views.render('bad')).rejects.toThrow('bad.kick:1:')
   })
 })
+
+describe('fragments through views.render', () => {
+  const page = "@for (user of users; track user.name) {@fragment('row') {<tr>{{ user.name }}</tr>}}"
+
+  it('renders a fragment from the data passed', async () => {
+    const views = createViews({ viewsDir: dir({ p: page }) })
+    expect(await views.render('p', { user: { name: 'A' } }, { fragment: 'row' })).toBe('<tr>A</tr>')
+  })
+
+  it("doesn't let share() data fill a fragment's needs", async () => {
+    const views = createViews({
+      viewsDir: dir({ p: page }),
+      share: () => ({ user: { name: 'me' } }),
+    })
+    await expect(views.render('p', {}, { fragment: 'row' })).rejects.toThrow(/needs 'user'/)
+  })
+
+  it("doesn't remember a fragment as the page to go back to", async () => {
+    const views = createViews({ viewsDir: dir({ p: page }) })
+    const ctx = {
+      req: { method: 'GET', url: '/rows' },
+      session: { data: {} as Record<string, unknown> },
+    }
+    await views.render('p', { user: { name: 'A' } }, { fragment: 'row', ctx })
+    expect(Object.values(ctx.session.data)).not.toContain('/rows')
+  })
+})
+
+describe('fragments in a bundle', () => {
+  it('render after a JSON round-trip, and a v1 bundle is refused', async () => {
+    const src = "@for (u of us; track u) {@fragment('row') {<tr>{{ u }}</tr>}}"
+    const project = {
+      templates: new Map([['p', parse(src, 'p.kick').ast]]),
+      pipes: new Set(BUILTIN_PIPES),
+      componentsDir: 'components',
+    }
+    const bundle = JSON.parse(
+      JSON.stringify({ v: AST_FORMAT_VERSION, templates: { p: check('p', project).template! } }),
+    ) as ViewsBundle
+    const views = createViews({ bundle })
+    expect(await views.render('p', { u: 'A' }, { fragment: 'row' })).toBe('<tr>A</tr>')
+    expect(() => bundleLoader({ v: 1, templates: {} })).toThrow(
+      `views bundle format v1, this runtime reads v2`,
+    )
+  })
+})
