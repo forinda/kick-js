@@ -354,3 +354,58 @@ describe('PR review parse fixes', () => {
     ok('@snippet s() {<b>x</b>}\n@layout(none)\n<p></p>')
   })
 })
+
+describe('typed @input and @import type', () => {
+  it('parses a type, brackets and all, before a default', () => {
+    expect(ok('@input user: Map<string, A[]> = null\n<p></p>').ast.inputs[0]).toMatchObject({
+      name: 'user',
+      type: 'Map<string, A[]>',
+      default: { value: null },
+    })
+    expect(ok('@input u: { a: string; b: number }\n<p></p>').ast.inputs[0]).toMatchObject({
+      name: 'u',
+      type: '{ a: string; b: number }',
+    })
+  })
+
+  it('collects @import type lines', () => {
+    expect(ok("@import type { User } from '@/domain/user'\n<p></p>").ast.typeImports).toEqual([
+      "import type { User } from '@/domain/user'",
+    ])
+  })
+
+  it('refuses a value import, and one inside an element', () => {
+    expect(errors("@import { x } from 'y'")).toHaveLength(1)
+    expect(errors("<div>@import type { X } from 'y'\n</div>").map((d) => d.message)).toEqual([
+      '@import type goes at the top level of a template',
+    ])
+  })
+
+  it('keeps prose that merely mentions @import as text', () => {
+    const src = "<p>Use @import to load files from 'the archive'.</p>"
+    expect(flat(ok(src).ast.body)).toBe(src)
+  })
+
+  it('still refuses a default-plus-namespace value import', () => {
+    expect(errors("@import Client, * as SDK from 'sdk'")).toHaveLength(1)
+  })
+
+  it('finds the default after a type with = inside a comment', () => {
+    expect(ok('@input count: number // items\n<p></p>').ast.inputs[0]!.type).toBe('number')
+    expect(ok("@input label: `a${`b=c`}` = 'ab=c'\n<p></p>").ast.inputs[0]).toMatchObject({
+      type: '`a${`b=c`}`',
+      default: { value: 'ab=c' },
+    })
+    const cr = ok("@import type { A } from './a'\r<p>x</p>")
+    expect(cr.ast.typeImports).toEqual(["import type { A } from './a'"])
+    expect(flat(cr.ast.body)).toBe('<p>x</p>')
+    expect(ok('@input count: number /* = */ = 1\n<p></p>').ast.inputs[0]).toMatchObject({
+      type: 'number /* = */',
+      default: { value: 1 },
+    })
+  })
+
+  it('keeps @import without type text as text', () => {
+    expect(flat(ok('a @import b').ast.body)).toBe('a @import b')
+  })
+})

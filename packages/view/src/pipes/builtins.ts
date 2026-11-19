@@ -88,7 +88,7 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 /**
  * The built-in pipes bound to a render's locale and time zone (`date`, `currency`, `kvRoute`, ...).
  *
- * @see https://kickjs.app/guide/views#pipes
+ * @see https://kickjs.app/guide/views/pipes
  */
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
@@ -104,9 +104,12 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
           if (v !== undefined && v !== null && v !== '')
             parts.push(`${key}=${encodeURIComponent(str(v))}`)
       }
-      const [base, hash] = str(url).split(/(?=#)/, 2) as [string, string?]
-      if (!parts.length) return str(url)
-      return `${base}${base.includes('?') ? '&' : '?'}${parts.join('&')}${hash ?? ''}`
+      const s = str(url)
+      if (!parts.length) return s
+      // The fragment is everything from the first `#` (it may hold more).
+      const at = s.indexOf('#')
+      const [base, hash] = at < 0 ? [s, ''] : [s.slice(0, at), s.slice(at)]
+      return `${base}${base.includes('?') ? '&' : '?'}${parts.join('&')}${hash}`
     },
     // `kv`, for KickJS views: `route` stays free for an app's own pipe.
     kvRoute: (name, ...params) => {

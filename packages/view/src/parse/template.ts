@@ -37,7 +37,7 @@ const RCDATA = new Set(['title', 'textarea'])
  */
 const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml'])
 const KEYWORDS =
-  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push|snippet|render)(?![\w$-])/
+  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push|snippet|render|import)(?![\w$-])/
 /** Fragment and stack names. */
 const PLAIN_NAME = /^[\w-]+$/
 const LOOP_VARS = new Set<LoopVar>(['$index', '$first', '$last', '$even', '$odd', '$count'])
@@ -592,6 +592,34 @@ class TemplateParser {
     return true
   }
 
+  /**
+   * `@import type { User } from '…'` (top level): kept for typegen. A value
+   * import is refused; `@import` followed by anything else stays text.
+   */
+  private typeImport(i: number, after: number): boolean {
+    // The line ends at the first CR or LF (`standalone` takes the break).
+    const br = /[\r\n]/.exec(this.s.slice(after))
+    const eol = br ? after + br.index : this.s.length
+    const line = this.s.slice(after, eol)
+    const isType = /^\s+type\b/.test(line)
+    // Only an import-shaped clause is a directive (`@import { x } from 'y'`,
+    // `@import X from 'y'`); prose that mentions @import stays text.
+    const importShaped =
+      /^\s+(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?)\s+from\s*['"]/.test(
+        line,
+      )
+    if (!isType && !importShaped) return false
+    if (!isType || !/^\s+type\s+[\s\S]+\bfrom\s*(['"])[^'"]+\1\s*;?\s*$/.test(line)) {
+      this.err(i, eol, "only @import type … from '…' is allowed: templates take types, not values")
+    } else if (this.frames.length > 1) {
+      this.err(i, eol, '@import type goes at the top level of a template')
+    } else {
+      ;(this.ast.typeImports ??= []).push(`import${line.replace(/;\s*$/, '').trimEnd()}`)
+    }
+    this.i = this.standalone(i, eol)
+    return true
+  }
+
   /** `( … )` from `j` (at `(`): the inside and the offset after `)`. */
   private parens(j: number, what: string): { src: string; at: number; end: number } {
     if (this.s[j] !== '(') this.fatal(j, j + 1, `expected ( after ${what}`)
@@ -691,6 +719,7 @@ class TemplateParser {
     if (kw === 'let') return this.let(i, after)
     if (kw === 'verbatim') return this.verbatim(i, next)
     if (kw === 'snippet' || kw === 'render') return this.snippetOrRender(kw, i, after)
+    if (kw === 'import') return this.typeImport(i, after)
     if (kw === 'assets') {
       const p = this.parens(next, '@assets')
       const entry = this.stringArg(p.src, p.at, '@assets')
@@ -1006,13 +1035,34 @@ class TemplateParser {
     let eol = this.s.indexOf('\n', after)
     if (eol < 0) eol = this.s.length
     const line = this.s.slice(after, eol).replace(/\r$/, '')
-    const m = /^\s*([A-Za-z_$][\w$]*)\s*(?:=\s*(.*?))?\s*$/.exec(line)
-    if (!m) this.fatal(i, eol, '@input needs a name: @input name or @input name = value')
+    // `name`, then `: Type` up to a top-level `=` (not `=>`), then `= default`.
+    const head = /^\s*([A-Za-z_$][\w$]*)\s*/.exec(line)
+    if (!head) {
+      this.fatal(
+        i,
+        eol,
+        '@input needs a name: @input name, @input name: Type or @input name = value',
+      )
+    }
+    let rest = line.slice(head[0].length)
+    let type: string | undefined
+    if (rest.startsWith(':')) {
+      const end = typeEnd(rest, 1)
+      type = rest.slice(1, end).trim()
+      // A trailing `// note` isn't part of the type (typegen copies it onto one line).
+      rest = rest.slice(end).replace(/^\/\/.*$/, '')
+      if (!type) this.err(i, eol, '@input name: expects a type after the colon')
+    }
+    const dm = /^\s*(?:=\s*(.*?))?\s*$/.exec(rest)
+    if (!dm) this.fatal(i, eol, `unexpected '${rest.trim()}' after @input ${head[1]}`)
+    // `m[1]` the name and `m[2]` the default, as the code below reads them.
+    const m = [line, head[1]!, dm[1]] as const
     if (this.frames.length > 1)
       this.err(i, eol, '@input goes at the top of a component, outside any block')
     const decl: InputDecl = { name: m[1]!, span: this.span(i, after + line.length) }
+    if (type) decl.type = type
     if (m[2] !== undefined) {
-      const at = after + line.indexOf(m[2], m[0].indexOf('=') + 1)
+      const at = after + line.lastIndexOf(m[2])
       const e = this.expr(m[2], at)
       const literal = literalOf(e)
       if (e && literal === undefined) {
@@ -1100,4 +1150,47 @@ function literalOf(e: Expr | undefined): Literal | undefined {
     return -e.arg.value
   }
   return undefined
+}
+
+/** The closing backtick of the template literal opening at `at`: `${ }` holes may hold more. */
+function templateEnd(src: string, at: number): number {
+  for (let k = at + 1; k < src.length; k++) {
+    const c = src[k]!
+    if (c === '\\') k++
+    else if (c === '`') return k
+    else if (c === '$' && src[k + 1] === '{') {
+      let depth = 1
+      for (k += 2; k < src.length && depth > 0; k++) {
+        const d = src[k]!
+        if (d === '`') k = templateEnd(src, k)
+        else if (d === '{') depth++
+        else if (d === '}') depth--
+      }
+      k--
+    }
+  }
+  return src.length
+}
+
+/** Where a type annotation in `src` (from `at`) ends: a top-level `=` that isn't `=>`, or the end. */
+function typeEnd(src: string, at: number): number {
+  let depth = 0
+  let quote = ''
+  for (let k = at; k < src.length; k++) {
+    const c = src[k]!
+    if (quote) {
+      if (c === '\\') k++
+      else if (c === quote) quote = ''
+    } else if (c === '/' && src[k + 1] === '*') {
+      // A comment's `=` isn't the default's.
+      const close = src.indexOf('*/', k + 2)
+      k = close < 0 ? src.length : close + 1
+    } else if (c === '/' && src[k + 1] === '/') return k
+    else if (c === '`') k = templateEnd(src, k)
+    else if (c === "'" || c === '"') quote = c
+    else if ('<([{'.includes(c)) depth++
+    else if ('>)]}'.includes(c) && !(c === '>' && src[k - 1] === '=')) depth--
+    else if (c === '=' && depth === 0 && src[k + 1] !== '>') return k
+  }
+  return src.length
 }

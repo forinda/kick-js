@@ -198,6 +198,14 @@ export {
   type ViewRenderer,
   type ViewRenderOptions,
 } from './http/view-renderer'
+// The registry `kick typegen` fills (`declare module '@forinda/kickjs'`).
+export type {
+  KickViews,
+  KickViewShared,
+  KickViewTypeOptions,
+  ViewData,
+  ViewName,
+} from './http/view-types'
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './http/middleware/request-id'

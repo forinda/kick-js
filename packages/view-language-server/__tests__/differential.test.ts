@@ -29,7 +29,16 @@ const BIN = resolve(import.meta.dirname, '../bin/kick-view-ls.js')
 const APP = resolve(import.meta.dirname, 'fixtures/app')
 const VIEWS = join(APP, 'src/views')
 
-const guide = readFileSync(resolve(import.meta.dirname, '../../../docs/guide/views.md'), 'utf8')
+// Every .kick example in the guide: the overview and each page under it.
+const DOCS = resolve(import.meta.dirname, '../../../docs/guide')
+const guide = [
+  join(DOCS, 'views.md'),
+  ...readdirSync(join(DOCS, 'views'))
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => join(DOCS, 'views', f)),
+]
+  .map((p) => readFileSync(p, 'utf8'))
+  .join('\n')
 const CORPUS: string[] = [
   ...[...guide.matchAll(/```kick\n([\s\S]*?)\n```/g)].map((m) => m[1]!),
   '<p>{{ a | nope }}</p>',

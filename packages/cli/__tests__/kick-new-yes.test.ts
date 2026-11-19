@@ -195,6 +195,7 @@ describe('kick new --yes (non-interactive)', () => {
       'src/adapters/views.ts',
       'src/views/layouts/main.kick',
       'src/views/home.kick',
+      'src/views/shared.ts',
     ])
       expect(existsSync(join(dir, file)), file).toBe(true)
     expect(readFileSync(join(dir, 'src/index.ts'), 'utf-8')).toContain('viewsAdapter()')

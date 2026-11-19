@@ -762,3 +762,17 @@ describe('<component> slot content', () => {
     expect(JSON.stringify(t.body).split('leaf').length - 1).toBe(1)
   })
 })
+
+describe('page @input', () => {
+  it('lets a page declare typed data', () => {
+    const t = clean({ page: '@input user: User\n<p>{{ user.name }}</p>' })
+    // Still page data: a page's @input doesn't make a slot.
+    expect(JSON.stringify(t.body)).toContain('"k":"d","n":"user"')
+  })
+
+  it('lets a component type its inputs', () => {
+    const t = clean({ 'components/x-c': '@input x: number\n<b>{{ x }}</b>' }, 'components/x-c')
+    expect(t.inputs).toMatchObject([{ n: 'x' }])
+    expect(JSON.stringify(t.body)).toContain(`"k":"v","s":${t.inputs[0]!.s}`)
+  })
+})

@@ -141,6 +141,8 @@ export type Node =
 /** An `@input` declaration, with its default when given. */
 export interface InputDecl {
   name: string
+  /** `@input name: Type`: the TypeScript type, as written (typegen copies it) */
+  type?: string
   default?: { value: Literal; span: Span }
   span: Span
 }
@@ -152,6 +154,8 @@ export interface TemplateAst {
   layout?: string | null
   layoutSpan?: Span
   inputs: InputDecl[]
+  /** `@import type … from '…'` lines, as written without the `@` (typegen copies them) */
+  typeImports?: string[]
   body: Node[]
 }
 
@@ -297,6 +301,8 @@ export interface CheckedTemplate {
   client?: { code: string; js: boolean }
   /** a field in it has `validate`: pages rendering it ship the validator script */
   validates?: true
+  /** a page's `@input name = value` defaults: data that fills in when nobody supplied it */
+  defaults?: Record<string, Literal>
   /** its `@snippet`s, by name */
   snippets?: Record<string, CSnippet>
   /** its `@fragment`s, by name */

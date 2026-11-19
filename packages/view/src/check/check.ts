@@ -17,6 +17,7 @@ import {
   type CheckedFragment,
   type CheckedTemplate,
   type Element,
+  type Literal,
   type Expr,
   type LoopVar,
   type Node,
@@ -1393,11 +1394,14 @@ export function check(name: string, project: Project): CheckResult {
   const component = isComponent(name, project.componentsDir)
   const c = new Checker(project, ast, component)
 
-  if (!component && ast.inputs.length) {
-    for (const i of ast.inputs)
-      c.diagnostics.push(error(ast.file, i.span, 'only components declare @input'))
+  // A page's @inputs declare its render data (typed for typegen); its reads
+  // stay data reads, so its layouts see the same values. A component's are
+  // its inputs, bound to slots.
+  const pageDefaults: Record<string, Literal> = {}
+  if (!component) {
+    for (const i of ast.inputs) if (i.default) pageDefaults[i.name] = i.default.value
   }
-  const inputs = ast.inputs.map((i, idx) => {
+  const inputs = (component ? ast.inputs : []).map((i, idx) => {
     const s = idx
     const entry: CheckedTemplate['inputs'][number] = { n: i.name, s, r: !i.default }
     if (i.default) entry.d = i.default.value
@@ -1603,6 +1607,7 @@ export function check(name: string, project: Project): CheckResult {
   if (ast.layout !== undefined) template.layout = ast.layout
   if (client) template.client = client
   if (c.validates) template.validates = true
+  if (Object.keys(pageDefaults).length) template.defaults = pageDefaults
   if (Object.keys(c.fragments).length) template.fragments = c.fragments
   if (Object.keys(c.snippets).length) template.snippets = c.snippets
   const failed = c.diagnostics.some((d) => d.severity === 'error')

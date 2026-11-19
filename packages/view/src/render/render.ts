@@ -646,12 +646,26 @@ export function render(
   opts: {
     layout?: boolean | string
     /** Render only these fragments of the page, without layouts. */
-    fragment?: string | string[]
+    fragment?: string | readonly string[]
     /** The caller's own data, which a fragment's needs are checked against (default `data`). */
     callerData?: object
   } = {},
 ): string {
   const r = new Renderer(env)
+  // A page's @input defaults sit under whatever data was given; under those,
+  // its declared @layout chain's, even when that layout doesn't render
+  // (`layout: false`, a fragment): typed render data counts them as supplied.
+  const declared: Record<string, unknown> = {}
+  const seen = new Set([template.name])
+  for (let next = template.layout; next && !seen.has(next);) {
+    seen.add(next)
+    const t = env.resolve(next)
+    for (const [k, v] of Object.entries(t.defaults ?? {})) {
+      if (!Object.hasOwn(declared, k)) declared[k] = v
+    }
+    next = t.layout
+  }
+  data = { ...declared, ...template.defaults, ...data }
   r.rootData = data as Record<string, unknown>
   const page: Inst = {
     t: template,
@@ -702,6 +716,13 @@ export function render(
     const base = env.baseLayout
     if (base && base !== template.name && !chain.some((t) => t.name === base))
       chain.push(env.resolve(base))
+  }
+  // Layouts' @input defaults sit under everything else, outer layouts first.
+  const layoutDefaults: Record<string, unknown> = {}
+  for (const t of chain.toReversed()) if (t.defaults) Object.assign(layoutDefaults, t.defaults)
+  if (Object.keys(layoutDefaults).length) {
+    page.data = { ...layoutDefaults, ...page.data }
+    r.rootData = page.data
   }
   // The page and its layouts always render; components report as they do.
   if (template.validates || chain.some((t) => t.validates)) env.validation?.()

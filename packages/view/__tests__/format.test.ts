@@ -77,6 +77,28 @@ describe('format', () => {
     expect(fmt(once)).toBe(once)
   })
 
+  it("leaves an @input default's text alone, while formatting the body", () => {
+    expect(fmt("@input label: string = '{{hello}}'\n<p>{{label}}</p>\n")).toBe(
+      "@input label: string = '{{hello}}'\n<p>{{ label }}</p>\n",
+    )
+  })
+
+  it('treats a prose line starting with @import as markup', () => {
+    const src = '<div>\n@import your notes <b>\nx\n</b>\n</div>\n'
+    expect(fmt(src)).toBe('<div>\n  @import your notes <b>\n    x\n  </b>\n</div>\n')
+  })
+
+  it('formats a template comment a protected range overlaps', () => {
+    const src = "@input label: string = '{{--'\n{{-- docs {{x}} --}}\n<p></p>\n"
+    expect(fmt(src)).toBe(src)
+  })
+
+  it('leaves a typed @input with generics out of the indentation', () => {
+    const src =
+      '@input u: Array<User>\n@input m: Map<string, A[]> = null\n<div>\n  <p>x</p>\n</div>\n'
+    expect(fmt(src)).toBe(src)
+  })
+
   it('spaces pipes in interpolations and block headers', () => {
     expect(fmt("<p>{{title|titlecase}} {{ at  |date:'short'| uppercase }}</p>\n")).toBe(
       "<p>{{ title | titlecase }} {{ at | date:'short' | uppercase }}</p>\n",

@@ -2,6 +2,13 @@
  * `createViews`: templates from a loader or a build's bundle, checked once
  * and cached, rendered with the app's pipes and shared data.
  */
+import type {
+  LooseViewName,
+  ViewFragmentData,
+  ViewFragmentNames,
+  ViewName,
+  ViewRenderArgs,
+} from './types'
 import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
@@ -60,7 +67,7 @@ export interface RenderOptions {
    * Render only these `@fragment`s of the page, in order, without layouts —
    * an htmx swap (several for out-of-band swaps).
    */
-  fragment?: string | string[]
+  fragment?: string | readonly string[]
   locale?: string
   timeZone?: string
 }
@@ -124,7 +131,17 @@ export interface ViewsOptions {
 
 /** A views instance: renders templates and serves component client scripts. */
 export interface Views {
-  render(name: string, data?: object, opts?: RenderOptions & { ctx?: unknown }): Promise<string>
+  render<N extends ViewName>(name: N, ...args: ViewRenderArgs<N>): Promise<string>
+  render<N extends ViewName, const F extends ViewFragmentNames<N>>(
+    name: N,
+    data: ViewFragmentData<N, F>,
+    opts: RenderOptions & { fragment: F; ctx?: unknown },
+  ): Promise<string>
+  render<N extends string>(
+    name: N & LooseViewName<N>,
+    data?: object,
+    opts?: RenderOptions & { ctx?: unknown },
+  ): Promise<string>
   /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
   clientScript(file: string): Promise<string | undefined>
   /** A client file (script, stylesheet, asset) by its served name, with its content type. */
@@ -395,7 +412,7 @@ export function createViews(options: ViewsOptions = {}): Views {
 
   const views: Views = {
     has,
-    async render(name, data = {}, opts = {}) {
+    async render(name: string, data: object = {}, opts: RenderOptions & { ctx?: unknown } = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
       if (!(await has(name))) throw new Error(`template '${name}' not found`)
       const st = bundle ? undefined : await current()
@@ -415,7 +432,15 @@ export function createViews(options: ViewsOptions = {}): Views {
       const used = new Map<string, CheckedTemplate>()
       let validation = false
       // A controller's own `$errors` / `$old` (a re-render) win over the session's.
-      const page = { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data }
+      // Low to high: the page's @input defaults, form state's empty bags,
+      // share(), the request's form state, the controller's data.
+      const page = {
+        ...template.defaults,
+        ...emptyFormState(),
+        ...shared,
+        ...takeFormState(opts.ctx),
+        ...data,
+      }
       const html = render(
         template,
         page,

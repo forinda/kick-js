@@ -65,6 +65,7 @@ describe('the kvQuery pipe', () => {
 
   it('adds to an existing query and keeps the fragment last', async () => {
     expect(await render(`{{ '/x?a=1#top' | kvQuery:'b':2 }}`)).toBe('/x?a=1&amp;b=2#top')
+    expect(await render(`{{ '/search#a#b' | kvQuery:'page':2 }}`)).toBe('/search?page=2#a#b')
     expect(await render(`{{ '/x' | kvQuery:'a':none }}`, { none: undefined })).toBe('/x')
   })
 

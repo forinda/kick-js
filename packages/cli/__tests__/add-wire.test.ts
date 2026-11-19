@@ -147,6 +147,7 @@ describe('kick add views', () => {
       'src/views.ts',
       'src/views/home.kick',
       'src/views/layouts/main.kick',
+      'src/views/shared.ts',
     ])
     expect(readFileSync(join(dir, 'src/views.ts'), 'utf-8')).toContain("from 'virtual:kick-views'")
     const result = await wireEntry(dir, 'src/index.ts', plan.integrations)

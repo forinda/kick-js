@@ -129,7 +129,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --typecheck --passWithNoTests",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.typetests.json",
     "clean": "rm -rf dist .wireit"
   },

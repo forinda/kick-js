@@ -237,3 +237,58 @@ describe('component features in a bundle', () => {
     expect(AST_FORMAT_VERSION).toBe(3)
   })
 })
+
+describe('page @input defaults', () => {
+  const files = {
+    'layouts/main': '<title>{{ title }}</title><slot />',
+    page: "@layout('layouts/main')\n@input title = 'Home'\n<p>x</p>",
+  }
+
+  it('reach the layout', async () => {
+    const views = createViews({ viewsDir: dir(files), warn: () => {} })
+    expect(await views.render('page')).toBe('<title>Home</title><p>x</p>')
+  })
+
+  it('give way to share() and to the controller', async () => {
+    const shared = createViews({
+      viewsDir: dir(files),
+      warn: () => {},
+      share: () => ({ title: 'S' }),
+    })
+    expect(await shared.render('page')).toBe('<title>S</title><p>x</p>')
+    expect(await shared.render('page', { title: 'C' })).toBe('<title>C</title><p>x</p>')
+  })
+})
+
+describe("a layout's @input defaults", () => {
+  it('apply under the page, which overrides them', async () => {
+    const files = {
+      'layouts/main': "@input title = 'Site'\n<title>{{ title }}</title><slot />",
+      plain: "@layout('layouts/main')\n<p>x</p>",
+      own: "@layout('layouts/main')\n@input title = 'Own'\n<p>x</p>",
+    }
+    const views = createViews({ viewsDir: dir(files), warn: () => {} })
+    expect(await views.render('plain')).toBe('<title>Site</title><p>x</p>')
+    expect(await views.render('own')).toBe('<title>Own</title><p>x</p>')
+  })
+
+  // Typed render data counts a declared layout's default as supplied, so it
+  // has to be there when the layout doesn't render too.
+  it("still fill in a page's reads without the layout, and in a fragment", async () => {
+    const files = {
+      'layouts/main': "@input title = 'Site'\n<title>{{ title }}</title><slot />",
+      page: "@layout('layouts/main')\n<h1>{{ title }}</h1>@fragment('head') {<b>{{ title }}</b>}",
+    }
+    const views = createViews({ viewsDir: dir(files), warn: () => {}, strict: true })
+    expect(await views.render('page', {}, { layout: false })).toBe('<h1>Site</h1><b>Site</b>')
+    expect(await views.render('page', {}, { fragment: 'head' })).toBe('<b>Site</b>')
+    const proto = createViews({
+      viewsDir: dir({
+        'layouts/main': "@input toString = 'own'\n<slot />",
+        page: "@layout('layouts/main')\n<p>{{ toString }}</p>",
+      }),
+      warn: () => {},
+    })
+    expect(await proto.render('page', {}, { layout: false })).toBe('<p>own</p>')
+  })
+})
