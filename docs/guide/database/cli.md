@@ -108,6 +108,45 @@ An `adapter` factory that opens a pool — MySQL, or your own `pg.Pool` — shou
 | `resolveKickDbConfig(block)`            | Apply the defaults above to a config block.                                      |
 | `registerDbCommands(parent, getConfig)` | Attach the command tree to any commander command — for building your own binary. |
 
+### Config per environment {#config-per-environment}
+
+One app can keep several db configs, such as staging and production, or one per database, and pick one per command with `--config` (`-c`):
+
+```bash
+kick db migrate latest --config db/staging.ts
+kick db generate add_orders -c db/analytics.ts
+KICK_DB_CONFIG=db/prod.ts kick db migrate status   # the env var, when there's no flag
+kickjs-db migrate latest --config db/staging.ts    # the standalone bin takes it too
+```
+
+The named file **replaces** the `db` block of `kick.config.ts` (and `kickjs-db.config.ts`) for that run. Nothing from them is merged in. That matters for safety: an `adapter()` in the `db` block beats `connectionString`, so a merged staging file that sets only `connectionString` would still run against the `db` block's database. Share settings with an import instead:
+
+```ts
+// db/base.ts
+import { defineKickDbConfig } from '@forinda/kickjs-db/cli'
+
+export const base = defineKickDbConfig({
+  schemaPath: 'src/db/schema.ts',
+  migrationsDir: 'db/migrations',
+  dialect: 'postgres',
+})
+```
+
+```ts
+// db/staging.ts
+import { defineKickDbConfig } from '@forinda/kickjs-db/cli'
+import { base } from './base'
+
+export default defineKickDbConfig({ ...base, connectionString: process.env.STAGING_DATABASE_URL })
+```
+
+- **What the file exports:** a db config as its default export, or a kick.config-style object whose `db` block is used (`--config kick.staging.config.ts`).
+- **Which file types load:** `.ts` / `.mts` load with your tsconfig `paths`; `.js`, `.mjs` and `.json` work too.
+- **How paths resolve:** a relative `--config` path resolves from the working directory. Paths inside the file (`schemaPath`, `migrationsDir`) are relative to the project root, as in `kick.config.ts`.
+- **No `DATABASE_URL` fallback:** a named file must set `connectionString` or `adapter()` itself. If `STAGING_DATABASE_URL` is unset, `db/staging.ts` above fails with "no adapter resolved" instead of quietly using whatever `DATABASE_URL` points at.
+- **What it prints:** every command run with a named file starts by writing `db config: <file>` to stderr, so you can see which config it used while stdout stays clean (`introspect --json` stays valid JSON). A missing file is an error naming the path.
+- **Typegen:** `kick typegen` still reads `kick.config.ts` for the database types.
+
 The examples below run against SQLite.
 
 ## generate

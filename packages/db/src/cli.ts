@@ -27,6 +27,9 @@ import { removeCasing } from './snapshot/casing'
 import { askRenamesInTerminal, confirmInTerminal, parseRenameFlags } from './cli/renames'
 import { remoteHost } from './cli/push-target'
 import { loadModule } from './cli/load-module'
+import { configFileOf, loadDbConfigFile } from './cli/load-config'
+
+export { configFileOf, loadDbConfigFile, readConfigModule } from './cli/load-config'
 
 /** Every folder the runner reads: `migrationsDir`, then `migrationsDirs`. */
 function runDirs(config: DbConfig): string | string[] {
@@ -128,15 +131,23 @@ export function mergeKickDbConfig(
   return Object.assign({}, ...configs.filter(Boolean))
 }
 
-/** Apply defaults to a {@link KickDbConfigInput}, yielding a resolved {@link DbConfig}. */
-export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbConfig {
+/**
+ * Apply defaults to a {@link KickDbConfigInput}, yielding a resolved {@link DbConfig}.
+ * `envFallback: false` leaves `connectionString` unset rather than reading
+ * `DATABASE_URL` — for a named `--config` file, which says its own connection.
+ */
+export function resolveKickDbConfig(
+  block: KickDbConfigInput | undefined,
+  opts: { envFallback?: boolean } = {},
+): DbConfig {
   const db = block ?? {}
+  const env = opts.envFallback === false ? undefined : process.env.DATABASE_URL
   return {
     schemaPath: db.schemaPath ?? 'src/db/schema.ts',
     migrationsDir: db.migrationsDir ?? 'db/migrations',
     seedsDir: db.seedsDir ?? 'db/seeds',
     dialect: db.dialect ?? 'postgres',
-    connectionString: db.connectionString ?? process.env.DATABASE_URL,
+    connectionString: db.connectionString ?? env,
     adapter: db.adapter,
     driftCheck: db.driftCheck,
     driftIgnore: db.driftIgnore,
@@ -232,7 +243,23 @@ export type DbConfigResolver = () => DbConfig | Promise<DbConfig>
  * the resolved {@link DbConfig} — under kickjs-cli from `ctx.config.db`,
  * standalone from `kickjs-db.config.ts`.
  */
-export function registerDbCommands(parent: Command, getConfig: DbConfigResolver): void {
+export function registerDbCommands(parent: Command, fallback: DbConfigResolver): void {
+  parent.option(
+    '-c, --config <file>',
+    'Db config file for this run, instead of the db block (or KICK_DB_CONFIG)',
+  )
+  // A named file replaces the config for the run: nothing of the db block
+  // leaks in (its adapter() would beat the file's connectionString).
+  const getConfig = async (): Promise<DbConfig> => {
+    const file = configFileOf(parent.opts())
+    if (!file) return fallback()
+    const input = await loadDbConfigFile(file)
+    // stderr: stdout stays the command's own output (`introspect --json`).
+    console.error(`db config: ${file}`)
+    // Not DATABASE_URL: an unset STAGING_URL in the file mustn't quietly
+    // become whatever database DATABASE_URL points at.
+    return resolveKickDbConfig(input, { envFallback: false })
+  }
   parent
     .command('generate <name>')
     .description('Generate a new migration from schema diff')
