@@ -1,7 +1,7 @@
 import type { Span } from './diagnostics'
 
 /** Bumped when the shape of a checked template changes; builds and runtimes must agree. */
-export const AST_FORMAT_VERSION = 2
+export const AST_FORMAT_VERSION = 3
 
 /** A literal value in a template expression. */
 export type Literal = string | number | boolean | null

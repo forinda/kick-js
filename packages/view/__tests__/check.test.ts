@@ -601,3 +601,12 @@ describe('dynamic components', () => {
     ).toEqual([expect.stringContaining('hx-get')])
   })
 })
+
+describe('slots inside snippets', () => {
+  it("finds a component's slot declared inside its @snippet", () => {
+    clean({
+      'components/x-s': '@snippet s() {<slot name="x" />}\n<div>@render s()</div>',
+      page: "<x-s>@slot('x') {<i>x</i>}</x-s>",
+    })
+  })
+})

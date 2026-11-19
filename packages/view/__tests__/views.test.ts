@@ -209,8 +209,31 @@ describe('fragments in a bundle', () => {
     ) as ViewsBundle
     const views = createViews({ bundle })
     expect(await views.render('p', { u: 'A' }, { fragment: 'row' })).toBe('<tr>A</tr>')
-    expect(() => bundleLoader({ v: 1, templates: {} })).toThrow(
-      `views bundle format v1, this runtime reads v2`,
+    const old = AST_FORMAT_VERSION - 1
+    expect(() => bundleLoader({ v: old, templates: {} })).toThrow(
+      `views bundle format v${old}, this runtime reads v${AST_FORMAT_VERSION}`,
     )
+  })
+})
+
+describe('component features in a bundle', () => {
+  it('render after a JSON round-trip: snippets, <component>, slots with values', async () => {
+    const files: Record<string, string> = {
+      'components/x-a': '<div><slot name="h" [x]="7" /></div>',
+      'components/x-b': '<p>b</p>',
+      p: '@snippet s(v) {[{{ v }}]}\n@render s(1)<component [is]="k" of="x-a x-b">@slot(\'h\'; let x) {{{ x }}}</component>',
+    }
+    const project = {
+      templates: new Map(Object.entries(files).map(([n, src]) => [n, parse(src, `${n}.kick`).ast])),
+      pipes: new Set(BUILTIN_PIPES),
+      componentsDir: 'components',
+    }
+    const templates = Object.fromEntries(
+      Object.keys(files).map((n) => [n, check(n, project).template!]),
+    )
+    const bundle = JSON.parse(JSON.stringify({ v: AST_FORMAT_VERSION, templates })) as ViewsBundle
+    const views = createViews({ bundle })
+    expect(await views.render('p', { k: 'x-a' })).toBe('[1]<div>7</div>')
+    expect(AST_FORMAT_VERSION).toBe(3)
   })
 })

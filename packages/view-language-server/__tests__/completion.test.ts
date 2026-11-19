@@ -101,4 +101,32 @@ describe('completions', () => {
   it("offers slot names inside a layout's @fragment", async () => {
     expect(await labels("@layout('layouts/shell')\n@slot('§")).toEqual(['nav'])
   })
+
+  it('offers snippet names after @render', async () => {
+    expect(await labels('@snippet badge(x) {x}\n@snippet pill() {y}\n@render §')).toEqual(
+      expect.arrayContaining(['badge', 'pill']),
+    )
+  })
+
+  it("offers the values a slot passes after @slot('…'; let", async () => {
+    const ws = await workspaceOf({
+      ...FILES,
+      'src/views/components/x-list.kick': '<ul><slot name="row" [user]="u" [index]="i" /></ul>',
+    })
+    const { text, offset } = cursor("<x-list>@slot('row'; let §")
+    ws.setBuffer(uri('page'), text)
+    expect(
+      completions(ws, uri('page'), text, offset)
+        .map((i) => i.label)
+        .toSorted(),
+    ).toEqual(['index', 'user'])
+  })
+
+  it('offers component tags inside of="…"', async () => {
+    expect(await labels('<component [is]="k" of="§')).toContain('user-card')
+  })
+
+  it('keeps loop names in scope after a @snippet closes', async () => {
+    expect(await labels('@for (u of us; track u) {@snippet s() {x}<p>{{ §')).toContain('u')
+  })
 })

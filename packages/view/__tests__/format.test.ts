@@ -67,6 +67,16 @@ describe('format', () => {
     expect(fmt(frag)).toBe(frag)
   })
 
+  it('normalizes @snippet, @render and @slot(…; let …) headers', () => {
+    const src =
+      "@snippet  b ( x ){\n<i>{{ x }}</i>\n}\n@render  b ( 1 )\n<x-a>\n@slot ( 'row' ;let a ){\n{{ a }}\n}\n</x-a>\n"
+    const once = fmt(src)
+    expect(once).toBe(
+      "@snippet b(x) {\n  <i>{{ x }}</i>\n}\n@render b(1)\n<x-a>\n  @slot('row'; let a) {\n    {{ a }}\n  }\n</x-a>\n",
+    )
+    expect(fmt(once)).toBe(once)
+  })
+
   it('spaces pipes in interpolations and block headers', () => {
     expect(fmt("<p>{{title|titlecase}} {{ at  |date:'short'| uppercase }}</p>\n")).toBe(
       "<p>{{ title | titlecase }} {{ at | date:'short' | uppercase }}</p>\n",

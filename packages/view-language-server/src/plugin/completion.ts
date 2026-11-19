@@ -33,6 +33,8 @@ const KEYWORDS: Record<string, string> = {
   slot: "slot('${1:name}') {\n\t$0\n}",
   error: "error('${1:field}') {\n\t$0\n}",
   assets: "assets('$1')",
+  snippet: 'snippet ${1:name}($2) {\n\t$0\n}',
+  render: 'render ${1:name}($2)',
   fragment: "fragment('${1:name}') {\n\t$0\n}",
   push: "push('${1:stack}') {\n\t$0\n}",
   verbatim: 'verbatim {\n\t$0\n}',
@@ -80,7 +82,8 @@ function layoutSlots(ws: Workspace, name: string | undefined): string[] {
         else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
         else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
         else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
-        else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push') stack.push(n.body)
+        else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push' || n.k === 'snippet')
+          stack.push(n.body)
       }
     }
   }
@@ -104,11 +107,35 @@ function stackNames(ws: Workspace): string[] {
         else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
         else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
         else if (n.k === 'slot-outlet') stack.push(n.fallback)
-        else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push') stack.push(n.body)
+        else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push' || n.k === 'snippet') {
+          stack.push(n.body)
+        }
       }
     }
   }
   return [...out]
+}
+
+/** The value names slot `slot` of component template `name` passes to its caller's content. */
+function slotOffers(ws: Workspace, name: string | undefined, slot: string): string[] {
+  const ast = name === undefined ? undefined : ws.astOf(name)
+  if (!ast) return []
+  const stack = [ast.body]
+  while (stack.length) {
+    for (const n of stack.pop()!) {
+      if (n.k === 'slot-outlet') {
+        if ((n.name ?? '') === slot) return n.offers.map((o) => o.name)
+        stack.push(n.fallback)
+      } else if (n.k === 'element') stack.push(n.children)
+      else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
+      else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
+      else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
+      else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push' || n.k === 'snippet') {
+        stack.push(n.body)
+      }
+    }
+  }
+  return []
 }
 
 export function completions(
@@ -181,6 +208,22 @@ export function completions(
       return layoutSlots(ws, ws.nameOf(uri)).map((label) => ({ label, kind: PROPERTY }))
     case 'stack-name':
       return stackNames(ws).map((label) => ({ label, kind: PROPERTY }))
+    case 'snippet-name':
+      return [...text.matchAll(/@snippet\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => ({
+        label: m[1]!,
+        kind: FUNCTION,
+      }))
+    case 'slot-let': {
+      const name = c.tag === undefined ? undefined : componentOf(ws, c.tag)
+      return slotOffers(ws, name, c.slot).map((label) => ({ label, kind: VARIABLE }))
+    }
+    case 'component-tag': {
+      const dir = ws.componentsDir()
+      return ws
+        .names()
+        .filter((n) => n.startsWith(`${dir}/`))
+        .map((n) => ({ label: ws.view.componentTag(n, dir), kind: CLASS }))
+    }
     case 'expr':
       // Form state is in every template: errors, what was typed, flash messages.
       return [...new Set([...c.scope, ...FORM_STATE])].map((label) => ({ label, kind: VARIABLE }))

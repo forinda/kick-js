@@ -70,6 +70,15 @@ describe('Workspace', () => {
     expect(ws.dependentsOf('components/x-pill')).toEqual(new Set(['page']))
   })
 
+  it('counts components used only inside @snippet as dependents', async () => {
+    const { ws } = workspace({
+      'src/views/page.kick': '@snippet s() {<x-card />}\n@render s()',
+      'src/views/components/x-card.kick': '<b>card</b>',
+    })
+    await ws.load()
+    expect(ws.dependentsOf('components/x-card')).toEqual(new Set(['page']))
+  })
+
   it('re-checks pages when their layout disappears', async () => {
     const { ws, disk, uri } = workspace({
       'src/views/page.kick': "@layout('layouts/main')\n<p>x</p>",
