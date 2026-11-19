@@ -2,7 +2,13 @@
  * `createViews`: templates from a loader or a build's bundle, checked once
  * and cached, rendered with the app's pipes and shared data.
  */
-import type { LooseViewName, ViewName, ViewRenderArgs } from './types'
+import type {
+  LooseViewName,
+  ViewFragmentData,
+  ViewFragmentNames,
+  ViewName,
+  ViewRenderArgs,
+} from './types'
 import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
@@ -126,8 +132,13 @@ export interface ViewsOptions {
 /** A views instance: renders templates and serves component client scripts. */
 export interface Views {
   render<N extends ViewName>(name: N, ...args: ViewRenderArgs<N>): Promise<string>
-  render(
-    name: LooseViewName,
+  render<N extends ViewName, const F extends ViewFragmentNames<N>>(
+    name: N,
+    data: ViewFragmentData<N, F>,
+    opts: RenderOptions & { fragment: F; ctx?: unknown },
+  ): Promise<string>
+  render<N extends string>(
+    name: N & LooseViewName<N>,
     data?: object,
     opts?: RenderOptions & { ctx?: unknown },
   ): Promise<string>

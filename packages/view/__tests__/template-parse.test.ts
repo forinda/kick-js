@@ -376,7 +376,20 @@ describe('typed @input and @import type', () => {
 
   it('refuses a value import, and one inside an element', () => {
     expect(errors("@import { x } from 'y'")).toHaveLength(1)
-    expect(errors("<div>@import type { X } from 'y'</div>")).toHaveLength(1)
+    expect(errors("<div>@import type { X } from 'y'\n</div>").map((d) => d.message)).toEqual([
+      '@import type goes at the top level of a template',
+    ])
+  })
+
+  it('keeps prose that merely mentions @import as text', () => {
+    expect(errors("<p>Use @import to load files from 'the archive'.</p>")).toEqual([])
+  })
+
+  it('finds the default after a type with = inside a comment', () => {
+    expect(ok('@input count: number /* = */ = 1\n<p></p>').ast.inputs[0]).toMatchObject({
+      type: 'number /* = */',
+      default: { value: 1 },
+    })
   })
 
   it('keeps @import without type text as text', () => {

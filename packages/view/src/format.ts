@@ -55,6 +55,9 @@ function rawRanges(source: string, body: Node[]): Range[] {
   }
   for (const m of source.matchAll(/\{\{--[\s\S]*?--\}\}/g))
     ranges.push([m.index, m.index + m[0].length])
+  // `@input …` / `@import type …`: a type and a default, never markup to tidy.
+  for (const m of source.matchAll(/^[ \t]*@(?:input|import)\b.*$/gm))
+    ranges.push([m.index, m.index + m[0].length])
   return ranges.toSorted((a, b) => a[0] - b[0])
 }
 
@@ -308,7 +311,8 @@ export function format(
   const same =
     !after.diagnostics.some((d) => d.severity === 'error') &&
     shape(after.ast.body).join('\n') === shape(before.ast.body).join('\n') &&
-    after.ast.layout === before.ast.layout
+    after.ast.layout === before.ast.layout &&
+    JSON.stringify(declarations(after.ast)) === JSON.stringify(declarations(before.ast))
   if (!same) {
     const pos = { offset: 0, line: 1, column: 1 }
     return {
@@ -326,3 +330,14 @@ export function format(
 }
 
 export type { Element }
+
+/** What the declarations say, without positions: formatting must not change them. */
+function declarations(ast: {
+  inputs: Array<{ name: string; type?: string; default?: { value: unknown } }>
+  typeImports?: string[]
+}) {
+  return {
+    inputs: ast.inputs.map((i) => [i.name, i.type, i.default?.value]),
+    imports: ast.typeImports ?? [],
+  }
+}

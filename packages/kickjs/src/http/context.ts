@@ -1,6 +1,12 @@
 /// <reference types="multer" />
 import { setPendingResponse, viewRendererFor, type ViewRenderOptions } from './view-renderer'
-import type { LooseViewName, ViewName, ViewRenderArgs } from './view-types'
+import type {
+  LooseViewName,
+  ViewFragmentData,
+  ViewFragmentNames,
+  ViewName,
+  ViewRenderArgs,
+} from './view-types'
 import type { RouteName, UrlForArgs } from './url-for'
 import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
 import type { ConnectRequest as Request, ConnectNext as NextFunction } from './connect'
@@ -1015,8 +1021,13 @@ export class RequestContext<
    * ```
    */
   render<N extends ViewName>(template: N, ...args: ViewRenderArgs<N>): Promise<void> | void
-  render(
-    template: LooseViewName,
+  render<N extends ViewName, const F extends ViewFragmentNames<N>>(
+    template: N,
+    data: ViewFragmentData<N, F>,
+    opts: ViewRenderOptions & { fragment: F },
+  ): Promise<void> | void
+  render<N extends string>(
+    template: N & LooseViewName<N>,
     data?: Record<string, any>,
     opts?: ViewRenderOptions,
   ): Promise<void> | void

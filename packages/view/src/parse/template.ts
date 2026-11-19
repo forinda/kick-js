@@ -601,7 +601,13 @@ class TemplateParser {
     if (eol < 0) eol = this.s.length
     const line = this.s.slice(after, eol).replace(/\r$/, '')
     const isType = /^\s+type\b/.test(line)
-    if (!isType && !/^\s+[\s\S]*\bfrom\s*['"]/.test(line)) return false
+    // Only an import-shaped clause is a directive (`@import { x } from 'y'`,
+    // `@import X from 'y'`); prose that mentions @import stays text.
+    const importShaped =
+      /^\s+(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*(?:\s*,\s*\{[^}]*\})?)\s+from\s*['"]/.test(
+        line,
+      )
+    if (!isType && !importShaped) return false
     if (!isType || !/^\s+type\s+[\s\S]+\bfrom\s*(['"])[^'"]+\1\s*;?\s*$/.test(line)) {
       this.err(i, eol, "only @import type … from '…' is allowed: templates take types, not values")
     } else if (this.frames.length > 1) {
@@ -1153,7 +1159,12 @@ function typeEnd(src: string, at: number): number {
     if (quote) {
       if (c === '\\') k++
       else if (c === quote) quote = ''
-    } else if (c === "'" || c === '"' || c === '`') quote = c
+    } else if (c === '/' && src[k + 1] === '*') {
+      // A comment's `=` isn't the default's.
+      const close = src.indexOf('*/', k + 2)
+      k = close < 0 ? src.length : close + 1
+    } else if (c === '/' && src[k + 1] === '/') return src.length
+    else if (c === "'" || c === '"' || c === '`') quote = c
     else if ('<([{'.includes(c)) depth++
     else if ('>)]}'.includes(c) && !(c === '>' && src[k - 1] === '=')) depth--
     else if (c === '=' && depth === 0 && src[k + 1] !== '>') return k

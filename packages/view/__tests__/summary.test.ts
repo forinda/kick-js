@@ -127,3 +127,58 @@ describe('data summary', () => {
     expect(s.fragments.rows!.reads.users).toMatchObject({ nullable: true })
   })
 })
+
+describe('data summary — PR review', () => {
+  it('lets ?.[key] skip the key, and records keys after a computed one', () => {
+    expect(fields('{{ table?.[key] }}').key).toMatchObject({ optional: true })
+    expect(Object.keys(fields('{{ table[row][column] }}')).toSorted()).toEqual([
+      'column',
+      'row',
+      'table',
+    ])
+  })
+
+  it('keeps a fragment need present, even read through ?.', () => {
+    const s = sum("@for (u of users) {@fragment('f') { {{ u?.name }} }}")
+    expect(s.fragments.f!.needs.u).toMatchObject({ optional: false, nullable: true })
+  })
+
+  it("doesn't carry an outer page guard into a standalone fragment", () => {
+    const s = sum("@if (user) {@fragment('card') { {{ user.name }} }}")
+    expect(s.fields.user).toMatchObject({ nullable: true })
+    expect(s.fragments.card!.reads.user).toMatchObject({ optional: false, nullable: false })
+  })
+
+  it('gives a conditional loop source the loop shape, not its selector', () => {
+    const f = fields('@for (u of (show ? users : guests)) { {{ u.name }} }')
+    expect(f.show!.shape).toEqual(U)
+    expect(f.users!.shape).toEqual({ k: 'list', item: obj({ name: req(U) }) })
+    expect(f.guests!.shape).toEqual({ k: 'list', item: obj({ name: req(U) }) })
+  })
+
+  it("adds the page data a called snippet reads to the fragment's reads", () => {
+    const s = sum(
+      "@snippet label() {{{ title }}@render deeper()}\n@snippet deeper() {{{ sub }}@render label()}\n@fragment('card') {@render label()}",
+    )
+    expect(Object.keys(s.fragments.card!.reads).toSorted()).toEqual(['sub', 'title'])
+  })
+})
+
+describe('mergeSummary — PR review', () => {
+  it('keeps a plain read non-null when a page only tests the name', async () => {
+    const { mergeSummary } = await import('../src/check/summary')
+    const page = sum('@if (user) {<p>x</p>}')
+    const layout = sum('{{ user.name }}<slot />')
+    expect(mergeSummary(page, layout).fields.user).toMatchObject({
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it("keeps a layout's default optional even when the page declares the name", async () => {
+    const { mergeSummary } = await import('../src/check/summary')
+    const page = sum('@input title: string\n<p>{{ title }}</p>')
+    const layout = sum("@input title: string = 'Home'\n<title>{{ title }}</title><slot />")
+    expect(mergeSummary(page, layout).declared.title).toEqual({ type: 'string', optional: true })
+  })
+})

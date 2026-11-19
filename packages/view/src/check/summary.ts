@@ -80,7 +80,12 @@ type Mode = 'use' | 'test' | 'soft'
 interface Binding {
   depth: number
   /** Data root, another local, or nothing data-shaped (a loop counter, a computed @let). */
-  src: { k: 'data'; root: string } | { k: 'var'; name: string; b: Binding } | null
+  src:
+    | { k: 'data'; root: string }
+    | { k: 'var'; name: string; b: Binding }
+    /** One of several (`a ? xs : ys`, `xs ?? ys`): reads go to each. */
+    | { k: 'either'; options: Target[] }
+    | null
   /** Steps from `src` to the value. */
   steps: Step[]
 }
@@ -91,13 +96,16 @@ interface Target {
   steps: Step[]
 }
 
+/** An `@for` source read: the list's items, or a Map's pairs. */
+type Loop = 'item' | 'pair'
+
 /** One read to record: root, steps, a mode per level (0 = root), opaque end, loop marker. */
 interface Read {
   root: string
   steps: Step[]
   modes: Mode[]
   opaqueEnd: boolean
-  loop?: 'item' | 'pair'
+  loop?: Loop
 }
 
 class Summarizer {
@@ -107,13 +115,21 @@ class Summarizer {
   private readonly tested: Array<Array<{ root: string; steps: Step[]; local?: Binding }>> = []
   /** Fragments being walked: their recorders and scope depth at entry. */
   private readonly frags: Array<{
+    name: string
     needs: Map<string, Level>
     reads: Map<string, Level>
     depth: number
+    /** Guard frames at entry: only later ones hold for its standalone render. */
+    tested: number
   }> = []
+  /** The snippet whose body is being walked, if any. */
+  private snippet?: string
+  /** Each snippet's page reads, and the snippets it renders. */
+  readonly snippetReads = new Map<string, Map<string, Level>>()
+  readonly snippetCalls = new Map<string, Set<string>>()
+  /** The snippets each fragment renders directly. */
+  readonly fragmentCalls = new Map<string, Set<string>>()
   readonly fragments = new Map<string, { needs: Map<string, Level>; reads: Map<string, Level> }>()
-  /** Set while walking an `@for` source: the read it makes is a loop source. */
-  private loopNext?: 'item' | 'pair'
 
   // ── scope ──
 
@@ -144,36 +160,59 @@ class Summarizer {
    * A path read. Returns what a binding to it should point at: the data root
    * or local it reads, with its steps (null when it isn't a plain path).
    */
-  private path(e: Extract<Expr, { kind: 'path' }>, mode: Mode): Target | null {
-    const loop = this.loopNext
-    this.loopNext = undefined
+  private path(e: Extract<Expr, { kind: 'path' }>, mode: Mode, loop?: Loop): Target | null {
     if (LOOP_VARS.has(e.root)) return null
     const steps: Step[] = []
     const own: Mode[] = [mode]
     let opaqueEnd = false
+    // After a `?.`, the rest of the path (computed keys too) may not run.
+    let skippable = false
     for (const s of e.segments) {
       // `a?.b`: the level holding `a` may be missing or null.
-      if (s.optional) own[own.length - 1] = 'soft'
-      if (s.computed) {
-        this.expr(s.computed, 'use')
-        opaqueEnd = true
-        break
+      if (s.optional) {
+        if (!opaqueEnd) own[own.length - 1] = 'soft'
+        skippable = true
       }
-      steps.push({ p: s.name! })
-      own.push(mode)
+      if (s.computed) {
+        // Every key expression is read, also after the first computed one.
+        this.expr(s.computed, skippable ? 'soft' : 'use')
+        opaqueEnd = true
+        continue
+      }
+      if (!opaqueEnd) {
+        steps.push({ p: s.name! })
+        own.push(mode)
+      }
     }
     const b = this.lookup(e.root)
     if (!b && FORM_GLOBALS.has(e.root)) return null
     // The page's view: follow locals back to data.
-    const page = b ? this.resolve(b, steps, own) : { root: e.root, steps, modes: own }
-    if (page) this.recordInto(this.roots, this.guarded({ ...page, opaqueEnd, loop }))
+    const pages = b ? this.resolve(b, steps, own) : [{ root: e.root, steps, modes: own }]
+    for (const page of pages) {
+      const read = this.guarded({ ...page, opaqueEnd, loop })
+      this.recordInto(this.roots, read)
+      // A snippet's own page reads, for the fragments that render it.
+      if (this.snippet) this.recordInto(this.snippetReads.get(this.snippet)!, read)
+    }
     // Each fragment's view: stop at the first name bound around it (a need).
+    // Only guards set up inside the fragment hold: a standalone render skips
+    // the page's conditions around it.
     for (const f of this.frags) {
-      const r = b ? this.resolveFor(f.depth, e.root, b, steps, own) : null
-      if (r?.need) this.recordInto(f.needs, this.guarded({ ...r.read, opaqueEnd, loop }))
-      else if (r) this.recordInto(f.reads, this.guarded({ ...r.read, opaqueEnd, loop }))
-      else if (!b)
-        this.recordInto(f.reads, this.guarded({ root: e.root, steps, modes: own, opaqueEnd, loop }))
+      if (!b) {
+        const read = { root: e.root, steps, modes: own, opaqueEnd, loop }
+        this.recordInto(f.reads, this.guarded(read, f.tested))
+        continue
+      }
+      for (const r of this.resolveFor(f.depth, e.root, b, steps, own)) {
+        const read = this.guarded({ ...r.read, opaqueEnd, loop }, f.tested)
+        if (!r.need) {
+          this.recordInto(f.reads, read)
+          continue
+        }
+        // The render checks a need is present before anything reads it.
+        if (read.modes[0] === 'soft') read.modes[0] = 'test'
+        this.recordInto(f.needs, read)
+      }
     }
     if (opaqueEnd) return null
     return b
@@ -181,23 +220,18 @@ class Summarizer {
       : { src: { k: 'data', root: e.root }, steps }
   }
 
-  /** A local's read, as a data read: its source's steps first. */
+  /** A local's reads, as data reads: its source's steps first (one per source it may be). */
   private resolve(
     b: Binding,
     steps: Step[],
     modes: Mode[],
-  ): { root: string; steps: Step[]; modes: Mode[] } | null {
-    const chain: Binding[] = []
-    for (let cur = b; ; cur = cur.src.b) {
-      if (!cur.src) return null
-      chain.push(cur)
-      if (cur.src.k === 'data') return joined(cur.src.root, chain, steps, modes)
-    }
+  ): Array<{ root: string; steps: Step[]; modes: Mode[] }> {
+    return this.resolveFor(-1, '', b, steps, modes).map((r) => r.read)
   }
 
   /**
-   * A local's read as fragment `depth` sees it: a need (by the first name
-   * bound around it), or page data.
+   * A local's reads as fragment `depth` sees them: a need (by the first name
+   * bound around it), or page data. `depth` -1: the page itself (no needs).
    */
   private resolveFor(
     depth: number,
@@ -205,25 +239,34 @@ class Summarizer {
     b: Binding,
     steps: Step[],
     modes: Mode[],
-  ): { need: boolean; read: { root: string; steps: Step[]; modes: Mode[] } } | null {
-    const chain: Binding[] = []
-    let curName = name
-    for (let cur = b; ;) {
-      if (cur.depth < depth) return { need: true, read: joined(curName, chain, steps, modes) }
-      if (!cur.src) return null
-      chain.push(cur)
-      if (cur.src.k === 'data') {
-        return { need: false, read: joined(cur.src.root, chain, steps, modes) }
+  ): Array<{ need: boolean; read: { root: string; steps: Step[]; modes: Mode[] } }> {
+    const out: Array<{ need: boolean; read: { root: string; steps: Step[]; modes: Mode[] } }> = []
+    const walk = (curName: string, cur: Binding, chain: Binding[]) => {
+      if (cur.depth < depth) {
+        out.push({ need: true, read: joined(curName, chain, steps, modes) })
+        return
       }
-      curName = cur.src.name
-      cur = cur.src.b
+      const src = cur.src
+      if (!src) return
+      if (src.k === 'either') {
+        // The binding's own steps apply after whichever option it took.
+        for (const o of src.options) {
+          walk(curName, { depth: cur.depth, src: o.src, steps: [...o.steps, ...cur.steps] }, chain)
+        }
+        return
+      }
+      const next = [...chain, cur]
+      if (src.k === 'data') out.push({ need: false, read: joined(src.root, next, steps, modes) })
+      else walk(src.name, src.b, next)
     }
+    walk(name, b, [])
+    return out
   }
 
   /** Levels a condition tested (for the branch it protects) count as tested, not used. */
-  private guarded(r: Read): Read {
+  private guarded(r: Read, from = 0): Read {
     const modes = [...r.modes]
-    for (const frame of this.tested) {
+    for (const frame of this.tested.slice(from)) {
       for (const t of frame) {
         if (t.root !== r.root || t.steps.length > r.steps.length) continue
         if (!t.steps.every((s, i) => sameStep(s, r.steps[i]!))) continue
@@ -262,12 +305,13 @@ class Summarizer {
   // ── expressions ──
 
   /** Walk an expression; returns what a binding to it points at (plain paths only). */
-  expr(e: Expr, mode: Mode): Target | null {
+  /** Walk an expression; `loop`: its result is an `@for` source (passed to the branches that produce it). */
+  expr(e: Expr, mode: Mode, loop?: Loop): Target | null {
     switch (e.kind) {
       case 'literal':
         return null
       case 'path':
-        return this.path(e, mode)
+        return this.path(e, mode, loop)
       case 'unary':
         this.expr(e.arg, e.op === '!' && mode === 'use' ? 'test' : mode)
         return null
@@ -276,25 +320,29 @@ class Summarizer {
         this.expr(e.right, mode)
         return null
       case 'logical':
+        // Either side can be the result: both carry the loop.
         if (e.op === '??') {
-          this.expr(e.left, 'soft')
-          this.expr(e.right, mode)
-        } else if (e.op === '&&') {
-          // `a && a.b`: the right side runs only when the left held.
-          this.expr(e.left, mode === 'use' ? 'test' : mode)
-          this.guardedBy([e.left], () => this.expr(e.right, mode))
-        } else {
-          this.expr(e.left, mode === 'use' ? 'test' : mode)
-          this.expr(e.right, mode)
+          return either(this.expr(e.left, 'soft', loop), this.expr(e.right, mode, loop))
         }
-        return null
+        if (e.op === '&&') {
+          // `a && a.b`: the right side runs only when the left held.
+          this.expr(e.left, mode === 'use' ? 'test' : mode, loop)
+          let right: Target | null = null
+          this.guardedBy([e.left], () => (right = this.expr(e.right, mode, loop)))
+          return right
+        }
+        return either(
+          this.expr(e.left, mode === 'use' ? 'test' : mode, loop),
+          this.expr(e.right, mode, loop),
+        )
       case 'conditional':
+        // The test only picks; the branches are the result.
         this.expr(e.test, mode === 'use' ? 'test' : mode)
-        this.guardedBy([e.test], () => this.expr(e.whenTrue, mode))
-        this.expr(e.whenFalse, mode)
-        return null
+        let yes: Target | null = null
+        this.guardedBy([e.test], () => (yes = this.expr(e.whenTrue, mode, loop)))
+        return either(yes, this.expr(e.whenFalse, mode, loop))
       case 'pipe':
-        this.expr(e.input, mode)
+        this.expr(e.input, mode, loop)
         for (const a of e.args) this.expr(a, 'use')
         return null
     }
@@ -310,12 +358,14 @@ class Summarizer {
     }
   }
 
-  /** A path as data: through locals to their data root (for guards). */
-  dataPath(root: string, steps: Step[]): { root: string; steps: Step[] } | null {
+  /** A path as data: through locals to the data they may be (for guards). */
+  dataPaths(root: string, steps: Step[]): Array<{ root: string; steps: Step[] }> {
     const b = this.lookup(root)
-    if (!b) return FORM_GLOBALS.has(root) || LOOP_VARS.has(root) ? null : { root, steps }
-    const r = this.resolve(b, steps, steps.map((): Mode => 'use').concat('use'))
-    return r ? { root: r.root, steps: r.steps } : null
+    if (!b) return FORM_GLOBALS.has(root) || LOOP_VARS.has(root) ? [] : [{ root, steps }]
+    return this.resolve(b, steps, [...steps.map((): Mode => 'use'), 'use']).map((r) => ({
+      root: r.root,
+      steps: r.steps,
+    }))
   }
 
   // ── nodes ──
@@ -370,9 +420,7 @@ class Summarizer {
       }
       case 'for': {
         const pairs = Array.isArray(n.item)
-        this.loopNext = pairs ? 'pair' : 'item'
-        const to = this.expr(n.of, 'test')
-        this.loopNext = undefined
+        const to = this.expr(n.of, 'test', pairs ? 'pair' : 'item')
         this.scoped(() => {
           if (pairs) {
             this.bind(n.item[0], null)
@@ -415,7 +463,12 @@ class Summarizer {
       case 'fragment': {
         const own = this.fragments.get(n.name) ?? { needs: new Map(), reads: new Map() }
         this.fragments.set(n.name, own)
-        this.frags.push({ ...own, depth: this.scopes.length })
+        this.frags.push({
+          name: n.name,
+          ...own,
+          depth: this.scopes.length,
+          tested: this.tested.length,
+        })
         try {
           this.scoped(() => this.nodes(n.body))
         } finally {
@@ -427,16 +480,21 @@ class Summarizer {
         // A snippet sees its parameters and page data, nothing from around it.
         const outer = this.scopes.splice(0)
         this.scopes.push(new Map())
+        this.snippet = n.name
+        if (!this.snippetReads.has(n.name)) this.snippetReads.set(n.name, new Map())
         try {
           for (const p of n.params) this.bind(p.name, null)
           this.nodes(n.body)
         } finally {
+          this.snippet = undefined
           this.scopes.splice(0, this.scopes.length, ...outer)
         }
         return
       }
       case 'render':
         for (const a of n.args) this.expr(a, 'use')
+        if (this.snippet) add(this.snippetCalls, this.snippet, n.name)
+        for (const f of this.frags) add(this.fragmentCalls, f.name, n.name)
         return
       default:
         return
@@ -461,6 +519,50 @@ function joined(
   return { root, steps: allSteps, modes: fixModes(allModes, allSteps.length) }
 }
 
+/** A value that is one of these (the ones that are plain paths). */
+function either(...targets: Array<Target | null>): Target | null {
+  const options = targets.filter((t): t is Target => t !== null)
+  if (options.length < 2) return options[0] ?? null
+  return { src: { k: 'either', options }, steps: [] }
+}
+
+function add(map: Map<string, Set<string>>, key: string, value: string): void {
+  const set = map.get(key) ?? new Set<string>()
+  set.add(value)
+  map.set(key, set)
+}
+
+/** `from`'s levels merged into `into` (a called snippet's reads into a fragment's). */
+function mergeLevels(into: Map<string, Level>, from: Map<string, Level>): void {
+  for (const [name, l] of from) {
+    const target = into.get(name)
+    if (target) mergeLevel(target, l)
+    else into.set(name, cloneLevel(l))
+  }
+}
+
+function cloneLevel(l: Level): Level {
+  const out = level()
+  mergeLevel(out, l)
+  return out
+}
+
+function mergeLevel(into: Level, l: Level): void {
+  into.present ||= l.present
+  into.nonNull ||= l.nonNull
+  into.loop ||= l.loop
+  into.opaque ||= l.opaque
+  mergeLevels(into.props, l.props)
+  if (l.item) {
+    if (into.item) mergeLevel(into.item, l.item)
+    else into.item = cloneLevel(l.item)
+  }
+  if (l.pair) {
+    if (into.pair) mergeLevel(into.pair, l.pair)
+    else into.pair = cloneLevel(l.pair)
+  }
+}
+
 /** `modes` for `n` steps plus the root, padded with 'use'. */
 function fixModes(modes: Mode[], n: number): Mode[] {
   const out = modes.slice(modes.length - (n + 1))
@@ -483,11 +585,11 @@ function testedPaths(
       visit(e.left)
       visit(e.right)
     } else if (e.kind === 'path' && e.segments.every((x) => !x.computed)) {
-      const p = s.dataPath(
+      const p = s.dataPaths(
         e.root,
         e.segments.map((x) => ({ p: x.name! })),
       )
-      if (p) out.push(p)
+      out.push(...p)
     }
   }
   visit(cond)
@@ -529,6 +631,22 @@ export function summarize(ast: TemplateAst): DataSummary {
   for (const i of ast.inputs) {
     declared[i.name] = { ...(i.type ? { type: i.type } : {}), optional: i.default !== undefined }
   }
+  // A fragment that renders a snippet reads what the snippet reads (and what
+  // the snippets it renders read — each once, recursion included).
+  for (const [name, called] of s.fragmentCalls) {
+    const f = s.fragments.get(name)
+    if (!f) continue
+    const seen = new Set<string>()
+    const todo = [...called]
+    while (todo.length) {
+      const snippet = todo.pop()!
+      if (seen.has(snippet)) continue
+      seen.add(snippet)
+      const reads = s.snippetReads.get(snippet)
+      if (reads) mergeLevels(f.reads, reads)
+      for (const next of s.snippetCalls.get(snippet) ?? []) todo.push(next)
+    }
+  }
   const fragments: DataSummary['fragments'] = {}
   for (const [name, f] of s.fragments) {
     fragments[name] = { needs: fieldsOf(f.needs), reads: fieldsOf(f.reads) }
@@ -562,8 +680,8 @@ export function merge(a: Field, b: Field): Field {
   return {
     shape: mergeShape(a.shape, b.shape),
     optional: a.optional && b.optional,
-    nullable:
-      (a.nullable && b.nullable) || (!a.optional && a.nullable) || (!b.optional && b.nullable),
+    // Stricter wins: null is allowed only when both allow it.
+    nullable: a.nullable && b.nullable,
   }
 }
 
@@ -574,8 +692,29 @@ export function mergeSummary(into: DataSummary, from: DataSummary): DataSummary 
   return {
     ...into,
     fields,
-    declared: { ...from.declared, ...into.declared },
+    declared: mergeDeclared(into.declared, from.declared),
     // Imports stay with the template that wrote them: typegen emits each
     // template's, resolved from that template's own folder.
   }
+}
+
+/**
+ * A page's declarations over its layout's: the page's type wins, but a
+ * layout default still makes the name optional (it fills it in).
+ */
+function mergeDeclared(
+  page: DataSummary['declared'],
+  layout: DataSummary['declared'],
+): DataSummary['declared'] {
+  const out = { ...layout }
+  for (const [name, d] of Object.entries(page)) {
+    const l = layout[name]
+    if (!l) {
+      out[name] = d
+      continue
+    }
+    const type = d.type ?? l.type
+    out[name] = { ...(type ? { type } : {}), optional: d.optional || l.optional }
+  }
+  return out
 }

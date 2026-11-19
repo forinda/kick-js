@@ -77,6 +77,11 @@ describe('format', () => {
     expect(fmt(once)).toBe(once)
   })
 
+  it("leaves an @input default's text alone", () => {
+    const src = "@input label: string = '{{hello}}'\n<p>{{ label }}</p>\n"
+    expect(fmt(src)).toBe(src)
+  })
+
   it('leaves a typed @input with generics out of the indentation', () => {
     const src =
       '@input u: Array<User>\n@input m: Map<string, A[]> = null\n<div>\n  <p>x</p>\n</div>\n'

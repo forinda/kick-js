@@ -40,6 +40,8 @@ export interface KickViewShared {}
  */
 export interface KickViewTypeOptions {}
 
+type Opts = Omit<ViewRenderOptions, 'fragment'>
+
 /** Template names `R` knows, `string` while it's empty or other engines are on. */
 export type ViewNameOf<R, O> = [keyof R] extends [never]
   ? string
@@ -49,6 +51,10 @@ export type ViewNameOf<R, O> = [keyof R] extends [never]
 
 type DataOf<R, N> = N extends keyof R ? (R[N] extends { data: infer D } ? D : never) : never
 
+type Intersect<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void
+  ? I
+  : never
+
 /**
  * Shared names may be left out; extra keys are fine. The union keeps an
  * interface or class instance assignable (they have no index signature),
@@ -57,10 +63,10 @@ type DataOf<R, N> = N extends keyof R ? (R[N] extends { data: infer D } ? D : ne
 type Shaped<D, S> = Omit<D, keyof S> & Partial<Pick<D, Extract<keyof D, keyof S>>>
 type WithShared<D, S> = Shaped<D, S> | (Shaped<D, S> & Record<string, unknown>)
 
-/** The data `ctx.render(N, data)` takes. */
+/** The data `ctx.render(N, data)` takes; for a union of names, what every one of those pages needs. */
 export type ViewDataOf<R, S, N> = [DataOf<R, N>] extends [never]
   ? Record<string, any>
-  : WithShared<DataOf<R, N>, S>
+  : WithShared<Intersect<DataOf<R, N>>, S>
 
 type FragmentsOf<R, N> = N extends keyof R ? (R[N] extends { fragments: infer F } ? F : {}) : never
 
@@ -69,46 +75,48 @@ export type ViewFragmentNameOf<R, N> = [FragmentsOf<R, N>] extends [never]
   ? string
   : Extract<keyof FragmentsOf<R, N>, string>
 
+/** What `opts.fragment` may be: one fragment of page `N`, or a list of them. */
+export type FragmentNames<R, N> = ViewFragmentNameOf<R, N> | readonly ViewFragmentNameOf<R, N>[]
+
+type Part<R, N, K, P extends 'needs' | 'reads'> = K extends keyof FragmentsOf<R, N>
+  ? FragmentsOf<R, N>[K] extends Record<P, infer X>
+    ? X
+    : never
+  : never
+type Listed<F> = F extends readonly (infer X)[] ? X : F
+
 /**
- * The data a fragment render takes: its needs exactly (the controller passes
- * them; `share()` doesn't count at render), plus the page data it reads.
+ * The data a fragment render takes: for every fragment named, its needs
+ * exactly (the controller passes them; `share()` doesn't count at render),
+ * plus the page data it reads.
  */
 export type ViewFragmentDataOf<R, S, N, F> = [FragmentsOf<R, N>] extends [never]
   ? Record<string, any>
-  : F extends keyof FragmentsOf<R, N>
-    ? FragmentsOf<R, N>[F] extends { needs: infer Needs; reads: infer Reads }
-      ? Needs & WithShared<Reads, S>
-      : Record<string, any>
-    : never
-
-type Opts = Omit<ViewRenderOptions, 'fragment'>
+  : Intersect<Part<R, N, Listed<F>, 'needs'>> &
+      WithShared<Intersect<Part<R, N, Listed<F>, 'reads'>>, S>
 
 /**
- * The arguments after the name: `data` (required when the page needs any)
- * and options; with `fragment`, the data is that fragment's needs.
+ * The arguments after the name, without a fragment: `data` (required when
+ * the page needs any) and options. Fragment renders have their own overload.
  */
 export type RenderArgs<R, S, N> = [DataOf<R, N>] extends [never]
   ? // A name the registry doesn't know (an empty registry, another engine): as before.
     [data?: Record<string, any>, opts?: Opts & { fragment?: string | readonly string[] }]
-  :
-      | ({} extends ViewDataOf<R, S, N>
-          ? [data?: ViewDataOf<R, S, N>, opts?: Opts & { fragment?: undefined }]
-          : [data: ViewDataOf<R, S, N>, opts?: Opts & { fragment?: undefined }])
-      | {
-          [F in ViewFragmentNameOf<R, N>]: [
-            data: ViewFragmentDataOf<R, S, N, F>,
-            opts: Opts & { fragment: F | readonly ViewFragmentNameOf<R, N>[] },
-          ]
-        }[ViewFragmentNameOf<R, N>]
+  : {} extends ViewDataOf<R, S, N>
+    ? [data?: ViewDataOf<R, S, N>, opts?: Opts & { fragment?: undefined }]
+    : [data: ViewDataOf<R, S, N>, opts?: Opts & { fragment?: undefined }]
 
 /**
- * A name any string may take: while the registry is empty, or other engines
- * are on — so a generic helper over names compiles. `never` otherwise.
+ * What name `N` the loose overload takes: any string while the registry is
+ * empty (so generic helpers compile); with other engines on, any name but a
+ * registered one — a known page can't skip its data through it; else none.
  */
-export type LooseViewName = [keyof KickViews] extends [never]
+export type LooseViewNameOf<R, O, N> = [keyof R] extends [never]
   ? string
-  : KickViewTypeOptions extends { otherEngines: true }
-    ? string
+  : O extends { otherEngines: true }
+    ? N extends keyof R
+      ? never
+      : string
     : never
 
 /** The app's template names. */
@@ -117,3 +125,9 @@ export type ViewName = ViewNameOf<KickViews, KickViewTypeOptions>
 export type ViewData<N> = ViewDataOf<KickViews, KickViewShared, N>
 /** Arguments after the name, for the app's registry. */
 export type ViewRenderArgs<N> = RenderArgs<KickViews, KickViewShared, N>
+/** `opts.fragment` for page `N`. */
+export type ViewFragmentNames<N> = FragmentNames<KickViews, N>
+/** The data a fragment render of page `N` takes. */
+export type ViewFragmentData<N, F> = ViewFragmentDataOf<KickViews, KickViewShared, N, F>
+/** The loose overload's name, for the app's registry. */
+export type LooseViewName<N> = LooseViewNameOf<KickViews, KickViewTypeOptions, N>

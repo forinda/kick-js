@@ -1,6 +1,6 @@
 /** Typed `views.render`, with a local registry (augmenting the real one would apply to every file). */
 import { expectTypeOf, test } from 'vitest'
-import type { RenderArgs, ViewNameOf } from '../src/types'
+import type { FragmentNames, RenderArgs, ViewFragmentDataOf, ViewNameOf } from '../src/types'
 import type { Views } from '../src/index'
 
 interface Reg {
@@ -9,9 +9,12 @@ interface Reg {
     fragments: { row: { needs: { u: unknown }; reads: {} } }
   }
 }
-declare function render<N extends ViewNameOf<Reg, {}>>(
+type Name = ViewNameOf<Reg, {}>
+declare function render<N extends Name>(name: N, ...args: RenderArgs<Reg, {}, N>): void
+declare function render<N extends Name, const F extends FragmentNames<Reg, N>>(
   name: N,
-  ...args: RenderArgs<Reg, {}, N>
+  data: ViewFragmentDataOf<Reg, {}, N, F>,
+  opts: { fragment: F; ctx?: unknown },
 ): void
 
 test('typed views.render', () => {

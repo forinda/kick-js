@@ -33,10 +33,17 @@ function shapeType(s: Shape): string {
       return 'unknown'
     case 'object':
       return objectType(s.props)
-    case 'list':
-      return `Iterable<${shapeType(s.item)}>`
-    case 'pairs':
-      return `Iterable<readonly [unknown, ${shapeType(s.value)}]>`
+    // What `@for` loops over: arrays and Sets (strings too, when items are
+    // only printed); Maps or [key, value] lists for pairs. Not any iterable.
+    case 'list': {
+      const item = shapeType(s.item)
+      const el = item.includes(' | ') ? `(${item})` : item
+      return `readonly ${el}[] | ReadonlySet<${item}>${s.item.k === 'unknown' ? ' | string' : ''}`
+    }
+    case 'pairs': {
+      const value = shapeType(s.value)
+      return `ReadonlyMap<unknown, ${value}> | readonly (readonly [unknown, ${value}])[]`
+    }
   }
 }
 
@@ -52,13 +59,21 @@ function objectType(props: Record<string, Field>): string {
   return parts.length ? `{ ${parts.join('; ')} }` : '{}'
 }
 
-/** A page's data type: declared `@input` types win over what's inferred. */
-function dataType(s: DataSummary): string {
+/**
+ * A page's data type: declared `@input` types win over what's inferred.
+ * `fields` defaults to the page's own; a fragment passes its reads (and only
+ * those names count, declared or not).
+ */
+function dataType(s: DataSummary, fields = s.fields, onlyFields = false): string {
   const parts: string[] = []
-  const names = [...new Set([...Object.keys(s.fields), ...Object.keys(s.declared)])].toSorted()
+  const names = (
+    onlyFields
+      ? Object.keys(fields)
+      : [...new Set([...Object.keys(fields), ...Object.keys(s.declared)])]
+  ).toSorted()
   for (const name of names) {
     const declared = s.declared[name]
-    const field = s.fields[name]
+    const field = fields[name]
     if (declared) {
       parts.push(
         `${key(name)}${declared.optional ? '?' : ''}: ${declared.type ?? (field ? fieldType(field) : 'unknown')}`,
@@ -90,36 +105,25 @@ function importLine(line: string, templateFile: string, outDir: string, root: st
  */
 export function renderViewTypes(
   entries: ViewTypesEntry[],
-  opts: { modules: string[]; outDir: string; projectRoot: string },
+  opts: {
+    modules: string[]
+    outDir: string
+    projectRoot: string
+    /** The import lines when `aliasImports` already ran (the typegen does, before merging layouts). */
+    aliased?: string[]
+  },
 ): string {
-  // `import type { … } from 'm'` lines merged per module, so two templates
-  // importing from one place don't declare a name twice.
-  const named = new Map<string, Set<string>>()
-  const other = new Set<string>()
-  for (const e of entries) {
-    for (const line of e.summary.imports) {
-      const rewritten = importLine(line, e.file, opts.outDir, opts.projectRoot)
-      const m = /^import\s+type\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2$/.exec(rewritten.trim())
-      if (!m) {
-        other.add(rewritten)
-        continue
-      }
-      const names = named.get(m[3]!) ?? new Set<string>()
-      for (const n of m[1]!.split(',')) if (n.trim()) names.add(n.trim().replace(/\s+/g, ' '))
-      named.set(m[3]!, names)
-    }
-  }
-  const imports = [
-    ...[...named].map(([from, names]) => `import type { ${[...names].join(', ')} } from '${from}'`),
-    ...other,
-  ]
+  const { imports, entries: aliased } = opts.aliased
+    ? { imports: opts.aliased, entries }
+    : aliasImports(entries, opts)
+  entries = aliased
   const body = entries
     .toSorted((a, b) => a.name.localeCompare(b.name))
     .map((e) => {
       const fragments = Object.entries(e.summary.fragments)
         .map(
           ([name, f]) =>
-            `${key(name)}: { needs: ${objectType(f.needs)}; reads: ${objectType(f.reads)} }`,
+            `${key(name)}: { needs: ${objectType(f.needs)}; reads: ${dataType(e.summary, f.reads, true)} }`,
         )
         .join('; ')
       return [
@@ -143,6 +147,69 @@ export function renderViewTypes(
     'export {}',
     '',
   ].join('\n')
+}
+
+/**
+ * Every template's `@import type` lines as one set: relative paths re-pointed
+ * at `outDir`, one line per module, and a name two templates import from
+ * different modules aliased (`User as User_2`) — with that template's
+ * declared types rewritten to match.
+ */
+export function aliasImports(
+  entries: ViewTypesEntry[],
+  opts: { outDir: string; projectRoot: string },
+): { imports: string[]; entries: ViewTypesEntry[] } {
+  // module → exported name → alias; and which import each alias belongs to.
+  const byModule = new Map<string, Map<string, string>>()
+  const owner = new Map<string, string>()
+  const other = new Set<string>()
+  const out = entries.map((e) => {
+    const rename = new Map<string, string>()
+    for (const line of e.summary.imports) {
+      const rewritten = importLine(line, e.file, opts.outDir, opts.projectRoot)
+      const m = /^import\s+type\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2$/.exec(rewritten.trim())
+      if (!m) {
+        other.add(rewritten)
+        continue
+      }
+      const from = m[3]!
+      const names = byModule.get(from) ?? new Map<string, string>()
+      byModule.set(from, names)
+      for (const spec of m[1]!.split(',')) {
+        const sm = /^\s*([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/.exec(spec)
+        if (!sm) continue
+        const exported = sm[1]!
+        const local = sm[2] ?? exported
+        const id = `${from}\0${exported}`
+        let alias = names.get(exported)
+        if (!alias) {
+          alias = local
+          for (let n = 2; owner.has(alias) && owner.get(alias) !== id; n++) alias = `${local}_${n}`
+          owner.set(alias, id)
+          names.set(exported, alias)
+        }
+        if (alias !== local) rename.set(local, alias)
+      }
+    }
+    if (!rename.size) return e
+    const declared: DataSummary['declared'] = {}
+    for (const [name, d] of Object.entries(e.summary.declared)) {
+      let type = d.type
+      for (const [local, alias] of rename) {
+        type = type?.replace(new RegExp(`(?<![\\w$.])${local}(?![\\w$])`, 'g'), alias)
+      }
+      declared[name] = { ...d, ...(type ? { type } : {}) }
+    }
+    return { ...e, summary: { ...e.summary, declared } }
+  })
+  const imports = [
+    ...[...byModule].map(
+      ([from, names]) =>
+        `import type { ${[...names].map(([x, a]) => (x === a ? x : `${x} as ${a}`)).join(', ')} } from '${from}'`,
+    ),
+    ...other,
+  ]
+  return { imports, entries: out }
 }
 
 const PACKAGES = ['@forinda/kickjs', '@forinda/kickjs-view'] as const
@@ -184,7 +251,14 @@ export function viewsTypegen(
         pipesFile: options.pipes,
         validatorsFile: options.validators,
       })
-      if (!loaded.names.length) return null
+      const installed = deps.installed ?? installedIn(ctx.cwd)
+      const modules = PACKAGES.filter((m) => installed(m))
+      if (!modules.length) return null
+      const outDir = resolve(ctx.cwd, '.kickjs/types')
+      // No templates left: an empty registry, so deleted names stop compiling.
+      if (!loaded.names.length) {
+        return renderViewTypes([], { modules, outDir, projectRoot: ctx.cwd, aliased: [] })
+      }
       const summaries = new Map<string, DataSummary>()
       const failed: string[] = []
       for (const name of loaded.names) {
@@ -201,6 +275,13 @@ export function viewsTypegen(
           `kick/views: ${failed.join(', ')} ha${failed.length === 1 ? 's' : 've'} errors (kick check:views) — typed from what could be read`,
         )
       }
+      // Imports aliased per template first, so a layout's types keep their
+      // own names when its declarations merge into its pages.
+      const aliased = aliasImports(
+        [...summaries].map(([name, summary]) => ({ name, file: `${dir}/${name}.kick`, summary })),
+        { outDir, projectRoot: ctx.cwd },
+      )
+      for (const e of aliased.entries) summaries.set(e.name, e.summary)
       // A page's explicit @layout chain reads data too.
       const entries: ViewTypesEntry[] = []
       for (const [name, summary] of summaries) {
@@ -215,13 +296,11 @@ export function viewsTypegen(
         }
         entries.push({ name, file: `${dir}/${name}.kick`, summary: merged })
       }
-      const installed = deps.installed ?? installedIn(ctx.cwd)
-      const modules = PACKAGES.filter((m) => installed(m))
-      if (!modules.length) return null
       return renderViewTypes(entries, {
         modules,
-        outDir: resolve(ctx.cwd, '.kickjs/types'),
+        outDir,
         projectRoot: ctx.cwd,
+        aliased: aliased.imports,
       })
     },
   }

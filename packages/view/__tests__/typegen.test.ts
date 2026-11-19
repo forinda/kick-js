@@ -40,7 +40,9 @@ describe('renderViewTypes', () => {
     expect(out).toContain("'users/show': {")
     expect(out).toContain('user: User')
     expect(out).toContain('title?: string')
-    expect(out).toContain('posts: Iterable<{ title: unknown }> | null | undefined')
+    expect(out).toContain(
+      'posts: readonly { title: unknown }[] | ReadonlySet<{ title: unknown }> | null | undefined',
+    )
     expect(out).toContain('me: { name: unknown } | null | undefined')
     expect(out).toContain('row: { needs: { p: { title: unknown } }; reads: {} }')
     expect(out).toContain('home: {\n      data: { greeting: unknown }')
@@ -109,5 +111,54 @@ describe('the kick/views typegen', () => {
 
   it('takes its folders from kickViewsCli options', () => {
     expect(kickViewsCli({ dir: 'views' }).typegens![0]!.inputs).toContain('views/**/*.kick')
+  })
+})
+
+describe('renderViewTypes — PR review', () => {
+  it('types loops as what the renderer accepts: arrays and Sets, Maps for pairs', () => {
+    const out = renderViewTypes(
+      summaries({ p: '@for (u of users) { {{ u.n }} }@for ([k, v] of m) { {{ v.x }} }' }),
+      opts,
+    )
+    expect(out).toContain(
+      'users: readonly { n: unknown }[] | ReadonlySet<{ n: unknown }> | null | undefined',
+    )
+    expect(out).toContain(
+      'm: ReadonlyMap<unknown, { x: unknown }> | readonly (readonly [unknown, { x: unknown }])[] | null | undefined',
+    )
+    expect(out).not.toContain('Iterable<')
+  })
+
+  it("types a fragment's reads with the page's declarations", () => {
+    const out = renderViewTypes(
+      summaries({ p: "@input title: string = 'Home'\n@fragment('f') { {{ title }} }" }),
+      opts,
+    )
+    expect(out).toContain('f: { needs: {}; reads: { title?: string } }')
+  })
+
+  it('aliases a type name two templates import from different modules', () => {
+    const out = renderViewTypes(
+      summaries({
+        a: "@import type { User } from '@/a'\n@input u: User\n<p></p>",
+        b: "@import type { User } from '@/b'\n@input u: User\n<p></p>",
+      }),
+      opts,
+    )
+    expect(out).toContain("import type { User } from '@/a'")
+    expect(out).toContain("import type { User as User_2 } from '@/b'")
+    expect(out).toMatch(/\bb: \{\n\s+data: \{ u: User_2 \}/)
+  })
+})
+
+describe('the kick/views typegen — PR review', () => {
+  it('writes an empty registry once the last template is gone', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'kick-typegen-'))
+    const out = await viewsTypegen({}, { installed: () => true }).generate({
+      cwd,
+      log: { warn: vi.fn() },
+    })
+    expect(out).toContain('interface KickViews {')
+    expect(out).not.toContain('data:')
   })
 })

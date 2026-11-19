@@ -24,12 +24,15 @@ function app(files: Record<string, string>): string {
   return dir
 }
 
+/** tsc's diagnostics, or '' only when it exited cleanly. */
 function tsc(dir: string): string {
   try {
     execFileSync(join(REPO, 'node_modules/.bin/tsc'), ['-p', dir], { encoding: 'utf8' })
     return ''
   } catch (err) {
-    return String((err as { stdout?: string }).stdout ?? err)
+    const e = err as { stdout?: string; stderr?: string; message: string }
+    // A failure is never '' — even one that printed nothing.
+    return `${e.stdout ?? ''}${e.stderr ?? ''}`.trim() || e.message
   }
 }
 
