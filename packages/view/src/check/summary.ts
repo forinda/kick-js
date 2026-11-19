@@ -241,7 +241,16 @@ class Summarizer {
     modes: Mode[],
   ): Array<{ need: boolean; read: { root: string; steps: Step[]; modes: Mode[] } }> {
     const out: Array<{ need: boolean; read: { root: string; steps: Step[]; modes: Mode[] } }> = []
+    // `@let b = f ? a : a` chains reach one binding many ways: walk each
+    // (binding, steps so far) once, or the reads grow exponentially.
+    const seen = new Map<object, Set<string>>()
     const walk = (curName: string, cur: Binding, chain: Binding[]) => {
+      if (cur.src) {
+        const key = JSON.stringify([curName, cur.depth, cur.steps, chain.map((c) => c.steps)])
+        const keys = seen.get(cur.src) ?? new Set<string>()
+        if (keys.has(key)) return
+        seen.set(cur.src, keys.add(key))
+      }
       if (cur.depth < depth) {
         out.push({ need: true, read: joined(curName, chain, steps, modes) })
         return
@@ -342,7 +351,8 @@ class Summarizer {
         this.guardedBy([e.test], () => (yes = this.expr(e.whenTrue, mode, loop)))
         return either(yes, this.expr(e.whenFalse, mode, loop))
       case 'pipe':
-        this.expr(e.input, mode, loop)
+        // The pipe's result is what's looped over, not its input.
+        this.expr(e.input, mode)
         for (const a of e.args) this.expr(a, 'use')
         return null
     }

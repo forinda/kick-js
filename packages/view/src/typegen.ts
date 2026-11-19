@@ -167,7 +167,10 @@ export function aliasImports(
     const rename = new Map<string, string>()
     for (const line of e.summary.imports) {
       const rewritten = importLine(line, e.file, opts.outDir, opts.projectRoot)
-      const m = /^import\s+type\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2$/.exec(rewritten.trim())
+      // Comments inside the braces aren't bindings.
+      const m = /^import\s+type\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2$/.exec(
+        rewritten.replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+      )
       if (!m) {
         other.add(rewritten)
         continue
@@ -192,12 +195,12 @@ export function aliasImports(
       }
     }
     if (!rename.size) return e
+    // One pass over the original text, so `A → A_2` and `A_2 → A_2_2` don't chain.
+    const names = [...rename.keys()].map((n) => n.replace(/\$/g, '\\$')).join('|')
+    const ref = new RegExp(`(?<![\\w$.])(?:${names})(?![\\w$])`, 'g')
     const declared: DataSummary['declared'] = {}
     for (const [name, d] of Object.entries(e.summary.declared)) {
-      let type = d.type
-      for (const [local, alias] of rename) {
-        type = type?.replace(new RegExp(`(?<![\\w$.])${local}(?![\\w$])`, 'g'), alias)
-      }
+      const type = d.type?.replace(ref, (local) => rename.get(local)!)
       declared[name] = { ...d, ...(type ? { type } : {}) }
     }
     return { ...e, summary: { ...e.summary, declared } }

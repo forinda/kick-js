@@ -21,7 +21,7 @@
 | `kvQuery:key:value…`                  | `href="{{ 'UsersController.list' \| kvRoute \| kvQuery:'page':page }}"` — query parameters, see [Links to routes](#links-to-routes)          |
 | `raw`                                 | `{{ html \| raw }}`                                                                                                                          |
 
-Dates and numbers use `locale` (default `en-US`) and `timeZone` (default `UTC`, never the server's zone). Set them in `createViews`, per request through `share`, or per call: `ctx.render(name, data, { locale: 'sw-KE', timeZone: 'Africa/Nairobi' })`.
+Dates and numbers use `locale` (default `en-US`) and `timeZone` (default `UTC`, never the server's zone). Set them in `createViews`, or per call: `ctx.render(name, data, { locale: 'sw-KE', timeZone: 'Africa/Nairobi' })` (for a per-request choice, pass the user's here). `share` adds data, not settings, so it doesn't change them.
 
 ## Links to routes
 

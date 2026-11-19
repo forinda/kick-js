@@ -191,3 +191,21 @@ describe('data summary — PR review 2', () => {
     expect(f.fallback).toMatchObject({ optional: false, nullable: false })
   })
 })
+
+describe('data summary — PR review 3', () => {
+  it('reads through a long chain of same-source aliases quickly', () => {
+    const lets = Array.from(
+      { length: 30 },
+      (_, i) => `@let a${i + 1} = flag ? a${i} : a${i};`,
+    ).join('\n')
+    const t = performance.now()
+    const f = fields(`@let a0 = user;\n${lets}\n{{ a30.name }}`)
+    expect(performance.now() - t).toBeLessThan(1000)
+    expect(f.user).toMatchObject({ shape: { k: 'object' } })
+  })
+
+  it("doesn't give a piped loop source the loop's shape", () => {
+    const f = fields('@for ([k, v] of (records | entries)) { {{ k }}: {{ v }} }')
+    expect(f.records!.shape.k).toBe('unknown')
+  })
+})

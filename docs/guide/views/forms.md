@@ -141,7 +141,19 @@ function messages(form: HTMLFormElement, schema: z.ZodType): Record<string, stri
 
 /** Fills the form's `@error` spots, for one field or all of them. */
 function show(form: HTMLFormElement, errors: Record<string, string>, only?: string): void {
-  for (const spot of form.querySelectorAll<HTMLElement>('[data-kick-error]')) {
+  const spots = [...form.querySelectorAll<HTMLElement>('[data-kick-error]')]
+  if (!only) {
+    // A message with no spot of its own goes to the form's (`@error('form')`),
+    // so a blocked submit always says why.
+    const has = new Set(spots.map((s) => s.dataset.kickError))
+    const lost = Object.entries(errors).filter(([f]) => f !== 'form' && !has.has(f))
+    if (lost.length)
+      errors = {
+        ...errors,
+        form: [errors.form, ...lost.map(([, m]) => m)].filter(Boolean).join(' '),
+      }
+  }
+  for (const spot of spots) {
     const field = spot.dataset.kickError!
     if (only && field !== only) continue
     const message = errors[field] ?? ''
@@ -188,6 +200,12 @@ export function checkWith(form: HTMLFormElement, schema: z.ZodType): void {
         <option value="{{ c.id }}">{{ c.name }}</option>
       }
     </select>
+    @error('categoryId') {
+      {{ $message }}
+    }
+    @error('form') {
+      {{ $message }}
+    }
     <button>Add</button>
   </form>
 </task-form-check>

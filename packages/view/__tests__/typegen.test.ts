@@ -162,3 +162,39 @@ describe('the kick/views typegen — PR review', () => {
     expect(out).not.toContain('data:')
   })
 })
+
+describe('the kick/views typegen — PR review 3', () => {
+  it('rewrites each original type reference once', () => {
+    const out = renderViewTypes(
+      summaries({
+        a: "@import type { A } from '@/one'\n@input x: A\n<p></p>",
+        b: "@import type { A } from '@/two'\n@import type { A_2 } from '@/three'\n@input x: A\n@input y: A_2\n<p></p>",
+      }),
+      opts,
+    )
+    expect(out).toContain("import type { A as A_2 } from '@/two'")
+    expect(out).toContain("import type { A_2 as A_2_2 } from '@/three'")
+    expect(out).toMatch(/\bb: \{\n\s+data: \{ x: A_2; y: A_2_2 \}/)
+  })
+
+  it('aliases names with a $ in them', () => {
+    const out = renderViewTypes(
+      summaries({
+        a: "@import type { $User } from '@/a'\n@input u: $User\n<p></p>",
+        b: "@import type { $User } from '@/b'\n@input u: $User\n<p></p>",
+      }),
+      opts,
+    )
+    expect(out).toMatch(/\bb: \{\n\s+data: \{ u: \$User_2 \}/)
+  })
+
+  it('keeps a specifier that has a comment beside it', () => {
+    const out = renderViewTypes(
+      summaries({
+        a: "@import type { /* view model */ User } from '@/a'\n@input u: User\n<p></p>",
+      }),
+      opts,
+    )
+    expect(out).toContain("import type { User } from '@/a'")
+  })
+})

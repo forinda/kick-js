@@ -1048,7 +1048,8 @@ class TemplateParser {
     if (rest.startsWith(':')) {
       const end = typeEnd(rest, 1)
       type = rest.slice(1, end).trim()
-      rest = rest.slice(end)
+      // A trailing `// note` isn't part of the type (typegen copies it onto one line).
+      rest = rest.slice(end).replace(/^\/\/.*$/, '')
       if (!type) this.err(i, eol, '@input name: expects a type after the colon')
     }
     const dm = /^\s*(?:=\s*(.*?))?\s*$/.exec(rest)
@@ -1163,7 +1164,7 @@ function typeEnd(src: string, at: number): number {
       // A comment's `=` isn't the default's.
       const close = src.indexOf('*/', k + 2)
       k = close < 0 ? src.length : close + 1
-    } else if (c === '/' && src[k + 1] === '/') return src.length
+    } else if (c === '/' && src[k + 1] === '/') return k
     else if (c === "'" || c === '"' || c === '`') quote = c
     else if ('<([{'.includes(c)) depth++
     else if ('>)]}'.includes(c) && !(c === '>' && src[k - 1] === '=')) depth--

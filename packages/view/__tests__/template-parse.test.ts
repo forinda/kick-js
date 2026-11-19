@@ -391,6 +391,7 @@ describe('typed @input and @import type', () => {
   })
 
   it('finds the default after a type with = inside a comment', () => {
+    expect(ok('@input count: number // items\n<p></p>').ast.inputs[0]!.type).toBe('number')
     expect(ok('@input count: number /* = */ = 1\n<p></p>').ast.inputs[0]).toMatchObject({
       type: 'number /* = */',
       default: { value: 1 },
