@@ -43,22 +43,58 @@ export function configuredLayouts(project: Project): Set<string> {
 }
 
 const SEGMENT = /^[A-Za-z0-9_-]+$/
+/** A view root's name: `billing`, `acme-ui`. */
+export const ROOT_NAME = /^[a-z][a-z0-9-]*$/
 
-/** A valid template name, or `undefined`: `/`-joined segments, no `..`, no extension, no absolute path. */
+/** `billing::invoices/show` → root `billing`, path `invoices/show`; an app template has no root. */
+export function splitName(name: string): { root?: string; path: string } {
+  const at = name.indexOf('::')
+  return at < 0 ? { path: name } : { root: name.slice(0, at), path: name.slice(at + 2) }
+}
+
+/** The full name of `path` in `root` (the app's own when `root` is undefined). */
+export const qualify = (root: string | undefined, path: string): string =>
+  root === undefined ? path : `${root}::${path}`
+
+/**
+ * A valid template name, or `undefined`: `/`-joined segments, no `..`, no
+ * extension, no absolute path; optionally after a view root (`billing::`).
+ */
 export function templateName(name: string): string | undefined {
   if (typeof name !== 'string' || !name) return undefined
-  const segments = name.split('/')
+  const { root, path } = splitName(name)
+  if (root !== undefined && !ROOT_NAME.test(root)) return undefined
+  if (!path) return undefined
+  const segments = path.split('/')
   return segments.every((s) => SEGMENT.test(s)) ? name : undefined
 }
 
-/** `components/forms/text-field` → `forms-text-field`. */
+/**
+ * What `ref`, written in template `from`, names: a qualified `ref` as is; an
+ * unqualified one in `from`'s own root when that has it, else the app's.
+ */
+export function resolveRef(from: string, ref: string, has: (name: string) => boolean): string {
+  if (ref.includes('::')) return ref
+  const { root } = splitName(from)
+  if (root === undefined) return ref
+  const own = qualify(root, ref)
+  return has(own) ? own : ref
+}
+
+/**
+ * `components/forms/text-field` → `forms-text-field`; a root's component
+ * starts with the root (`ui::components/button` → `ui-button`): custom
+ * element names are global in the browser.
+ */
 export function componentTag(name: string, componentsDir: string): string {
-  return name
+  const { root, path } = splitName(name)
+  const tag = path
     .slice(componentsDir.length + 1)
     .split('/')
     .join('-')
     .toLowerCase()
+  return root === undefined ? tag : `${root}-${tag}`
 }
 
 export const isComponent = (name: string, componentsDir: string): boolean =>
-  name.startsWith(`${componentsDir}/`)
+  splitName(name).path.startsWith(`${componentsDir}/`)

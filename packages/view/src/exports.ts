@@ -29,7 +29,15 @@ export {
   type Field,
   type Shape,
 } from './check/summary'
-export { componentTag, layoutResolver, templateName, type Project } from './check/project'
+export {
+  componentTag,
+  layoutResolver,
+  qualify,
+  resolveRef,
+  splitName,
+  templateName,
+  type Project,
+} from './check/project'
 export { isUrlAttr, URL_ATTRS } from './urls'
 export {
   escapeHtml,
