@@ -1325,7 +1325,8 @@ export class Application {
       this.settingsPrefixes,
       this.settingsProvided,
     )) {
-      this.container.registerInstance(section, value)
+      // Not persisted: a reset (HMR) must not revive a value read from the old env.
+      this.container.registerInstance(section, value, { persist: false })
     }
   }
 
@@ -2174,6 +2175,13 @@ export class Application {
       this.settingsPrefixes = prevSettingsPrefixes
       this.settingsProvided = prevSettingsProvided
       this.settingsOptional = prevSettingsOptional
+      // Settings.get() reads the global container, which reset() replaced and
+      // doesn't replay settings into: give it the running app's values back.
+      for (const section of prevSettingsPrefixes.values()) {
+        Container.getInstance().registerInstance(section, prevContainer.resolve(section), {
+          persist: false,
+        })
+      }
       return
     }
 

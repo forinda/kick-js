@@ -530,8 +530,13 @@ export class Container {
     this.emit(name, 'registered', 'factory')
   }
 
-  /** Register a pre-constructed singleton instance */
-  registerInstance(token: any, instance: any): void {
+  /**
+   * Register a pre-constructed singleton instance. On the global container it
+   * survives `Container.reset()` (an HMR rebuild) — right for a connection,
+   * wrong for a value read from the environment: pass `{ persist: false }`
+   * and the next reset forgets it.
+   */
+  registerInstance(token: any, instance: any, options?: { persist?: boolean }): void {
     this.assertFallbackUnused(token)
     const store = getPersistentStore()
     const name = tokenName(token)
@@ -553,12 +558,18 @@ export class Container {
     // global container only. An isolated one that wrote here had its overrides
     // replayed into the next Container.reset().
     if (this.isGlobal) {
-      store.resolvedInstances.set(name, instance)
       const idx = store.instances.findIndex((r) => tokenName(r.token) === name)
-      if (idx >= 0) {
-        store.instances[idx] = { token, instance }
+      if (options?.persist === false) {
+        // Drop an earlier persisted value too, or the reset would revive it.
+        if (idx >= 0) store.instances.splice(idx, 1)
+        store.resolvedInstances.delete(name)
       } else {
-        store.instances.push({ token, instance })
+        store.resolvedInstances.set(name, instance)
+        if (idx >= 0) {
+          store.instances[idx] = { token, instance }
+        } else {
+          store.instances.push({ token, instance })
+        }
       }
     }
     this.emit(name, 'registered', 'instance')
@@ -878,9 +889,10 @@ export class Container {
     if (!reg || visited.has(reg)) return
     visited.add(reg)
 
-    // Don't invalidate persistent registrations (DB, Redis, etc.)
+    // Don't invalidate persistent registrations (DB, Redis, etc.), nor a
+    // registered instance: there is nothing to build it again from.
     const store = getPersistentStore()
-    if (store.resolvedInstances.has(name)) return
+    if (reg.kind === 'instance' || store.resolvedInstances.has(name)) return
 
     // Clear cached instance — next resolve() will re-create
     reg.instance = undefined

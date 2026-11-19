@@ -120,3 +120,27 @@ it('ctn is createToken under a short name', () => {
   expect(ctn).toBe(createToken)
   expect(container.resolve(MAILER).send()).toBe('sent')
 })
+
+it('registerInstance survives Container.reset() unless told not to persist', () => {
+  const KEPT = createToken<string>('standalone/kept')
+  const DROPPED = createToken<string>('standalone/dropped')
+  Container.getInstance().registerInstance(KEPT, 'kept')
+  Container.getInstance().registerInstance(DROPPED, 'old')
+  // Re-bound without persisting: the earlier persisted value goes too.
+  Container.getInstance().registerInstance(DROPPED, 'new', { persist: false })
+  Container.reset()
+  expect(Container.getInstance().resolve(KEPT)).toBe('kept')
+  expect(Container.getInstance().has(DROPPED)).toBe(false)
+})
+
+it('invalidate() leaves a registered instance bound — nothing rebuilds it', () => {
+  const SETTINGS = createToken<{ url: string }>('standalone/settings')
+  const value = { url: 'postgres://db' }
+  Container.getInstance().registerInstance(SETTINGS, value, { persist: false })
+  Container.getInstance().invalidate(SETTINGS)
+  expect(Container.getInstance().resolve(SETTINGS)).toBe(value)
+  const isolated = Container.create()
+  isolated.registerInstance(SETTINGS, value)
+  isolated.invalidate(SETTINGS)
+  expect(isolated.resolve(SETTINGS)).toBe(value)
+})
