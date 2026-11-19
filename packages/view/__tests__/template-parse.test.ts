@@ -354,3 +354,32 @@ describe('PR review parse fixes', () => {
     ok('@snippet s() {<b>x</b>}\n@layout(none)\n<p></p>')
   })
 })
+
+describe('typed @input and @import type', () => {
+  it('parses a type, brackets and all, before a default', () => {
+    expect(ok('@input user: Map<string, A[]> = null\n<p></p>').ast.inputs[0]).toMatchObject({
+      name: 'user',
+      type: 'Map<string, A[]>',
+      default: { value: null },
+    })
+    expect(ok('@input u: { a: string; b: number }\n<p></p>').ast.inputs[0]).toMatchObject({
+      name: 'u',
+      type: '{ a: string; b: number }',
+    })
+  })
+
+  it('collects @import type lines', () => {
+    expect(ok("@import type { User } from '@/domain/user'\n<p></p>").ast.typeImports).toEqual([
+      "import type { User } from '@/domain/user'",
+    ])
+  })
+
+  it('refuses a value import, and one inside an element', () => {
+    expect(errors("@import { x } from 'y'")).toHaveLength(1)
+    expect(errors("<div>@import type { X } from 'y'</div>")).toHaveLength(1)
+  })
+
+  it('keeps @import without type text as text', () => {
+    expect(flat(ok('a @import b').ast.body)).toBe('a @import b')
+  })
+})
