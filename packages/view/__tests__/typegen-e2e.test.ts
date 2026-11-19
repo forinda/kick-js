@@ -59,6 +59,8 @@ describe('typed render, end to end', () => {
       'src/views/layouts/main.kick':
         "@import type { Site } from '../../domain/user'\n@input site: Site\n<title>{{ site.name }}</title><slot />",
       'src/views/home.kick': "@layout('layouts/main')\n<p>{{ greeting }}</p>",
+      'src/modules/billing/views/invoices/show.kick':
+        "@import type { User } from '../../../../domain/user'\n@input owner: User\n<p>{{ owner.name }}</p>",
       'src/views/shared.ts':
         "declare module '@forinda/kickjs' {\n  interface KickViewShared { csrfToken: string }\n}\nexport {}\n",
       'src/controller.ts': `
@@ -80,10 +82,17 @@ export function calls(ctx: RequestContext, views: Views, d: ShowData) {
   ctx.render('users/show', { posts: [], me: null })
   // @ts-expect-error the layout's site is missing
   ctx.render('home', { greeting: 'hi' })
+  ctx.render('billing::invoices/show', { owner: { name: 'a' } })
+  // @ts-expect-error a view root's page checks its data too
+  ctx.render('billing::invoices/show', {})
 }
 `,
     })
-    const out = await viewsTypegen().generate({ cwd: dir, log: { warn: vi.fn() } })
+    const out = await viewsTypegen().generate({
+      cwd: dir,
+      log: { warn: vi.fn() },
+      config: { views: { roots: { billing: './src/modules/billing/views' } } },
+    })
     expect(out, 'the typegen wrote nothing').toBeTruthy()
     mkdirSync(join(dir, '.kickjs/types'), { recursive: true })
     writeFileSync(join(dir, '.kickjs/types/kick__views.ts'), out!)

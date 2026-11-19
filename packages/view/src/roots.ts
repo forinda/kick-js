@@ -77,6 +77,10 @@ function rootDir(projectRoot: string, name: string, value: string): string {
   return resolve(pkg, views)
 }
 
+/** kick.config's `views` block, if the config has one. */
+export const viewsConfigOf = (config: unknown): ViewsConfig | undefined =>
+  (config as { views?: ViewsConfig } | null | undefined)?.views
+
 /** For `createViews({ roots })`: name → absolute folder. */
 export function rootFolders(roots: ViewRoot[]): Record<string, string> {
   return Object.fromEntries(roots.map((r) => [r.name, r.dir]))

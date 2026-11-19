@@ -10,11 +10,11 @@
 import { dirname, relative, resolve, sep } from 'node:path'
 import type { CliTypegen } from '@forinda/kickjs-cli-kit'
 import { check } from './check/check'
-import { isComponent } from './check/project'
+import { isComponent, resolveRef } from './check/project'
 import { mergeSummary, summarize, type DataSummary, type Field, type Shape } from './check/summary'
 import type { KickViewsCliOptions } from './cli'
 import { loadViewsProject } from './load-project'
-import { packageDir } from './roots'
+import { packageDir, resolveViewRoots, viewsConfigOf } from './roots'
 
 /** One page: its name, its file (relative to the project root) and what it reads. */
 export interface ViewTypesEntry {
@@ -276,10 +276,12 @@ export function viewsTypegen(
     id: 'kick/views',
     outExtension: '.ts',
     inputs: [`${dir}/**/*.kick`, options.pipes ?? `${dir}/pipes.ts`],
-    async generate(ctx: { cwd: string; log: TypegenLog }) {
+    async generate(ctx: { cwd: string; log: TypegenLog; config?: unknown }) {
+      const views = viewsConfigOf(ctx.config)
       const loaded = await loadViewsProject({
         root: ctx.cwd,
-        dir,
+        dir: options.dir ?? views?.dir ?? 'src/views',
+        roots: resolveViewRoots(ctx.cwd, views).roots,
         componentsDir: options.componentsDir,
         pipesFile: options.pipes,
         validatorsFile: options.validators,
@@ -311,23 +313,28 @@ export function viewsTypegen(
       // Imports aliased per template first, so a layout's types keep their
       // own names when its declarations merge into its pages.
       const aliased = aliasImports(
-        [...summaries].map(([name, summary]) => ({ name, file: `${dir}/${name}.kick`, summary })),
+        [...summaries].map(([name, summary]) => ({ name, file: loaded.fileOf(name), summary })),
         { outDir, projectRoot: ctx.cwd },
       )
       for (const e of aliased.entries) summaries.set(e.name, e.summary)
       // A page's explicit @layout chain reads data too.
       const entries: ViewTypesEntry[] = []
+      // A layout named in a root's template is that root's first (`resolveRef`).
+      const layoutOf = (from: string, s: DataSummary) =>
+        typeof s.layout === 'string'
+          ? resolveRef(from, s.layout, (n) => summaries.has(n))
+          : undefined
       for (const [name, summary] of summaries) {
         let merged = summary
         const seen = new Set([name])
-        let next = summary.layout
-        while (typeof next === 'string' && !seen.has(next) && summaries.has(next)) {
+        let next = layoutOf(name, summary)
+        while (next !== undefined && !seen.has(next) && summaries.has(next)) {
           seen.add(next)
           const layout = summaries.get(next)!
           merged = mergeSummary(merged, layout)
-          next = layout.layout
+          next = layoutOf(next, layout)
         }
-        entries.push({ name, file: `${dir}/${name}.kick`, summary: merged })
+        entries.push({ name, file: loaded.fileOf(name), summary: merged })
       }
       return renderViewTypes(entries, {
         modules,

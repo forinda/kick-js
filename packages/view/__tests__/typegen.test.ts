@@ -264,3 +264,39 @@ describe('the kick/views typegen — PR review 5', () => {
     expect(out).not.toContain('import type { Unused }')
   })
 })
+
+describe('the kick/views typegen — view roots', () => {
+  function project(files: Record<string, string>) {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-typegen-roots-'))
+    for (const [p, src] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), src)
+    }
+    return dir
+  }
+  const log = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() }
+  const config = { views: { roots: { billing: './src/modules/billing/views' } } }
+
+  it("types a root's pages by full name, its imports from its own folder", async () => {
+    const cwd = project({
+      'src/views/home.kick': '<p></p>',
+      'src/modules/billing/views/invoices/show.kick':
+        "@import type { Invoice } from '../../invoice'\n@input invoice: Invoice\n<p>{{ invoice.id }}</p>",
+    })
+    const out = await viewsTypegen({}, { installed: () => true }).generate({ cwd, log, config })
+    expect(out).toContain("'billing::invoices/show': {")
+    expect(out).toContain("import type { Invoice } from '../../src/modules/billing/invoice'")
+  })
+
+  it("merges a root page's own layout", async () => {
+    const cwd = project({
+      'src/views/layouts/main.kick': '<slot />',
+      'src/modules/billing/views/layouts/main.kick': '<h1>{{ heading }}</h1><slot />',
+      'src/modules/billing/views/index.kick': "@layout('layouts/main')\n<p>{{ body }}</p>",
+    })
+    const out = await viewsTypegen({}, { installed: () => true }).generate({ cwd, log, config })
+    expect(out).toMatch(
+      /'billing::index': \{\n\s+data: \{ body: NonNullable<unknown>; heading: NonNullable<unknown> \}/,
+    )
+  })
+})

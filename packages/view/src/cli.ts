@@ -8,13 +8,14 @@
  * ```
  */
 import { readFile, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import type { KickCliPlugin } from '@forinda/kickjs-cli-kit'
 import type { Diagnostic } from './diagnostics'
 import { check } from './check/check'
-import type { Project } from './check/project'
+import { splitName, type Project } from './check/project'
 import { format } from './format'
-import { loadViewsProject, templates } from './load-project'
+import { allTemplates, loadViewsProject } from './load-project'
+import { resolveViewRoots, viewsConfigOf, type ViewRoot } from './roots'
 import { viewsTypegen } from './typegen'
 
 export interface ViewsCliOptions {
@@ -22,8 +23,10 @@ export interface ViewsCliOptions {
   root: string
   /** Views folder, relative to the root. Default `src/views`. */
   dir?: string
-  /** Only these files (relative to the root). Default: every `.kick` file in the views folder. */
+  /** Only these files (relative to the root). Default: every `.kick` file in the views folders. */
   paths?: string[]
+  /** Named view roots (from kick.config's `views.roots`, via `resolveViewRoots`). */
+  roots?: ViewRoot[]
   log: (message: string) => void
 }
 
@@ -36,23 +39,28 @@ export async function fmtViews(
 ): Promise<number> {
   const dir = opts.dir ?? 'src/views'
   const viewsDir = resolve(opts.root, dir)
+  // An installed package's templates aren't the app's to rewrite.
+  const editable = (opts.roots ?? []).filter((r) => !r.readOnly)
+  const dirs = new Map(editable.map((r) => [r.name, r.dir]))
   let failed = false
   let changed = 0
-  for (const name of await templates(viewsDir, opts.root, opts.paths)) {
-    const file = join(viewsDir, `${name}.kick`)
+  for (const name of await allTemplates(viewsDir, opts.root, editable, opts.paths)) {
+    const { root, path } = splitName(name)
+    const file = join(root === undefined ? viewsDir : dirs.get(root)!, `${path}.kick`)
+    const shown = relative(opts.root, file).split(sep).join('/')
     const source = await readFile(file, 'utf8')
-    const r = format(source, `${name}.kick`, { indent: opts.indent })
-    for (const d of r.diagnostics) opts.log(line(d, `${dir}/`))
+    const r = format(source, shown, { indent: opts.indent })
+    for (const d of r.diagnostics) opts.log(line(d, ''))
     if (r.output === undefined) {
       failed = true
       continue
     }
     if (r.output === source) continue
     changed++
-    if (opts.check) opts.log(`would reformat ${dir}/${name}.kick`)
+    if (opts.check) opts.log(`would reformat ${shown}`)
     else {
       await writeFile(file, r.output)
-      opts.log(`formatted ${dir}/${name}.kick`)
+      opts.log(`formatted ${shown}`)
     }
   }
   return failed || (opts.check && changed) ? 1 : 0
@@ -70,7 +78,7 @@ export async function checkViews(
   },
 ): Promise<number> {
   const loaded = await loadViewsProject({ ...opts, pipesFile: opts.pipesFile })
-  const { project, dir, viewsDir, unparsed: syntax } = loaded
+  const { project, viewsDir, unparsed: syntax } = loaded
   let errors = 0
   const report = (d: Diagnostic, prefix: string) => {
     if (d.severity === 'error') errors++
@@ -78,10 +86,12 @@ export async function checkViews(
   }
   for (const { d, prefix } of loaded.diagnostics) report(d, prefix)
   const all = loaded.names
-  const wanted = opts.paths?.length ? await templates(viewsDir, opts.root, opts.paths) : all
+  const wanted = opts.paths?.length
+    ? await allTemplates(viewsDir, opts.root, opts.roots, opts.paths)
+    : all
   for (const name of wanted) {
     if (syntax.has(name)) continue
-    for (const d of check(name, project).diagnostics) report(d, `${dir}/`)
+    for (const d of check(name, project).diagnostics) report(d, loaded.prefixOf(name))
   }
   if (!errors) opts.log(`${wanted.length} template(s) checked, no errors`)
   return errors ? 1 : 0
@@ -112,20 +122,34 @@ export interface KickViewsCliOptions {
  * @see https://kickjs.app/guide/views/typed-render-data
  */
 export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
-  const dir = options.dir ?? 'src/views'
   return {
     name: 'kick/view',
     typegens: [viewsTypegen(options)],
     register(program, ctx) {
+      const views = viewsConfigOf(ctx.config)
+      // `kickViewsCli({ dir })` overrides kick.config's `views.dir`.
+      const dir = options.dir ?? views?.dir ?? 'src/views'
+      /** The roots, or `undefined` after logging why kick.config's are wrong. */
+      const roots = (): ViewRoot[] | undefined => {
+        try {
+          return resolveViewRoots(ctx.projectRoot, views).roots
+        } catch (err) {
+          ctx.log((err as Error).message)
+          return undefined
+        }
+      }
       program
         .command('fmt:views [paths...]')
         .description('Format .kick templates (spacing and indentation; raw regions untouched)')
         .option('--check', 'list files that would change and exit 1, writing nothing')
         .option('--dir <dir>', 'views folder', dir)
         .action(async (paths: string[], o: { check?: boolean; dir: string }) => {
+          const r = roots()
+          if (!r) return void (process.exitCode = 1)
           process.exitCode = await fmtViews({
             root: ctx.projectRoot,
             dir: o.dir,
+            roots: r,
             paths,
             check: o.check,
             log: ctx.log,
@@ -145,9 +169,12 @@ export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
         )
         .action(
           async (paths: string[], o: { dir: string; pipes?: string; validators?: string }) => {
+            const r = roots()
+            if (!r) return void (process.exitCode = 1)
             process.exitCode = await checkViews({
               root: ctx.projectRoot,
               dir: o.dir,
+              roots: r,
               paths,
               pipesFile: o.pipes,
               validatorsFile: o.validators,
@@ -163,4 +190,11 @@ export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
 /** The plugin with default folders — `kickViewsCli()`. */
 export const viewCliPlugin: KickCliPlugin = kickViewsCli()
 
-export { packageDir, resolveViewRoots, rootFolders, type ViewRoot, type ViewsConfig } from './roots'
+export {
+  packageDir,
+  resolveViewRoots,
+  rootFolders,
+  viewsConfigOf,
+  type ViewRoot,
+  type ViewsConfig,
+} from './roots'
