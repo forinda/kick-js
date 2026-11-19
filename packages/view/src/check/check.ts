@@ -561,7 +561,7 @@ class Checker {
         return undefined
       }
       if (names) {
-        this.call(el, names[0]!, out)
+        this.call(el, names[0]!, out, el === this.rootElement)
         return undefined
       }
       // A component with a client script renders the custom elements it defines.
@@ -825,7 +825,38 @@ class Checker {
     return sig
   }
 
-  private call(el: Element, name: string, out: CNode[]): void {
+  /** The value an attribute passes to an input, or undefined (reported) when it can't be one. */
+  private inputExpr(a: Attr, def: unknown): CExpr | undefined {
+    if (a.kind === 'bind') return this.expr(a.expr!)
+    if (a.kind === 'bare') return { k: 'l', v: true }
+    if (a.kind === 'static') {
+      const v = String(a.parts?.[0] ?? '')
+      if (typeof def === 'boolean' && (v === 'true' || v === 'false')) {
+        this.warn(
+          a.span,
+          `${a.name}="${v}" passes the string "${v}", which is truthy — write [${a.name}]="${v}"`,
+        )
+      }
+      // Text passed to an input is data: entities decoded here, the value
+      // escaped wherever it's printed.
+      return { k: 'l', v: decodeEntities(v) }
+    }
+    if (a.kind === 'interp') {
+      return a.parts!.reduce<CExpr>(
+        (acc, p) => ({
+          k: 'b',
+          o: '+',
+          l: acc,
+          r: typeof p === 'string' ? { k: 'l', v: decodeEntities(p) } : this.expr(p),
+        }),
+        { k: 'l', v: '' },
+      )
+    }
+    this.err(a.span, `[${a.kind}.${a.name}] goes on the component's root element, not an input`)
+    return undefined
+  }
+
+  private call(el: Element, name: string, out: CNode[], root = false): void {
     const sig = this.signature(name)
     const target = this.project.templates.get(name)!
     const slotOf = new Map<string, number>()
@@ -853,57 +884,58 @@ class Checker {
       }
       if (a.kind === 'bind' && !a.expr) continue
       given.add(input)
-      let e: CExpr
-      if (a.kind === 'bind') e = this.expr(a.expr!)
-      else if (a.kind === 'bare') e = { k: 'l', v: true }
-      else if (a.kind === 'static') {
-        const v = String(a.parts?.[0] ?? '')
-        if (typeof sig.inputs.get(input)!.def === 'boolean' && (v === 'true' || v === 'false')) {
-          this.warn(
-            a.span,
-            `${a.name}="${v}" passes the string "${v}", which is truthy — write [${a.name}]="${v}"`,
-          )
-        }
-        // Text passed to an input is data: entities decoded here, the value
-        // escaped wherever it's printed.
-        e = { k: 'l', v: decodeEntities(v) }
-      } else if (a.kind === 'interp') {
-        e = a.parts!.reduce<CExpr>(
-          (acc, p) => ({
-            k: 'b',
-            o: '+',
-            l: acc,
-            r: typeof p === 'string' ? { k: 'l', v: decodeEntities(p) } : this.expr(p),
-          }),
-          { k: 'l', v: '' },
-        )
-      } else {
-        this.err(a.span, `[${a.kind}.${a.name}] goes on the component's root element, not an input`)
-        continue
-      }
+      const e = this.inputExpr(a, sig.inputs.get(input)!.def)
+      if (!e) continue
       inputs.push({ s: slotOf.get(input)!, e })
     }
     for (const [input, info] of sig.inputs) {
       if (info.required && !given.has(input))
         this.err(el.span, `missing input '${input}' on <${el.tag}>`)
     }
+    // Down a chain of wrapper components (a root that is itself a component):
+    // an attribute one of them declares is that one's input; the rest go on
+    // to the element at the end.
+    const chained: Array<{ n: string; e: CExpr }> = []
+    let leaf = sig
+    const seen = new Set([name])
+    while (
+      leaf.root?.k === 'cmp' &&
+      fallthrough.length &&
+      leaf.roots === 1 &&
+      !seen.has(leaf.root.name)
+    ) {
+      seen.add(leaf.root.name)
+      const inner = this.signature(leaf.root.name)
+      const rest: Attr[] = []
+      for (const a of fallthrough) {
+        const input = inner.inputs.has(a.name) ? a.name : camel(a.name)
+        if (isFallthrough(a) || !inner.inputs.has(input)) {
+          rest.push(a)
+          continue
+        }
+        const e = this.inputExpr(a, inner.inputs.get(input)!.def)
+        if (e) chained.push({ n: input, e })
+      }
+      fallthrough.splice(0, fallthrough.length, ...rest)
+      leaf = inner
+    }
     const passed = fallthrough.map((a) => a.name).join(', ')
-    if (fallthrough.length && sig.roots !== 1) {
+    if (fallthrough.length && leaf.roots !== 1) {
       this.err(
         fallthrough[0]!.span,
-        `<${el.tag}> passes ${passed} to its root element, but ${name}.kick needs exactly one root element for that`,
+        `<${el.tag}> passes ${passed} to its root element, but ${leaf.name}.kick needs exactly one root element for that`,
       )
-    } else if (fallthrough.length && sig.root?.k === 'slot') {
+    } else if (fallthrough.length && leaf.root?.k === 'slot') {
       this.err(
         fallthrough[0]!.span,
-        `<${el.tag}> passes ${passed} to its root, but ${name}.kick's root is a <slot>, which takes no attributes`,
+        `<${el.tag}> passes ${passed} to its root, but ${leaf.name}.kick's root is a <slot>, which takes no attributes`,
       )
-    } else if (sig.root?.k === 'el' && FORM_FIELDS.has(sig.root.tag)) {
+    } else if (leaf.root?.k === 'el' && FORM_FIELDS.has(leaf.root.tag)) {
       const guarded = fallthrough.filter((a) => FORM_FIELD_GUARDED.has(a.name.toLowerCase()))
       for (const a of guarded) {
         this.err(
           a.span,
-          `'${a.name}' would reach the <${sig.root.tag}> in ${name}.kick, whose form refill depends on it — declare it as an @input of ${el.tag}`,
+          `'${a.name}' would reach the <${leaf.root.tag}> in ${leaf.name}.kick, whose form refill depends on it — declare it as an @input of ${el.tag}`,
         )
       }
       // Reported once, not compiled too.
@@ -930,9 +962,18 @@ class Checker {
       }
     }
     // Checked as written on the element they land on (URL attributes, …).
-    const rootTag = sig.root?.k === 'el' ? sig.root.tag : el.tag
+    const rootTag = leaf.root?.k === 'el' ? leaf.root.tag : el.tag
     const fa = this.attrs({ ...el, tag: rootTag, attrs: fallthrough })
-    out.push({ k: 'cmp', n: name, in: inputs, fa, f: fills, at: at(el.span) })
+    out.push({
+      k: 'cmp',
+      n: name,
+      in: inputs,
+      ...(chained.length ? { ci: chained } : {}),
+      fa,
+      f: fills,
+      ...(root ? { r: 1 as const } : {}),
+      at: at(el.span),
+    })
   }
 
   // ── layouts ───────────────────────────────────────────────────────────

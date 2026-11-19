@@ -195,8 +195,12 @@ export type CNode =
       k: 'cmp'
       n: string
       in: Array<{ s: number; e: CExpr }>
+      /** inputs of wrapped components further down the chain, by name */
+      ci?: Array<{ n: string; e: CExpr }>
       fa: CAttr[]
       f: Record<string, CNode[]>
+      /** this call is its template's root: it takes the caller's chained attributes */
+      r?: 1
       at: At
     }
   /** `<slot name="n">fallback</slot>` */

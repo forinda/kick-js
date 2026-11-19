@@ -71,6 +71,8 @@ interface Inst {
   slots: unknown[]
   fills: Record<string, { nodes: CNode[]; inst: Inst }>
   fall?: Resolved
+  /** Inputs for components further down a wrapper chain, not taken yet, by name. */
+  chain?: Record<string, unknown>
   stack: string[]
   depth: number
   /** The node being rendered, for error positions. */
@@ -508,6 +510,22 @@ class Renderer {
     const slots: unknown[] = Array.from({ length: t.slots })
     for (const i of t.inputs) if (i.d !== undefined) slots[i.s] = i.d
     for (const i of n.in) slots[i.s] = this.value(i.e, caller)
+    // Chained inputs: those written further up (the caller's own wins), then
+    // the ones this template declares are taken; the rest go on down.
+    let chain: Record<string, unknown> | undefined
+    if (n.ci || (n.r && caller.chain)) {
+      chain = Object.create(null) as Record<string, unknown>
+      for (const c of n.ci ?? []) chain[c.n] = this.value(c.e, caller)
+      if (n.r && caller.chain) Object.assign(chain, caller.chain)
+      for (const i of t.inputs) {
+        if (!(i.n in chain)) continue
+        slots[i.s] = chain[i.n]
+        delete chain[i.n]
+      }
+    }
+    let fall = this.resolve(n.fa, caller)
+    // The root call of a wrapper: the caller's forwarded attributes win.
+    if (n.r && caller.fall) fall = mergeResolved(fall, caller.fall)
     const fills: Inst['fills'] = {}
     for (const [name, nodes] of Object.entries(n.f)) fills[name] = { nodes, inst: caller }
     const inst: Inst = {
@@ -515,11 +533,22 @@ class Renderer {
       data: Object.create(null),
       slots,
       fills,
-      fall: this.resolve(n.fa, caller),
+      fall,
+      ...(chain ? { chain } : {}),
       stack: [...caller.stack, n.n],
       depth: caller.depth + 1,
     }
     this.nodes(t.body, inst)
+  }
+}
+
+/** `outer` over `inner`: same-named attributes replaced, classes and styles combined. */
+function mergeResolved(inner: Resolved, outer: Resolved): Resolved {
+  const names = new Set(outer.attrs.map(([n]) => n.toLowerCase()))
+  return {
+    attrs: [...inner.attrs.filter(([n]) => !names.has(n.toLowerCase())), ...outer.attrs],
+    cls: [...inner.cls, ...outer.cls],
+    style: [...inner.style, ...outer.style],
   }
 }
 

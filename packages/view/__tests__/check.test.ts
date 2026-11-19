@@ -438,3 +438,24 @@ describe('passthrough', () => {
     ])
   })
 })
+
+describe('wrapper components', () => {
+  it('refuses guarded names on a form field at the end of the chain', () => {
+    expect(
+      errs({
+        'components/x-in': '<input name="pw">',
+        'components/x-w': '<x-in />',
+        page: '<x-w type="password" />',
+      }),
+    ).toEqual([expect.stringContaining('@input')])
+  })
+
+  it("leaves a wrapper's missing inner input to the wrapper's own check", () => {
+    const files = {
+      'components/ui-b': '@input size\n<b>{{ size }}</b>',
+      'components/x-w': '<ui-b />',
+      page: '<x-w size="lg" />',
+    }
+    expect(errs(files, 'components/x-w')).toEqual([expect.stringContaining("missing input 'size'")])
+  })
+})

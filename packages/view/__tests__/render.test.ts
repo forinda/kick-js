@@ -616,3 +616,26 @@ describe('passthrough', () => {
     expect(html).toBe('<button type="submit" hx-post="/s">go</button>')
   })
 })
+
+describe('wrapper components', () => {
+  it('chains attributes: an input of the inner component, the rest to its root', () => {
+    const { html } = r({
+      'components/ui-button': '@input size = "md"\n<button data-size="{{ size }}">go</button>',
+      'components/primary-button': '<ui-button kind="primary" />',
+      page: '<primary-button size="lg" hx-post="/s" />',
+    })
+    expect(html).toBe('<button data-size="lg" kind="primary" hx-post="/s">go</button>')
+  })
+
+  it('checks a URL that reaches an <a> through two wrappers', () => {
+    const { html } = r(
+      {
+        'components/x-l2': '<a>go</a>',
+        'components/x-l1': '<x-l2 />',
+        page: '<x-l1 href="{{ u }}" />',
+      },
+      { u: 'javascript:alert(1)' },
+    )
+    expect(html).toBe('<a href="#">go</a>')
+  })
+})
