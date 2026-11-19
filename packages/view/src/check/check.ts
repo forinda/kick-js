@@ -86,7 +86,39 @@ interface Signature {
   name: string
   inputs: Map<string, { required: boolean; def?: unknown }>
   outlets: Set<string>
+  /** Root nodes, not counting a lifted `<script client>`. */
   roots: number
+  /** The single root, when there is one: where forwarded attributes go. */
+  root?: { k: 'el'; tag: string } | { k: 'cmp'; name: string } | { k: 'slot' }
+}
+
+/** Attributes a refilled form field decides its refill from: never forwarded to one. */
+const FORM_FIELD_GUARDED = new Set(['type', 'name', 'value', 'checked', 'validate'])
+const FORM_FIELDS = new Set(['input', 'select', 'textarea', 'option'])
+
+/** Edit distance, for "did you mean" — small strings only. */
+function distance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]!
+    row[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j]!
+      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
+      prev = cur
+    }
+  }
+  return row[b.length]!
+}
+
+/** The declared input `name` most likely misspells (within 2 edits), if any. */
+export function nearInput(name: string, inputs: Iterable<string>): string | undefined {
+  if (/^(hx-|x-|aria-|data-|@|:)/i.test(name)) return undefined
+  const want = camel(name).toLowerCase()
+  for (const input of inputs) {
+    if (distance(want, input.toLowerCase()) <= 2) return input
+  }
+  return undefined
 }
 
 class Checker {
@@ -768,13 +800,26 @@ class Checker {
         else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push') stack.push(n.body)
       }
     }
+    // A lifted `<script client>` isn't markup, so not a root either.
+    const top = ast.body.filter((n) => !(n.k === 'element' && isClientScript(n)))
+    const roots = rootElements(top)
+    let root: Signature['root']
+    if (roots.length === 1) {
+      const el = roots[0]
+      const tag = el?.tag.toLowerCase()
+      if (el && !el.foreign && tag!.includes('-') && this.tags.get(tag!)?.length === 1) {
+        root = { k: 'cmp', name: this.tags.get(tag!)![0]! }
+      } else if (el) root = { k: 'el', tag: tag! }
+      else if (top.some((n) => n.k === 'slot-outlet')) root = { k: 'slot' }
+    }
     const sig: Signature = {
       name,
       inputs: new Map(
         ast.inputs.map((i) => [i.name, { required: !i.default, def: i.default?.value }]),
       ),
       outlets,
-      roots: rootElements(ast.body).length,
+      roots: roots.length,
+      ...(root ? { root } : {}),
     }
     this.signatures.set(name, sig)
     return sig
@@ -795,10 +840,15 @@ class Checker {
       }
       const input = sig.inputs.has(a.name) ? a.name : camel(a.name)
       if (!sig.inputs.has(input)) {
-        this.err(
-          a.span,
-          `unknown input '${a.name}' on <${el.tag}> — its inputs are ${[...sig.inputs.keys()].join(', ') || 'none'}`,
-        )
+        // Not an input: the root element's attribute.
+        const near = nearInput(a.name, sig.inputs.keys())
+        if (near) {
+          this.warn(
+            a.span,
+            `'${a.name}' isn't an input of ${el.tag} — did you mean '${near}'? It's passed to the root element.`,
+          )
+        }
+        fallthrough.push(a)
         continue
       }
       if (a.kind === 'bind' && !a.expr) continue
@@ -837,11 +887,27 @@ class Checker {
       if (info.required && !given.has(input))
         this.err(el.span, `missing input '${input}' on <${el.tag}>`)
     }
+    const passed = fallthrough.map((a) => a.name).join(', ')
     if (fallthrough.length && sig.roots !== 1) {
       this.err(
         fallthrough[0]!.span,
-        `<${el.tag}> passes ${fallthrough.map((a) => a.name).join(', ')} to its root element, but ${name}.kick needs exactly one root element for that`,
+        `<${el.tag}> passes ${passed} to its root element, but ${name}.kick needs exactly one root element for that`,
       )
+    } else if (fallthrough.length && sig.root?.k === 'slot') {
+      this.err(
+        fallthrough[0]!.span,
+        `<${el.tag}> passes ${passed} to its root, but ${name}.kick's root is a <slot>, which takes no attributes`,
+      )
+    } else if (sig.root?.k === 'el' && FORM_FIELDS.has(sig.root.tag)) {
+      const guarded = fallthrough.filter((a) => FORM_FIELD_GUARDED.has(a.name.toLowerCase()))
+      for (const a of guarded) {
+        this.err(
+          a.span,
+          `'${a.name}' would reach the <${sig.root.tag}> in ${name}.kick, whose form refill depends on it — declare it as an @input of ${el.tag}`,
+        )
+      }
+      // Reported once, not compiled too.
+      fallthrough.splice(0, fallthrough.length, ...fallthrough.filter((a) => !guarded.includes(a)))
     }
     // Slot content: `@slot('x') { }` fills, the rest is the default slot. It
     // is compiled here, in the caller's scope.
@@ -863,7 +929,9 @@ class Checker {
         fills[''] = this.scoped(() => this.nodes(rest))
       }
     }
-    const fa = this.attrs({ ...el, attrs: fallthrough })
+    // Checked as written on the element they land on (URL attributes, …).
+    const rootTag = sig.root?.k === 'el' ? sig.root.tag : el.tag
+    const fa = this.attrs({ ...el, tag: rootTag, attrs: fallthrough })
     out.push({ k: 'cmp', n: name, in: inputs, fa, f: fills, at: at(el.span) })
   }
 

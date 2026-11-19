@@ -168,9 +168,10 @@ describe('check', () => {
     expect(errs({ page: '<user-card />', 'components/user-card': card })[0]).toContain(
       "missing input 'user'",
     )
+    // Not an input: forwarded to the root element.
     expect(
-      errs({ page: '<user-card [user]="u" nope="1" />', 'components/user-card': card })[0],
-    ).toContain("unknown input 'nope'")
+      errs({ page: '<user-card [user]="u" nope="1" />', 'components/user-card': card }),
+    ).toEqual([])
     // Fallthrough attributes are not inputs.
     expect(
       errs({
@@ -188,11 +189,9 @@ describe('check', () => {
     expect(
       warns({ page: '<user-card [user]="u" compact="false" />', 'components/user-card': card })[0],
     ).toContain('"false"')
-    // Only class/id/style/role/aria-*/data-* fall through; a URL or event attribute is an unknown input.
+    // Any non-input falls through, checked as written on the root.
     for (const attr of ['href="{{ u }}"', '[href]="u"', 'onclick="x"', 'src="a"', 'data="x"']) {
-      expect(errs({ page: `<x-a ${attr} />`, 'components/x-a': '<a>x</a>' })[0], attr).toContain(
-        'unknown input',
-      )
+      expect(errs({ page: `<x-a ${attr} />`, 'components/x-a': '<a>x</a>' }), attr).toEqual([])
     }
     // kebab-case binds the camelCase input
     expect(
@@ -381,5 +380,61 @@ describe('slots inside fragments and pushes', () => {
       'components/x-box': '@push(\'h\') {<slot name="extra" />}<b>box</b>',
       page: "<x-box>@slot('extra') {<i>e</i>}</x-box>",
     })
+  })
+})
+
+describe('passthrough', () => {
+  const btn = { 'components/x-btn': '<button>go</button>' }
+
+  it('forwards non-inputs, bindings included', () => {
+    clean({ ...btn, page: '<x-btn type="submit" hx-post="/s" [disabled]="!ok" />' })
+  })
+
+  it('refuses an interpolated event handler, as on the root itself', () => {
+    expect(errs({ ...btn, page: '<x-btn onclick="{{ js }}" />' })).toEqual([
+      expect.stringContaining('onclick'),
+    ])
+  })
+
+  it('warns about a name close to an input', () => {
+    const c = { 'components/x-c': '@input compact = false\n<p>{{ compact }}</p>' }
+    expect(warns({ ...c, page: '<x-c compcat />' })).toEqual([
+      expect.stringContaining("did you mean 'compact'"),
+    ])
+    expect(warns({ ...c, page: '<x-c hx-get="/a" />' })).toEqual([])
+  })
+
+  it('refuses guarded names on a form-field root', () => {
+    const input = { 'components/x-in': '<input name="pw">' }
+    for (const attr of [
+      'type="password"',
+      'name="x"',
+      'value="v"',
+      'checked',
+      'validate="required"',
+    ]) {
+      expect(errs({ ...input, page: `<x-in ${attr} />` }), attr).toEqual([
+        expect.stringContaining('@input'),
+      ])
+    }
+  })
+
+  it('refuses attributes for a <slot> root', () => {
+    expect(errs({ 'components/x-s': '<slot />', page: '<x-s x="1" />' })).toEqual([
+      expect.stringContaining('x'),
+    ])
+  })
+
+  it('lets a client-script component with one element take attributes', () => {
+    clean({
+      'components/x-k': '<b>k</b>\n<script client>customElements.get("x-b")</script>',
+      page: '<x-k hx-get="/a" />',
+    })
+  })
+
+  it('names the forwarded attributes when there are several roots', () => {
+    expect(errs({ 'components/x-2': '<p></p><p></p>', page: '<x-2 hx-get="/a" />' })).toEqual([
+      expect.stringContaining('hx-get'),
+    ])
   })
 })

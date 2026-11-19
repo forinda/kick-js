@@ -598,3 +598,21 @@ describe('a stack reached inside a push', () => {
     ).toThrow(/@push/)
   })
 })
+
+describe('passthrough', () => {
+  it("checks a forwarded URL as the root's own attribute", () => {
+    const { html } = r(
+      { 'components/x-link': '<a>go</a>', page: '<x-link href="{{ u }}" />' },
+      { u: 'javascript:alert(1)' },
+    )
+    expect(html).toBe('<a href="#">go</a>')
+  })
+
+  it('forwards attributes to the root', () => {
+    const { html } = r({
+      'components/x-btn': '<button>go</button>',
+      page: '<x-btn type="submit" hx-post="/s" />',
+    })
+    expect(html).toBe('<button type="submit" hx-post="/s">go</button>')
+  })
+})
