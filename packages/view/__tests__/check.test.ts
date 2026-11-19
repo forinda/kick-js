@@ -459,3 +459,15 @@ describe('wrapper components', () => {
     expect(errs(files, 'components/x-w')).toEqual([expect.stringContaining("missing input 'size'")])
   })
 })
+
+describe('passthrough to a <meta> root', () => {
+  it('refuses forwarding content or http-equiv, whose safety depends on the pair', () => {
+    const meta = { 'components/x-m': '<meta http-equiv="refresh">' }
+    expect(errs({ ...meta, page: '<x-m content="{{ url }}" />' })).toEqual([
+      expect.stringContaining('@input'),
+    ])
+    expect(
+      errs({ 'components/x-n': '<meta content="0">', page: '<x-n http-equiv="refresh" />' }),
+    ).toEqual([expect.stringContaining('@input')])
+  })
+})

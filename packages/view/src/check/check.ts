@@ -92,9 +92,20 @@ interface Signature {
   root?: { k: 'el'; tag: string } | { k: 'cmp'; name: string } | { k: 'slot' }
 }
 
-/** Attributes a refilled form field decides its refill from: never forwarded to one. */
-const FORM_FIELD_GUARDED = new Set(['type', 'name', 'value', 'checked', 'validate'])
-const FORM_FIELDS = new Set(['input', 'select', 'textarea', 'option'])
+/**
+ * Attributes never forwarded to a root of this tag: their check depends on the
+ * root's other attributes, which the call site can't see. A form field decides
+ * `$old` refill from them; a `<meta>`'s `content` is a URL when `http-equiv` is
+ * refresh.
+ */
+const FIELD_GUARDED = new Set(['type', 'name', 'value', 'checked', 'validate'])
+const GUARDED: Record<string, ReadonlySet<string>> = {
+  input: FIELD_GUARDED,
+  select: FIELD_GUARDED,
+  textarea: FIELD_GUARDED,
+  option: FIELD_GUARDED,
+  meta: new Set(['http-equiv', 'content']),
+}
 
 /** Edit distance, for "did you mean" — small strings only. */
 function distance(a: string, b: string): number {
@@ -930,12 +941,13 @@ class Checker {
         fallthrough[0]!.span,
         `<${el.tag}> passes ${passed} to its root, but ${leaf.name}.kick's root is a <slot>, which takes no attributes`,
       )
-    } else if (leaf.root?.k === 'el' && FORM_FIELDS.has(leaf.root.tag)) {
-      const guarded = fallthrough.filter((a) => FORM_FIELD_GUARDED.has(a.name.toLowerCase()))
+    } else if (leaf.root?.k === 'el' && Object.hasOwn(GUARDED, leaf.root.tag)) {
+      const names = GUARDED[leaf.root.tag]!
+      const guarded = fallthrough.filter((a) => names.has(a.name.toLowerCase()))
       for (const a of guarded) {
         this.err(
           a.span,
-          `'${a.name}' would reach the <${leaf.root.tag}> in ${leaf.name}.kick, whose form refill depends on it — declare it as an @input of ${el.tag}`,
+          `'${a.name}' would reach the <${leaf.root.tag}> in ${leaf.name}.kick, whose safety checks depend on its other attributes — declare it as an @input of ${el.tag}`,
         )
       }
       // Reported once, not compiled too.
