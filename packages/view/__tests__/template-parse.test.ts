@@ -301,3 +301,26 @@ describe('slots that receive data', () => {
     expect(errors('<slot name="a" foo="1" />')).toHaveLength(1)
   })
 })
+
+describe('snippets', () => {
+  it('parses @snippet with params and defaults, and @render with arguments', () => {
+    const body = ok(
+      "@snippet badge(label, tone = 'info') {<b>{{ label }}</b>}\n@render badge(user.role, 'warn')",
+    ).ast.body
+    expect(body[0]).toMatchObject({
+      k: 'snippet',
+      name: 'badge',
+      params: [{ name: 'label' }, { name: 'tone', default: 'info' }],
+    })
+    expect(body.find((n) => n.k === 'render')).toMatchObject({ k: 'render', name: 'badge' })
+    expect((body.find((n) => n.k === 'render') as { args: unknown[] }).args).toHaveLength(2)
+  })
+
+  it('keeps @snippet and @render without a call as text', () => {
+    expect(flat(ok('a @render b @snippet').ast.body)).toBe('a @render b @snippet')
+  })
+
+  it('refuses a snippet that is not at the top level', () => {
+    expect(errors('<div>@snippet b() {x}</div>')).toHaveLength(1)
+  })
+})

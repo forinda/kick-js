@@ -354,6 +354,10 @@ class Renderer {
         }
         return
       }
+      case 'rnd':
+        inst.at = n.at
+        this.snippet(n, inst)
+        return
       case 'stk':
         if (this.pushing) {
           this.fail(
@@ -511,6 +515,29 @@ class Renderer {
   }
 
   // ── components and layouts ────────────────────────────────────────────
+
+  /**
+   * `@render`: the snippet's body on fresh slots — the template's inputs
+   * copied across, then the arguments (or defaults). Counts toward the depth
+   * limit like a component.
+   */
+  private snippet(n: Extract<CNode, { k: 'rnd' }>, caller: Inst): void {
+    if (caller.depth >= MAX_DEPTH) {
+      this.fail(
+        caller,
+        `snippets nest more than ${MAX_DEPTH} deep — is ${n.n} rendering itself forever?`,
+      )
+    }
+    const def = caller.t.snippets?.[n.n]
+    if (!def) return this.fail(caller, `no snippet '${n.n}' in ${caller.t.name}`)
+    if (def.validates) this.env.validation?.()
+    const slots: unknown[] = Array.from({ length: def.slots })
+    for (let i = 0; i < caller.t.inputs.length; i++) slots[i] = caller.slots[i]
+    def.params.forEach((s, i) => {
+      slots[s] = i < n.a.length ? this.value(n.a[i]!, caller) : def.defaults[i]
+    })
+    this.nodes(def.body, { ...caller, slots, depth: caller.depth + 1 })
+  }
 
   private component(n: Extract<CNode, { k: 'cmp' }>, caller: Inst): void {
     if (caller.depth >= MAX_DEPTH) {

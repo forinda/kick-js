@@ -689,3 +689,53 @@ describe('slots that receive data', () => {
     expect(html).toBe('<li><b>r</b><li>[a]<li>[a1]</li></li></li>')
   })
 })
+
+describe('snippets', () => {
+  it('renders with arguments and defaults', () => {
+    expect(html("@snippet b(x, y = 'd') {[{{ x }}{{ y }}]}\n@render b(1)@render b(2, 'e')")).toBe(
+      '[1d][2e]',
+    )
+  })
+
+  it("reads a component's inputs", () => {
+    const { html: out } = r({
+      'components/x-c':
+        "@input who\n<p>@render hi('!')</p>\n@snippet hi(mark) {hi {{ who }}{{ mark }}}",
+      page: '<x-c who="A" />',
+    })
+    expect(out).toBe('<p>hi A!</p>')
+  })
+
+  it('renders itself, and stops runaway recursion at the depth limit', () => {
+    expect(
+      html(
+        '@snippet t(n) {{{ n.name }}@for (c of n.kids; track c.name) {(@render t(c))}}\n@render t(root)',
+        {
+          root: { name: 'a', kids: [{ name: 'b', kids: [] }] },
+        },
+      ),
+    ).toBe('a(b)')
+    expect(() => html('@snippet t() {@render t()}\n@render t()')).toThrow(/64/)
+  })
+
+  it("doesn't see loop variables where it's rendered", () => {
+    const { html: out, warn } = r(
+      { page: '@snippet b() {[{{ x }}]}\n@for (x of xs; track x) {@render b()}' },
+      { xs: [1] },
+    )
+    expect(out).toBe('[]')
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('renders inside a fragment-only render', () => {
+    const { html: out } = r(
+      {
+        page: "@snippet b(v) {{{ title }}:{{ v }}}\n@for (x of xs; track x) {@fragment('f') {@render b(x)}}",
+      },
+      { title: 'T', x: 7 },
+      {},
+      { fragment: 'f' },
+    )
+    expect(out).toBe('T:7')
+  })
+})

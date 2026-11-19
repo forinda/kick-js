@@ -513,3 +513,23 @@ describe('slots that receive data', () => {
     ).toEqual([expect.stringContaining('t')])
   })
 })
+
+describe('snippets', () => {
+  it('checks arity, names and duplicates', () => {
+    const def = '@snippet b(x, y = 1) {{{ x }}{{ y }}}\n'
+    expect(errs({ page: `${def}@render b()` })).toEqual([expect.stringContaining('b')])
+    expect(errs({ page: `${def}@render b(1, 2, 3)` })).toEqual([expect.stringContaining('b')])
+    expect(errs({ page: `${def}@render nope(1)` })).toEqual([expect.stringContaining('b')])
+    expect(errs({ page: `${def}${def}@render b(1)` })).toEqual([expect.stringContaining("'b'")])
+  })
+
+  it('refuses a top-level @let inside a snippet', () => {
+    expect(errs({ page: '@let t = 1;\n@snippet b() {{{ t }}}\n@render b()' })).toEqual([
+      expect.stringContaining('pass it as a parameter'),
+    ])
+  })
+
+  it('lets @render come before @snippet', () => {
+    clean({ page: '@render b(1)\n@snippet b(x) {{{ x }}}' })
+  })
+})

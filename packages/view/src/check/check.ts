@@ -12,6 +12,7 @@ import {
   type CExpr,
   type CFill,
   type CNode,
+  type CSnippet,
   type CSeg,
   type CheckedFragment,
   type CheckedTemplate,
@@ -145,6 +146,13 @@ class Checker {
   private readonly offered = new Map<string, string>()
   /** Inside a `@push` body, where a `<stack>` would be filled into the wrong buffer. */
   private inPush = 0
+  /** The template's `@snippet`s: their parameters, known before any body is compiled. */
+  readonly snippetDefs = new Map<string, Array<{ name: string; default?: unknown }>>()
+  // Null prototype: any identifier is a snippet name.
+  readonly snippets: Record<string, CSnippet> = Object.create(null)
+  /** Top-level `@let` names: a snippet can't read them (it may run before they do). */
+  readonly topLets = new Set<string>()
+  private inSnippet = false
   /** Each `@fragment`'s standalone unit, by name. */
   // Null prototype: `constructor`, `toString` and `__proto__` are fragment names too.
   readonly fragments: Record<string, CheckedFragment> = Object.create(null)
@@ -259,6 +267,13 @@ class Checker {
         const b = this.lookup(e.root)
         if (b?.kind === 'meta') return { k: 'm', s: b.s, w: b.w! }
         if (b) return { k: 'v', s: b.s, p }
+        if (this.inSnippet && this.topLets.has(e.root)) {
+          this.err(
+            e.span,
+            `'${e.root}' is a top-level @let, which a snippet can't read — pass it as a parameter`,
+          )
+          return { k: 'x' }
+        }
         if (this.unit?.outer.has(e.root)) {
           if (!this.unit.needs.includes(e.root)) this.unit.needs.push(e.root)
           return { k: 'd', n: e.root, p }
@@ -465,6 +480,27 @@ class Checker {
       case 'fragment':
         this.fragment(n, out, parent)
         return
+      case 'snippet':
+        // Only reachable nested, which the parser reports.
+        return
+      case 'render': {
+        const params = this.snippetDefs.get(n.name)
+        if (!params) {
+          this.err(
+            n.span,
+            `no snippet '${n.name}' in this template — it has ${[...this.snippetDefs.keys()].join(', ') || 'none'}`,
+          )
+          return
+        }
+        const required = params.filter((p) => p.default === undefined).length
+        if (n.args.length < required || n.args.length > params.length) {
+          const range = required === params.length ? `${required}` : `${required}–${params.length}`
+          this.err(n.span, `@render ${n.name} takes ${range} argument(s), got ${n.args.length}`)
+          return
+        }
+        out.push({ k: 'rnd', n: n.name, a: n.args.map((a) => this.expr(a)), at: at(n.span) })
+        return
+      }
       case 'push': {
         this.inPush++
         try {
@@ -546,6 +582,49 @@ class Checker {
     // unit's own.
     this.diagnostics.length = saved.reported
     this.diagnostics.push(...unit.errors)
+  }
+
+  /**
+   * A `@snippet`, compiled once in its own slot space: the template's inputs
+   * at their own indexes, then the parameters. It sees those and page data —
+   * nothing from where it's rendered, so it behaves the same everywhere.
+   */
+  snippet(n: Extract<Node, { k: 'snippet' }>, inputs: CheckedTemplate['inputs']): void {
+    const saved = {
+      scopes: this.scopes.splice(0),
+      loops: this.loops.splice(0),
+      slots: this.slots,
+      validates: this.validates,
+    }
+    this.scopes.push(new Map())
+    this.slots = 0
+    this.validates = false
+    this.inSnippet = true
+    let body: CNode[]
+    const params: number[] = []
+    try {
+      for (const i of inputs) this.bind(i.n, { kind: 'slot', s: this.slot() })
+      for (const p of n.params) {
+        const s = this.slot()
+        params.push(s)
+        this.bind(p.name, { kind: 'slot', s })
+      }
+      body = this.nodes(n.body)
+    } finally {
+      this.inSnippet = false
+      this.scopes.splice(0, this.scopes.length, ...saved.scopes)
+      this.loops.splice(0, this.loops.length, ...saved.loops)
+    }
+    const compiled: CSnippet = {
+      params,
+      defaults: n.params.map((p) => p.default),
+      slots: this.slots,
+      body: optimize(body),
+    }
+    if (this.validates) compiled.validates = true
+    this.snippets[n.name] = compiled
+    this.slots = saved.slots
+    this.validates = saved.validates
   }
 
   /** `{{ }}` inside `<script>` / `<style>`: only a JSON script's single value. */
@@ -1095,7 +1174,7 @@ function rootElements(body: Node[]): Array<Element | null> {
   const roots: Array<Element | null> = []
   for (const n of body) {
     if (n.k === 'text' && !n.value.trim()) continue
-    if (n.k === 'comment' || n.k === 'let' || n.k === 'push') continue
+    if (n.k === 'comment' || n.k === 'let' || n.k === 'push' || n.k === 'snippet') continue
     roots.push(n.k === 'element' ? n : null)
   }
   return roots
@@ -1146,6 +1225,21 @@ export function check(name: string, project: Project): CheckResult {
   // Input slots come first, in declaration order.
   c.slots = inputs.length
   for (const i of inputs) c.bind(i.n, { kind: 'slot', s: i.s })
+
+  // Snippets: every name and parameter list first (a body may render any of
+  // them, defined before or after), then each body.
+  const snippetNodes: Array<Extract<Node, { k: 'snippet' }>> = []
+  for (const n of ast.body) {
+    if (n.k === 'let') c.topLets.add(n.name)
+    if (n.k !== 'snippet') continue
+    if (c.snippetDefs.has(n.name)) {
+      c.diagnostics.push(error(ast.file, n.span, `snippet '${n.name}' is defined twice`))
+      continue
+    }
+    c.snippetDefs.set(n.name, n.params)
+    snippetNodes.push(n)
+  }
+  for (const n of snippetNodes) c.snippet(n, inputs)
 
   // `<script client>`: the component's browser code, shipped as a module of
   // its own — lifted out of the template before anything else looks at it.
@@ -1223,7 +1317,19 @@ export function check(name: string, project: Project): CheckResult {
   const fills: Record<string, CFill> = {}
   const body: Node[] = []
   const fillNodes: Array<Extract<Node, { k: 'slot-fill' }>> = []
-  for (const n of top) {
+  for (const [i, n] of top.entries()) {
+    if (n.k === 'snippet') {
+      // A definition prints nothing: its line goes too — the newline after
+      // it, or before it at the end of the file.
+      const next = top[i + 1]
+      const prev = body.at(-1)
+      if (next?.k === 'text' && /^\r?\n/.test(next.value)) {
+        top[i + 1] = { ...next, value: next.value.replace(/^\r?\n/, '') }
+      } else if (!next && prev?.k === 'text') {
+        body[body.length - 1] = { ...prev, value: prev.value.replace(/\r?\n$/, '') }
+      }
+      continue
+    }
     if (n.k === 'slot-fill' && !component) fillNodes.push(n)
     else body.push(n)
   }
@@ -1287,6 +1393,7 @@ export function check(name: string, project: Project): CheckResult {
   if (client) template.client = client
   if (c.validates) template.validates = true
   if (Object.keys(c.fragments).length) template.fragments = c.fragments
+  if (Object.keys(c.snippets).length) template.snippets = c.snippets
   const failed = c.diagnostics.some((d) => d.severity === 'error')
   return failed ? { diagnostics: c.diagnostics } : { template, diagnostics: c.diagnostics }
 }

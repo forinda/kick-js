@@ -125,6 +125,16 @@ export type Node =
   | { k: 'fragment'; name: string; body: Node[]; span: Span }
   /** `@push('name') { }`: content for a layout's `<stack name>` */
   | { k: 'push'; name: string; body: Node[]; span: Span }
+  /** `@snippet name(a, b = 'x') { }`: a block of markup with parameters, top level only */
+  | {
+      k: 'snippet'
+      name: string
+      params: Array<{ name: string; default?: Literal }>
+      body: Node[]
+      span: Span
+    }
+  /** `@render name(args)`: run a snippet of this file */
+  | { k: 'render'; name: string; args: Expr[]; span: Span }
   /** `<stack name="…" />`: where pushed content goes; `children` must be blank (checked) */
   | { k: 'stack'; name: string; children: Node[]; span: Span }
 
@@ -231,6 +241,8 @@ export type CNode =
    * while the fallback renders they sit in slots `fs` (same order).
    */
   | { k: 'o'; n: string; fb: CNode[]; v?: Array<{ n: string; e: CExpr }>; fs?: number[] }
+  /** `@render n(args)`: run snippet `n` of the current template */
+  | { k: 'rnd'; n: string; a: CExpr[]; at: At }
   /** `@push('n') { }`: rendered, then added to stack `n` */
   | { k: 'push'; n: string; b: CNode[] }
   /** `<stack name="n" />`: filled once the render is done */
@@ -238,6 +250,19 @@ export type CNode =
   | { k: 'as'; en: string }
 
 /** A template after `check`: plain JSON the renderer walks, which a build can ship as data. */
+/**
+ * A `@snippet`, in its own slot space: the template's inputs first (same
+ * indexes as in the template), then `params`, then its own variables.
+ */
+export interface CSnippet {
+  params: number[]
+  defaults: Array<Literal | undefined>
+  slots: number
+  body: CNode[]
+  /** a field in it has `validate` */
+  validates?: true
+}
+
 /** A page's `@fragment`, compiled to render on its own. */
 export interface CheckedFragment {
   /** names enclosing blocks bound (loop items, aliases, `@let`): the caller passes them */
@@ -266,6 +291,8 @@ export interface CheckedTemplate {
   client?: { code: string; js: boolean }
   /** a field in it has `validate`: pages rendering it ship the validator script */
   validates?: true
+  /** its `@snippet`s, by name */
+  snippets?: Record<string, CSnippet>
   /** its `@fragment`s, by name */
   fragments?: Record<string, CheckedFragment>
 }

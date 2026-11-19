@@ -10,6 +10,7 @@ import type {
   Expr,
   IfBranch,
   InputDecl,
+  Literal,
   LoopVar,
   Node,
   TemplateAst,
@@ -36,7 +37,7 @@ const RCDATA = new Set(['title', 'textarea'])
  */
 const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml'])
 const KEYWORDS =
-  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push)(?![\w$-])/
+  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push|snippet|render)(?![\w$-])/
 /** Fragment and stack names. */
 const PLAIN_NAME = /^[\w-]+$/
 const LOOP_VARS = new Set<LoopVar>(['$index', '$first', '$last', '$even', '$odd', '$count'])
@@ -132,7 +133,7 @@ class TemplateParser {
   }
   private emit(node: Node): void {
     this.flush()
-    if (node.k !== 'let' && node.k !== 'slot-fill') this.seenOutput = true
+    if (node.k !== 'let' && node.k !== 'slot-fill' && node.k !== 'snippet') this.seenOutput = true
     this.children().push(node)
   }
   private addText(chunk: string, at: number): void {
@@ -519,6 +520,63 @@ class TemplateParser {
 
   // ── blocks ────────────────────────────────────────────────────────────
 
+  /**
+   * `@snippet name(a, b = 'lit') { … }` (top level only) or `@render name(args)`.
+   * False — text after all — unless a name and `(` follow.
+   */
+  private snippetOrRender(kw: 'snippet' | 'render', i: number, after: number): boolean {
+    const m = /^\s+([A-Za-z_$][\w$]*)\s*\(/.exec(this.s.slice(after, after + 200))
+    if (!m) return false
+    const name = m[1]!
+    const p = this.parens(after + m[0].length - 1, `@${kw} ${name}`)
+    const parts = splitArgs(p.src, p.at)
+    if (kw === 'render') {
+      const args = parts.flatMap((a) => {
+        const e = this.expr(a.src, a.at)
+        return e ? [e] : []
+      })
+      this.i = this.standalone(i, p.end)
+      this.emit({ k: 'render', name, args, span: this.span(i, p.end) })
+      return true
+    }
+    const params: Array<{ name: string; default?: Literal }> = []
+    for (const a of parts) {
+      const pm = /^\s*([A-Za-z_$][\w$]*)\s*(?:=\s*([\s\S]+?))?\s*$/.exec(a.src)
+      if (!pm) {
+        this.err(a.at, a.at + a.src.length, 'expected a parameter name, or name = literal')
+        continue
+      }
+      const param: { name: string; default?: Literal } = { name: pm[1]! }
+      if (pm[2] !== undefined) {
+        const at = a.at + a.src.indexOf(pm[2], pm[1]!.length)
+        const e = this.expr(pm[2], at)
+        if (e?.kind === 'literal') param.default = e.value
+        else if (e) this.err(at, at + pm[2].length, 'a parameter default must be a literal')
+      }
+      params.push(param)
+    }
+    if (this.frames.length > 1) {
+      this.err(
+        i,
+        p.end,
+        '@snippet goes at the top level of a template, not inside an element or block',
+      )
+    }
+    const brace = this.openBrace(p.end, `@snippet ${name}(…)`)
+    const resume = this.standalone(i, brace)
+    const node: Extract<Node, { k: 'snippet' }> = {
+      k: 'snippet',
+      name,
+      params,
+      body: [],
+      span: this.span(i, brace),
+    }
+    this.emit(node)
+    this.frames.push({ type: 'block', children: node.body, node, keyword: 'snippet', start: i })
+    this.i = resume
+    return true
+  }
+
   /** `( … )` from `j` (at `(`): the inside and the offset after `)`. */
   private parens(j: number, what: string): { src: string; at: number; end: number } {
     if (this.s[j] !== '(') this.fatal(j, j + 1, `expected ( after ${what}`)
@@ -617,6 +675,7 @@ class TemplateParser {
     if (kw === 'input') return this.input(i, after)
     if (kw === 'let') return this.let(i, after)
     if (kw === 'verbatim') return this.verbatim(i, next)
+    if (kw === 'snippet' || kw === 'render') return this.snippetOrRender(kw, i, after)
     if (kw === 'assets') {
       const p = this.parens(next, '@assets')
       const entry = this.stringArg(p.src, p.at, '@assets')
@@ -996,4 +1055,28 @@ export function parse(source: string, file: string): ParseResult {
   const p = new TemplateParser(source.charCodeAt(0) === 0xfeff ? source.slice(1) : source, file)
   p.run()
   return { ast: p.ast, diagnostics: p.diagnostics }
+}
+
+/** Comma-separated arguments at the top level of `src` (quotes and brackets respected). */
+function splitArgs(src: string, at: number): Array<{ src: string; at: number }> {
+  if (!src.trim()) return []
+  const out: Array<{ src: string; at: number }> = []
+  let depth = 0
+  let quote = ''
+  let start = 0
+  for (let k = 0; k < src.length; k++) {
+    const c = src[k]!
+    if (quote) {
+      if (c === '\\') k++
+      else if (c === quote) quote = ''
+    } else if (c === "'" || c === '"') quote = c
+    else if (c === '(' || c === '[') depth++
+    else if (c === ')' || c === ']') depth--
+    else if (c === ',' && depth === 0) {
+      out.push({ src: src.slice(start, k), at: at + start })
+      start = k + 1
+    }
+  }
+  out.push({ src: src.slice(start), at: at + start })
+  return out
 }
