@@ -889,9 +889,10 @@ export class Container {
     if (!reg || visited.has(reg)) return
     visited.add(reg)
 
-    // Don't invalidate persistent registrations (DB, Redis, etc.)
+    // Don't invalidate persistent registrations (DB, Redis, etc.), nor a
+    // registered instance: there is nothing to build it again from.
     const store = getPersistentStore()
-    if (store.resolvedInstances.has(name)) return
+    if (reg.kind === 'instance' || store.resolvedInstances.has(name)) return
 
     // Clear cached instance — next resolve() will re-create
     reg.instance = undefined

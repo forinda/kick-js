@@ -16,6 +16,7 @@ import {
   defineAdapter,
   defineSettings,
   reloadEnv,
+  type SettingsDeclaration,
   type SettingsOf,
 } from '../src/index'
 import { createWebApp } from '../src/web'
@@ -453,6 +454,16 @@ describe('optional sections', () => {
       env: { KT_EDGE_SMTP_HOST: 'smtp.edge' },
     })
     expect(EdgeSmtp.get().host).toBe('smtp.edge')
+  })
+
+  it('on the web entry, a section once required and now optional reads the new env', () => {
+    const Edge = defineSettings('KT_EDGE_RE', z.object({ host: z.string() }))
+    const web = (settings: SettingsDeclaration[], host: string) =>
+      createWebApp({ h3: h3v2, modules: [], settings, env: { KT_EDGE_RE_HOST: host } })
+    web([Edge], 'one')
+    Container.reset()
+    web([Edge.optional()], 'two')
+    expect(Edge.get().host).toBe('two')
   })
 
   it('are required when also declared plainly', async () => {

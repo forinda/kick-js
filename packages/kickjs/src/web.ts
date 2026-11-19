@@ -37,7 +37,7 @@ import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute, headFromGet } from './http/web/handler'
 import { ROUTE_URLS, RouteUrls } from './http/url-for'
-import { loadSettings, type SettingsDeclaration } from './config/settings'
+import { _forgetLoadedSettings, loadSettings, type SettingsDeclaration } from './config/settings'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
@@ -183,6 +183,8 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   )
   // Declared settings sections — app-wide and mounted modules' — from the
   // platform env (Workers bindings) when given, bound before modules register.
+  // As Application.setup(): get() must not keep a value a previous app loaded.
+  _forgetLoadedSettings()
   const settingsEnv = (options.env ??
     (typeof process !== 'undefined' ? process.env : {})) as NodeJS.ProcessEnv
   for (const [section, value] of loadSettings(

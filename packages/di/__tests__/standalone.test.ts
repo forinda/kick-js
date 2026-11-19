@@ -132,3 +132,15 @@ it('registerInstance survives Container.reset() unless told not to persist', () 
   expect(Container.getInstance().resolve(KEPT)).toBe('kept')
   expect(Container.getInstance().has(DROPPED)).toBe(false)
 })
+
+it('invalidate() leaves a registered instance bound — nothing rebuilds it', () => {
+  const SETTINGS = createToken<{ url: string }>('standalone/settings')
+  const value = { url: 'postgres://db' }
+  Container.getInstance().registerInstance(SETTINGS, value, { persist: false })
+  Container.getInstance().invalidate(SETTINGS)
+  expect(Container.getInstance().resolve(SETTINGS)).toBe(value)
+  const isolated = Container.create()
+  isolated.registerInstance(SETTINGS, value)
+  isolated.invalidate(SETTINGS)
+  expect(isolated.resolve(SETTINGS)).toBe(value)
+})
