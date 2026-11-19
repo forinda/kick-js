@@ -26,7 +26,7 @@ export type AssetsMode =
  * the hashed script, stylesheets and module preloads from the manifest in production.
  * Throws when the entry isn't in the manifest.
  *
- * @see https://kickjs.app/guide/views#assets
+ * @see https://kickjs.app/guide/views/assets
  */
 export function assetTags(entry: string, mode: AssetsMode, nonce?: string): string {
   const base = mode.base.endsWith('/') ? mode.base : `${mode.base}/`

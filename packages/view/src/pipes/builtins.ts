@@ -88,7 +88,7 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 /**
  * The built-in pipes bound to a render's locale and time zone (`date`, `currency`, `kvRoute`, ...).
  *
- * @see https://kickjs.app/guide/views#pipes
+ * @see https://kickjs.app/guide/views/pipes
  */
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
