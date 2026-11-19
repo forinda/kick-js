@@ -712,4 +712,14 @@ describe('named view roots — review fixes', () => {
     const configured = await serve({ loadConfig: async () => ({ views: { dir: 'app/views' } }) })
     expect(configured.viewsDir).toBe(join(root, 'app/views'))
   })
+
+  it("keeps kick.config's views folder when the plugin sets the roots", async () => {
+    const root = project({ 'app/views/home.kick': '<p>home</p>', 'ui/x.kick': '<p>x</p>' })
+    const code = await bundle(root, {
+      roots: { ui: './ui' },
+      loadConfig: async () => ({ views: { dir: 'app/views' } }),
+    })
+    expect(code).toContain('"home"')
+    expect(code).toContain('"ui::x"')
+  })
 })

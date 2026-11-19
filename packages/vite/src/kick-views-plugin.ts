@@ -288,13 +288,12 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     async configResolved(config) {
       // kick.config's `views` block: folders resolve from its directory.
       const configDir = kickConfigDir(config.root)
-      const fromConfig = options.roots
-        ? undefined
-        : (
-            (await (options.loadConfig ?? loadConfigWithCli)(configDir)) as {
-              views?: { dir?: string; roots?: Record<string, string> }
-            } | null
-          )?.views
+      // Always read: the plugin's `roots` / `viewsDir` override only their own field.
+      const fromConfig = (
+        (await (options.loadConfig ?? loadConfigWithCli)(configDir)) as {
+          views?: { dir?: string; roots?: Record<string, string> }
+        } | null
+      )?.views
       viewsDirSet = !!(options.viewsDir || fromConfig?.dir)
       viewsDir =
         options.viewsDir || !fromConfig?.dir

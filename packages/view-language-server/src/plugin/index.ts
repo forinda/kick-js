@@ -69,16 +69,18 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
         provideReferences(document, position, context) {
           const d = open(document)
           return d
-            ? references(ws, d.text, document.offsetAt(position), context.includeDeclaration)
+            ? references(ws, d.text, document.offsetAt(position), context.includeDeclaration, d.uri)
             : undefined
         },
         provideRenameRange(document, position) {
           const d = open(document)
-          return d ? renameRange(ws, d.text, document.offsetAt(position)) : undefined
+          return d ? renameRange(ws, d.text, document.offsetAt(position), d.uri) : undefined
         },
         provideRenameEdits(document, position, newName) {
           const d = open(document)
-          return d ? renameEdits(ws, d.text, document.offsetAt(position), newName) : undefined
+          return d
+            ? renameEdits(ws, d.text, document.offsetAt(position), newName, d.uri)
+            : undefined
         },
         provideFileRenameEdits(oldUri, newUri) {
           return fileRenameEdits(ws, oldUri.toString(), newUri.toString())

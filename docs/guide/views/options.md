@@ -25,7 +25,7 @@ The Vite plugin's own options, in `vite.config.ts` as `kickjs({ views: { … } }
 | ------------------ | ---------------------------- | ------------------------------------------------------------------------------------------- |
 | `viewsDir`         | `'src/views'`                |                                                                                             |
 | `componentsDir`    | `'components'`               |                                                                                             |
-| `pipesFile`        | `'src/views/pipes.ts'`       |                                                                                             |
+| `pipesFile`        | `'<viewsDir>/pipes.ts'`      |                                                                                             |
 | `validatorsFile`   | `'<viewsDir>/validators.ts'` | [your own validators](./forms.md#your-own-validators)                                       |
 | `clientScriptPath` | `'/_kick/c'`                 | the URL path client files are served under                                                  |
 | `clientFiles`      | `'disk'`                     | `'bundle'` keeps client files in the server bundle                                          |

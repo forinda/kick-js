@@ -125,11 +125,8 @@ export function startServer(): void {
     const opts = (params.initializationOptions ?? {}) as ServerOptions
     const at = (p: string) => (isAbsolute(p) ? p : resolve(root, p))
     // kick.config runs the project's code: read only in a trusted workspace.
-    const setup = viewsSetup(
-      root,
-      opts,
-      opts.trusted === true && !opts.roots ? await loadKickConfig(root) : null,
-    )
+    // Each editor setting overrides only its own field (viewsSetup).
+    const setup = viewsSetup(root, opts, opts.trusted === true ? await loadKickConfig(root) : null)
     if (setup.error) connection.console.warn(`kick views: ${setup.error}`)
     const viewsDir = setup.viewsDir ?? at('src/views')
     const hasViews = existsSync(viewsDir)

@@ -69,3 +69,16 @@ describe('checking view roots', () => {
     expect(errors(check('page', p)).join('\n')).toContain('nope::x')
   })
 })
+
+describe('checking view roots — PR review', () => {
+  it('reports two components that would share a tag even when nothing uses it', () => {
+    const p = project({
+      'components/ui/button': '<button></button>',
+      'ui::components/button': '<button></button>',
+    })
+    const msgs = errors(check('ui::components/button', p)).join('\n')
+    expect(msgs).toContain('components/ui/button')
+    expect(msgs).toContain('ui::components/button')
+    expect(errors(check('components/ui/button', p)).join('\n')).toContain('ui::components/button')
+  })
+})

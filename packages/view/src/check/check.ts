@@ -170,7 +170,7 @@ class Checker {
    * it sits in a loop (whose `$index` etc. it can't read).
    */
   private unit?: { outer: Set<string>; inLoop: boolean; needs: string[]; errors: Diagnostic[] }
-  private readonly tags = new Map<string, string[]>()
+  readonly tags = new Map<string, string[]>()
   private readonly signatures = new Map<string, Signature>()
 
   constructor(
@@ -1399,6 +1399,17 @@ export function check(name: string, project: Project): CheckResult {
   }
   const component = isComponent(name, project.componentsDir)
   const c = new Checker(project, ast, component)
+  // Two components with one tag (`components/ui/button` and the `ui` root's
+  // `components/button`): reported on each, used or not.
+  if (component) {
+    const tag = componentTag(name, project.componentsDir)
+    const same = c.tags.get(tag) ?? []
+    if (same.length > 1) {
+      c.diagnostics.push(
+        error(ast.file, zero, `<${tag}> is the tag of more than one component: ${same.join(', ')}`),
+      )
+    }
+  }
 
   // A page's @inputs declare its render data (typed for typegen); its reads
   // stay data reads, so its layouts see the same values. A component's are

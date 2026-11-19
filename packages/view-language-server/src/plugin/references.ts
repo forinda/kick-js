@@ -18,6 +18,9 @@ type Target =
 
 interface Use {
   uri: string
+  /** The template it's in, and the name as written there (a layout's). */
+  from: string
+  written: string
   text: string
   offset: number
   length: number
@@ -32,11 +35,27 @@ const rangeOf = (text: string, offset: number, length: number): Range => ({
   end: posOf(text, offset + length),
 })
 
-/** The shared name under the cursor, with where it sits in `text`. */
+/** `ui::layouts/main` → `ui`; an app template has none. */
+const rootOf = (name: string) =>
+  name.includes('::') ? name.slice(0, name.indexOf('::')) : undefined
+
+/**
+ * What to write for a layout renamed to `newFull`, at a use written as
+ * `written` in template `from`: unqualified when it stays in that root.
+ */
+function layoutText(ws: Workspace, use: Use, newFull: string): string {
+  const root = rootOf(newFull)
+  return !use.written.includes('::') && root !== undefined && rootOf(use.from) === root
+    ? ws.pathPart(newFull)
+    : newFull
+}
+
+/** The shared name under the cursor, with where it sits in `text` (the template at `uri`). */
 function targetAt(
   ws: Workspace,
   text: string,
   offset: number,
+  uri?: string,
 ): { target: Target; offset: number; length: number } | undefined {
   const tokens = kickTokens(text, (tag) => componentOf(ws, tag) !== undefined)
   const t = tokens.find((k) => offset >= k.offset && offset <= k.offset + k.length)
@@ -50,9 +69,11 @@ function targetAt(
   }
   if (t.type === 'function') return { target: { kind: 'pipe', name: word }, ...t }
   if (t.type === 'string' && /@layout\s*\(\s*$/.test(text.slice(0, t.offset))) {
-    const name = word.slice(1, -1)
+    const written = word.slice(1, -1)
+    // In a view root's template, its own root's layout first.
+    const name = ws.refOf(uri === undefined ? undefined : ws.nameOf(uri), written)
     return ws.astOf(name)
-      ? { target: { kind: 'layout', name }, offset: t.offset + 1, length: name.length }
+      ? { target: { kind: 'layout', name }, offset: t.offset + 1, length: written.length }
       : undefined
   }
   return undefined
@@ -67,12 +88,14 @@ function usesOf(ws: Workspace, target: Target): Use[] {
     const uri = ws.uriOf(name)
     if (target.kind === 'layout') {
       for (const m of text.matchAll(LAYOUT))
-        if (m[2] === target.name)
+        if (ws.refOf(name, m[2]!) === target.name)
           out.push({
             uri,
             text,
-            offset: m.index + m[0].length - m[2].length - 1,
-            length: m[2].length,
+            from: name,
+            written: m[2]!,
+            offset: m.index + m[0].length - m[2]!.length - 1,
+            length: m[2]!.length,
           })
       continue
     }
@@ -83,7 +106,7 @@ function usesOf(ws: Workspace, target: Target): Use[] {
         t.type === want &&
         text.slice(t.offset, t.offset + t.length).toLowerCase() === match.toLowerCase()
       )
-        out.push({ uri, text, ...t })
+        out.push({ uri, text, from: name, written: match, ...t })
   }
   return out
 }
@@ -104,8 +127,9 @@ export function references(
   text: string,
   offset: number,
   includeDeclaration: boolean,
+  uri?: string,
 ): Location[] {
-  const at = targetAt(ws, text, offset)
+  const at = targetAt(ws, text, offset, uri)
   if (!at) return []
   const { target } = at
   const locations: Location[] = usesOf(ws, target).map((u) => ({
@@ -126,8 +150,9 @@ export function renameRange(
   ws: Workspace,
   text: string,
   offset: number,
+  uri?: string,
 ): Range | { message: string } | undefined {
-  const at = targetAt(ws, text, offset)
+  const at = targetAt(ws, text, offset, uri)
   if (!at) return undefined
   if (at.target.kind === 'pipe' && !pipeDeclaration(ws, at.target.name))
     return {
@@ -142,15 +167,21 @@ const TAG = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/
 function componentNameFor(ws: Workspace, oldName: string, tag: string): string | undefined {
   if (!TAG.test(tag)) return undefined
   const dir = ws.componentsDir()
-  const folders = oldName
+  // A root's component stays in its root, and its tag keeps the root's prefix.
+  const root = rootOf(oldName)
+  if (root !== undefined && !tag.startsWith(`${root}-`)) return undefined
+  const rest = root === undefined ? tag : tag.slice(root.length + 1)
+  const folders = ws
+    .pathPart(oldName)
     .slice(dir.length + 1)
     .split('/')
     .slice(0, -1)
   const prefix = folders.join('-')
-  const name =
-    prefix && tag.startsWith(`${prefix}-`)
-      ? `${dir}/${folders.join('/')}/${tag.slice(prefix.length + 1)}`
-      : `${dir}/${tag}`
+  const path =
+    prefix && rest.startsWith(`${prefix}-`)
+      ? `${dir}/${folders.join('/')}/${rest.slice(prefix.length + 1)}`
+      : `${dir}/${rest}`
+  const name = root === undefined ? path : `${root}::${path}`
   return ws.view.componentTag(name, dir) === tag ? name : undefined
 }
 
@@ -158,7 +189,7 @@ function componentNameFor(ws: Workspace, oldName: string, tag: string): string |
 function renameTemplate(
   ws: Workspace,
   target: Target,
-  newText: string,
+  newText: string | ((use: Use) => string),
   newName: string,
 ): WorkspaceEdit | undefined {
   if (target.kind === 'pipe') return undefined
@@ -166,7 +197,10 @@ function renameTemplate(
   const byUri = new Map<string, TextEdit[]>()
   for (const u of usesOf(ws, target)) {
     const edits = byUri.get(u.uri) ?? []
-    edits.push({ range: rangeOf(u.text, u.offset, u.length), newText })
+    edits.push({
+      range: rangeOf(u.text, u.offset, u.length),
+      newText: typeof newText === 'string' ? newText : newText(u),
+    })
     byUri.set(u.uri, edits)
   }
   return {
@@ -184,15 +218,21 @@ export function renameEdits(
   text: string,
   offset: number,
   newName: string,
+  uri?: string,
 ): WorkspaceEdit | undefined {
-  const at = targetAt(ws, text, offset)
+  const at = targetAt(ws, text, offset, uri)
   if (!at) return undefined
   const { target } = at
   if (target.kind === 'component') {
     const name = componentNameFor(ws, target.name, newName)
     return name === undefined ? undefined : renameTemplate(ws, target, newName, name)
   }
-  if (target.kind === 'layout') return renameTemplate(ws, target, newName, newName)
+  if (target.kind === 'layout') {
+    // A root's layout stays in its root: `layouts/base` means `ui::layouts/base`.
+    const root = rootOf(target.name)
+    const full = root !== undefined && !newName.includes('::') ? `${root}::${newName}` : newName
+    return renameTemplate(ws, target, (u) => layoutText(ws, u, full), full)
+  }
   if (!IDENT.test(newName) || ws.project().pipes.has(newName)) return undefined
   const decl = pipeDeclaration(ws, target.name)
   if (!decl) return undefined
@@ -235,10 +275,13 @@ export async function fileRenameEdits(
       ])
     for (const [target, newText] of targets)
       for (const u of usesOf(ws, target))
-        (changes[u.uri] ??= []).push({ range: rangeOf(u.text, u.offset, u.length), newText })
+        (changes[u.uri] ??= []).push({
+          range: rangeOf(u.text, u.offset, u.length),
+          newText: target.kind === 'layout' ? layoutText(ws, u, newText) : newText,
+        })
   }
   // Pages named in `ctx.render('…')` / `views.render('…')`.
-  const pages = [...renamed].filter(([n]) => !n.startsWith(`${dir}/`))
+  const pages = [...renamed].filter(([n]) => !ws.isComponent(n))
   if (pages.length) {
     const to = new Map(pages)
     for (const script of await ws.scripts())

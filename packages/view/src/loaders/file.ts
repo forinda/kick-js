@@ -49,9 +49,16 @@ export function multiRootLoader(appDir: string, roots: Record<string, string>): 
   return {
     async list() {
       const all = await Promise.all(
-        [...loaders].map(async ([root, l]) =>
-          (await l.list().catch(() => [])).map((p) => qualify(root, p)),
-        ),
+        [...loaders].map(async ([root, l]) => {
+          // No app views folder is fine (an app of roots only); any other
+          // failure, or a root that can't be read, rejects — so the views
+          // don't cache an empty listing.
+          const names = await l.list().catch((err: NodeJS.ErrnoException) => {
+            if (root === undefined && err.code === 'ENOENT') return []
+            throw err
+          })
+          return names.map((p) => qualify(root, p))
+        }),
       )
       return all.flat().toSorted()
     },

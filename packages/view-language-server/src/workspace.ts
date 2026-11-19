@@ -287,8 +287,12 @@ export class Workspace {
   }
 
   private remove(name: string): void {
+    // Who uses it, found before it's gone: a root page's `@layout('x')`
+    // resolves to the app's `x` once the root's own is deleted.
+    const users = this.dependentsOf(name)
     this.entries.delete(name)
     this.invalidate(name, true)
+    for (const u of users) this.invalidate(u, false)
   }
 
   /** Drop cached diagnostics for `name` and every template that uses it, transitively. */

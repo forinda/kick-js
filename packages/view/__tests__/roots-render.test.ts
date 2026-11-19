@@ -124,3 +124,15 @@ describe('view roots — client scripts', () => {
     expect(await v.clientScript(src)).toContain('console.log(1)')
   })
 })
+
+describe('view roots — PR review', () => {
+  it("lists without an app views folder, but fails on a root that can't be read", async () => {
+    const { multiRootLoader } = await import('../src/loaders/file')
+    const ui = dir({ x: '<p></p>' })
+    const missing = join(tmpdir(), 'kick-roots-absent-app')
+    expect(await multiRootLoader(missing, { ui }).list()).toEqual(['ui::x'])
+    await expect(
+      multiRootLoader(missing, { ui, gone: join(tmpdir(), 'kick-roots-absent-root') }).list(),
+    ).rejects.toThrow()
+  })
+})

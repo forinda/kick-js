@@ -44,3 +44,16 @@ describe('viewsSetup', () => {
     expect(r.error).toMatch(/Bad/)
   })
 })
+
+describe('viewsSetup — PR review', () => {
+  it("keeps kick.config's views folder when only the roots are set in the editor", () => {
+    const root = app()
+    const r = viewsSetup(
+      root,
+      { roots: { ui: './src/modules/ui/views' } },
+      { views: { dir: 'app/views' } },
+    )
+    expect(r.viewsDir).toBe(join(root, 'app/views'))
+    expect(r.roots.map((x) => x.name)).toEqual(['ui'])
+  })
+})
