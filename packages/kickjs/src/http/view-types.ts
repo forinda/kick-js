@@ -5,7 +5,7 @@
  * `ctx.render` takes any name and any data, as before.
  *
  * @module @forinda/kickjs/http/view-types
- * @see https://kickjs.app/guide/views#typed-render-data
+ * @see https://kickjs.app/guide/views/typed-render-data
  */
 import type { ViewRenderOptions } from './view-renderer'
 
@@ -13,7 +13,7 @@ import type { ViewRenderOptions } from './view-renderer'
  * Every `.kick` page by name: the data it reads and its fragments' needs.
  * Filled by `kick typegen`; don't write entries by hand.
  *
- * @see https://kickjs.app/guide/views#typed-render-data
+ * @see https://kickjs.app/guide/views/typed-render-data
  */
 export interface KickViews {}
 
@@ -27,7 +27,7 @@ export interface KickViews {}
  * }
  * ```
  *
- * @see https://kickjs.app/guide/views#typed-render-data
+ * @see https://kickjs.app/guide/views/typed-render-data
  */
 export interface KickViewShared {}
 
@@ -36,7 +36,7 @@ export interface KickViewShared {}
  * {@link KickViews} through — for an app that also renders EJS or Pug with
  * `ViewAdapter` (a misspelled `.kick` name then compiles too).
  *
- * @see https://kickjs.app/guide/views#typed-render-data
+ * @see https://kickjs.app/guide/views/typed-render-data
  */
 export interface KickViewTypeOptions {}
 

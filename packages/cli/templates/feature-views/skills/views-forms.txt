@@ -66,4 +66,4 @@ A failed `body` schema on a browser form post: `formErrorHandler()` stores the e
 - Rich rules: a component with a `<script client>` can import the route's own schema (`import { taskSchema } from '@/modules/tasks/tasks.schemas'`) and run `safeParse` on blur and submit — one set of rules for server and browser. Keep the schema file free of server imports.
 - The browser checks are for quick feedback. The route's schema still decides.
 
-Full guide: https://kickjs.app/guide/views#forms.
+Full guide: https://kickjs.app/guide/views/forms.

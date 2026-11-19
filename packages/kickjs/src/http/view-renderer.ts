@@ -23,7 +23,7 @@ export interface ViewRenderOptions {
    * Render only these `@fragment`s of the template, without layouts — an htmx
    * swap, or several for out-of-band swaps. `.kick` views only.
    *
-   * @see https://kickjs.app/guide/views#fragments
+   * @see https://kickjs.app/guide/views/htmx#fragments
    */
   fragment?: string | readonly string[]
   locale?: string

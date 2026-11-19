@@ -289,7 +289,7 @@ function shape(nodes: Node[]): string[] {
  * `output` is absent when the source has syntax errors; when formatting would change more
  * than whitespace, `output` is the source unchanged and a warning says why.
  *
- * @see https://kickjs.app/guide/views#formatting-and-checking
+ * @see https://kickjs.app/guide/views/tooling#formatting-and-checking
  */
 export function format(
   source: string,

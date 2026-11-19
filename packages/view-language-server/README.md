@@ -36,4 +36,4 @@ Initialization options, relative to the workspace folder:
 
 Any file ending in `.kick` is a template, whatever `languageId` the editor sends. The custom request `kick/templateNames` returns every template name except components.
 
-See the [views guide](https://kickjs.app/guide/views#editor-support).
+See the [views guide](https://kickjs.app/guide/views/tooling#editor-support).

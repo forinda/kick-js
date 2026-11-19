@@ -1,7 +1,7 @@
 // Names createViews({ share }) in src/views.ts gives every page. List them
 // here so `kick typegen` doesn't make controllers pass them to ctx.render
 // (and views.render, for emails). A .ts file, so a mistake here is reported.
-// See https://kickjs.app/guide/views#typed-render-data
+// See https://kickjs.app/guide/views/typed-render-data
 declare module '@forinda/kickjs' {
   interface KickViewShared {
     // user: { name: string } | undefined

@@ -109,7 +109,7 @@ export interface KickViewsCliOptions {
  * plugins: [kickViewsCli({ dir: 'app/views' })]
  * ```
  *
- * @see https://kickjs.app/guide/views#typed-render-data
+ * @see https://kickjs.app/guide/views/typed-render-data
  */
 export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
   const dir = options.dir ?? 'src/views'
