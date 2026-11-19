@@ -58,6 +58,11 @@ describe('loadDbConfigFile', () => {
     await expect(loadDbConfigFile(missing)).rejects.toThrow(missing)
     const bad = await file('bad.mjs', 'export default 42')
     await expect(loadDbConfigFile(bad)).rejects.toThrow(bad)
+    // No default export at all: not the module namespace, read as an empty config.
+    const none = await file('none.mjs', "export const db = 1\nexport const other = 'x'")
+    await expect(loadDbConfigFile(none)).rejects.toThrow(none)
+    const noneTs = await file('none.ts', 'export const x = 1')
+    await expect(loadDbConfigFile(noneTs)).rejects.toThrow(noneTs)
   })
 })
 
@@ -81,14 +86,17 @@ describe('kick db --config', () => {
     })
   const run = async (args: string[]) => {
     const lines: string[] = []
-    vi.spyOn(console, 'log').mockImplementation((l: string) => void lines.push(String(l)))
+    const out: string[] = []
+    // The announcement goes to stderr: stdout stays clean for `introspect --json`.
+    vi.spyOn(console, 'error').mockImplementation((l: string) => void lines.push(String(l)))
+    vi.spyOn(console, 'log').mockImplementation((l: string) => void out.push(String(l)))
     const program = new Command().exitOverride()
     registerDbCommands(program.command('db'), base)
     const err = await program.parseAsync(['node', 'kick', 'db', ...args]).then(
       () => undefined,
       (e: Error) => e,
     )
-    return { lines, err }
+    return { lines, out, err }
   }
   const fileConfig = () =>
     file(
@@ -101,6 +109,7 @@ describe('kick db --config', () => {
     const after = await run(['migrate', 'status', '--config', p])
     expect(after.err?.message).toBe('file used')
     expect(after.lines[0]).toBe(`db config: ${p}`)
+    expect(after.out).toEqual([])
     const before = await run(['--config', p, 'migrate', 'status'])
     expect(before.err?.message).toBe('file used')
   })

@@ -254,7 +254,8 @@ export function registerDbCommands(parent: Command, fallback: DbConfigResolver):
     const file = configFileOf(parent.opts())
     if (!file) return fallback()
     const input = await loadDbConfigFile(file)
-    console.log(`db config: ${file}`)
+    // stderr: stdout stays the command's own output (`introspect --json`).
+    console.error(`db config: ${file}`)
     // Not DATABASE_URL: an unset STAGING_URL in the file mustn't quietly
     // become whatever database DATABASE_URL points at.
     return resolveKickDbConfig(input, { envFallback: false })

@@ -144,7 +144,7 @@ export default defineKickDbConfig({ ...base, connectionString: process.env.STAGI
 - **Which file types load:** `.ts` / `.mts` load with your tsconfig `paths`; `.js`, `.mjs` and `.json` work too.
 - **How paths resolve:** a relative `--config` path resolves from the working directory. Paths inside the file (`schemaPath`, `migrationsDir`) are relative to the project root, as in `kick.config.ts`.
 - **No `DATABASE_URL` fallback:** a named file must set `connectionString` or `adapter()` itself. If `STAGING_DATABASE_URL` is unset, `db/staging.ts` above fails with "no adapter resolved" instead of quietly using whatever `DATABASE_URL` points at.
-- **What it prints:** every command run with a named file starts with `db config: <file>`, so the output says which config it used. A missing file is an error naming the path.
+- **What it prints:** every command run with a named file starts by writing `db config: <file>` to stderr, so you can see which config it used while stdout stays clean (`introspect --json` stays valid JSON). A missing file is an error naming the path.
 - **Typegen:** `kick typegen` still reads `kick.config.ts` for the database types.
 
 The examples below run against SQLite.

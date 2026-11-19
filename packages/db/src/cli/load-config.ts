@@ -39,17 +39,23 @@ export async function loadDbConfigFile(
 export async function readConfigModule(file: string, cwd = process.cwd()): Promise<unknown> {
   const abs = path.resolve(cwd, file)
   if (!existsSync(abs)) throw new Error(`kickjs-db: no config file at ${file}`)
-  return importConfig(abs)
+  const mod = await importConfig(abs)
+  // No default export: the module namespace isn't a config, however it looks.
+  if (!('default' in mod))
+    throw new Error(
+      `kickjs-db: ${file} has no default export (export default defineKickDbConfig({ … }))`,
+    )
+  return mod.default
 }
 
-async function importConfig(file: string): Promise<unknown> {
-  if (file.endsWith('.json')) return JSON.parse(await readFile(file, 'utf8'))
+/** The file's module: its exports, `default` among them when it has one (JSON is its default). */
+async function importConfig(file: string): Promise<{ default?: unknown }> {
+  if (file.endsWith('.json')) return { default: JSON.parse(await readFile(file, 'utf8')) }
   if (file.endsWith('.ts') || file.endsWith('.mts')) {
     const { createJiti } = await import('jiti')
     // From the file's own location, with tsconfig `paths`, as the app resolves them.
     const jiti = createJiti(pathToFileURL(file).href, { tsconfigPaths: true })
-    return jiti.import(file, { default: true })
+    return ((await jiti.import(file)) ?? {}) as { default?: unknown }
   }
-  const mod = (await import(pathToFileURL(file).href)) as { default?: unknown }
-  return mod.default ?? mod
+  return (await import(pathToFileURL(file).href)) as { default?: unknown }
 }
