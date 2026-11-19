@@ -162,3 +162,5 @@ export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
 
 /** The plugin with default folders — `kickViewsCli()`. */
 export const viewCliPlugin: KickCliPlugin = kickViewsCli()
+
+export { packageDir, resolveViewRoots, rootFolders, type ViewRoot, type ViewsConfig } from './roots'

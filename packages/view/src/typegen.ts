@@ -7,14 +7,14 @@
  * so `skipLibCheck` doesn't hide a bad `@input` type or an `@import type` that
  * doesn't resolve.
  */
-import { existsSync } from 'node:fs'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 import type { CliTypegen } from '@forinda/kickjs-cli-kit'
 import { check } from './check/check'
 import { isComponent } from './check/project'
 import { mergeSummary, summarize, type DataSummary, type Field, type Shape } from './check/summary'
 import type { KickViewsCliOptions } from './cli'
 import { loadViewsProject } from './load-project'
+import { packageDir } from './roots'
 
 /** One page: its name, its file (relative to the project root) and what it reads. */
 export interface ViewTypesEntry {
@@ -256,20 +256,11 @@ export function aliasImports(
 
 const PACKAGES = ['@forinda/kickjs', '@forinda/kickjs-view'] as const
 
-/**
- * Is `pkg` installed for the project at `root`? Looks for
- * `node_modules/<pkg>/package.json` up the folders, as Node resolves — not
- * `require.resolve('<pkg>/package.json')`, which a package's `exports` can
- * refuse.
- */
-function installedIn(root: string): (pkg: string) => boolean {
-  return (pkg) => {
-    for (let dir = resolve(root); ; dir = dirname(dir)) {
-      if (existsSync(join(dir, 'node_modules', pkg, 'package.json'))) return true
-      if (dirname(dir) === dir) return false
-    }
-  }
-}
+/** Is `pkg` installed for the project at `root`? (Not `require.resolve`, which a package's `exports` can refuse.) */
+const installedIn =
+  (root: string) =>
+  (pkg: string): boolean =>
+    packageDir(root, pkg) !== undefined
 
 interface TypegenLog {
   warn(message: string): void
