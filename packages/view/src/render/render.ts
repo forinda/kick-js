@@ -69,7 +69,7 @@ interface Inst {
   t: CheckedTemplate
   data: Record<string, unknown>
   slots: unknown[]
-  fills: Record<string, { nodes: CNode[]; inst: Inst }>
+  fills: Record<string, { nodes: CNode[]; inst: Inst; params?: Array<{ from: string; s: number }> }>
   fall?: Resolved
   /** Inputs for components further down a wrapper chain, not taken yet, by name. */
   chain?: Record<string, unknown>
@@ -338,8 +338,20 @@ class Renderer {
         return
       case 'o': {
         const fill = inst.fills[n.n]
-        if (fill) this.nodes(fill.nodes, fill.inst)
-        else this.nodes(n.fb, inst)
+        // The values this slot offers, by name.
+        const offered: Record<string, unknown> = Object.create(null)
+        for (const v of n.v ?? []) offered[v.n] = this.value(v.e, inst)
+        if (fill?.params) {
+          // On its own copy of the caller's scope: a nested render of the same
+          // content (a recursive component) can't overwrite this one's values.
+          const own: Inst = { ...fill.inst, slots: [...fill.inst.slots] }
+          for (const p of fill.params) own.slots[p.s] = offered[p.from]
+          this.nodes(fill.nodes, own)
+        } else if (fill) this.nodes(fill.nodes, fill.inst)
+        else {
+          n.fs?.forEach((s, i) => (inst.slots[s] = offered[n.v![i]!.n]))
+          this.nodes(n.fb, inst)
+        }
         return
       }
       case 'stk':
@@ -527,7 +539,7 @@ class Renderer {
     // The root call of a wrapper: the caller's forwarded attributes win.
     if (n.r && caller.fall) fall = mergeResolved(fall, caller.fall)
     const fills: Inst['fills'] = {}
-    for (const [name, nodes] of Object.entries(n.f)) fills[name] = { nodes, inst: caller }
+    for (const [name, f] of Object.entries(n.f)) fills[name] = { ...f, inst: caller }
     const inst: Inst = {
       t,
       data: Object.create(null),
@@ -650,7 +662,7 @@ export function render(
   // Each layout renders the one inside it into its default slot; named fills
   // pass outward until a layout's own fill replaces them.
   let fills: Inst['fills'] = { '': { nodes: template.body, inst: page } }
-  for (const [name, nodes] of Object.entries(template.fills)) fills[name] = { nodes, inst: page }
+  for (const [name, f] of Object.entries(template.fills)) fills[name] = { ...f, inst: page }
   let inst: Inst = page
   for (const [i, t] of chain.entries()) {
     inst = {
@@ -663,7 +675,7 @@ export function render(
     }
     if (i === chain.length - 1) break
     const outer: Inst['fills'] = { ...fills, '': { nodes: t.body, inst } }
-    for (const [name, nodes] of Object.entries(t.fills)) outer[name] = { nodes, inst }
+    for (const [name, f] of Object.entries(t.fills)) outer[name] = { ...f, inst }
     fills = outer
   }
   r.nodes(inst.t.body, inst)

@@ -275,3 +275,29 @@ describe('fragments and stacks', () => {
     expect(ok('<stack-panel></stack-panel>').ast.body[0]!.k).toBe('element')
   })
 })
+
+describe('slots that receive data', () => {
+  it('parses lets on a fill, with renames, and the default slot', () => {
+    const fill = ok("<x-a>@slot('row'; let user, u2 = index) {x}</x-a>").ast.body[0] as Element
+    expect(fill.children[0]).toMatchObject({
+      k: 'slot-fill',
+      name: 'row',
+      lets: [
+        { name: 'user', from: 'user' },
+        { name: 'u2', from: 'index' },
+      ],
+    })
+    const def = ok('<x-a>@slot(default; let item) {x}</x-a>').ast.body[0] as Element
+    expect(def.children[0]).toMatchObject({
+      k: 'slot-fill',
+      name: '',
+      lets: [{ name: 'item', from: 'item' }],
+    })
+  })
+
+  it('parses the values a <slot> offers, and refuses other static attributes', () => {
+    const out = ok('<slot name="a" [user]="u" />').ast.body[0]
+    expect(out).toMatchObject({ k: 'slot-outlet', name: 'a', offers: [{ name: 'user' }] })
+    expect(errors('<slot name="a" foo="1" />')).toHaveLength(1)
+  })
+})

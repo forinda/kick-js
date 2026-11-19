@@ -340,7 +340,20 @@ class TemplateParser {
           'a slot name must be plain text',
         )
       }
-      const node: Node = { k: 'slot-outlet', name: slotName, fallback: [], span: el.span }
+      // `[name]="expr"`: a value for the caller's content.
+      const offers: Array<{ name: string; expr: Expr; span: Span }> = []
+      for (const a of attrs) {
+        if (a === nameAttr) continue
+        if (a.kind === 'bind' && a.expr) offers.push({ name: a.name, expr: a.expr, span: a.span })
+        else if (a.kind !== 'bind') {
+          this.err(
+            a.span.start.offset,
+            a.span.end.offset,
+            `<slot> takes name="…" and [value]="…" bindings only, not ${a.name}`,
+          )
+        }
+      }
+      const node: Node = { k: 'slot-outlet', name: slotName, offers, fallback: [], span: el.span }
       this.emit(node)
       if (!selfClosing) {
         this.frames.push({ type: 'slot', children: node.fallback, tag: 'slot', start: i })
@@ -704,8 +717,29 @@ class TemplateParser {
       this.emit(node)
       this.frames.push({ type: 'block', children: node.body, node, keyword: kw, start: i })
     } else {
-      const name = this.stringArg(p.src, p.at, '@slot')
-      const node: Node = { k: 'slot-fill', name, body: [], span: this.span(i, brace) }
+      const [head, letPart, extra] = this.splitHeader(p.src, p.at)
+      // `default` (unquoted, like `@layout(none)`) is the default slot.
+      const name = /^\s*default\s*$/.test(head!.src)
+        ? ''
+        : this.stringArg(head!.src, head!.at, '@slot')
+      const lets: Array<{ name: string; from: string }> = []
+      if (letPart) {
+        const m = /^\s*let\s+(.*)$/s.exec(letPart.src)
+        const items = m
+          ? m[1]!
+              .split(',')
+              .map((x) => /^\s*([A-Za-z_$][\w$]*)\s*(?:=\s*([A-Za-z_$][\w$]*)\s*)?$/.exec(x))
+          : []
+        if (!m || items.some((x) => !x)) {
+          this.err(
+            letPart.at,
+            letPart.at + letPart.src.length,
+            'expected `let name` or `let name = offered` after ;',
+          )
+        } else for (const x of items) lets.push({ name: x![1]!, from: x![2] ?? x![1]! })
+      }
+      if (extra) this.err(extra.at, extra.at + 1, 'unexpected ; in @slot')
+      const node: Node = { k: 'slot-fill', name, lets, body: [], span: this.span(i, brace) }
       this.emit(node)
       this.frames.push({ type: 'block', children: node.body, node, keyword: 'slot', start: i })
     }

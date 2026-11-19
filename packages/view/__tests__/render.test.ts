@@ -639,3 +639,53 @@ describe('wrapper components', () => {
     expect(html).toBe('<a href="#">go</a>')
   })
 })
+
+describe('slots that receive data', () => {
+  const list = {
+    'components/x-list':
+      '@input users\n<ul>@for (u of users; track u.id) {<li><slot name="row" [user]="u">{{ user.name }}?</slot></li>}</ul>',
+  }
+  const users = [
+    { id: 1, name: 'A' },
+    { id: 2, name: 'B' },
+  ]
+
+  it("passes each item to the caller's content", () => {
+    const { html } = r(
+      {
+        ...list,
+        page: '<x-list [users]="us">@slot(\'row\'; let user) {<i>{{ user.name }}</i>}</x-list>',
+      },
+      { us: users },
+    )
+    expect(html).toBe('<ul><li><i>A</i></li><li><i>B</i></li></ul>')
+  })
+
+  it('renames with let x = name', () => {
+    const { html } = r(
+      {
+        ...list,
+        page: '<x-list [users]="us">@slot(\'row\'; let p = user) {{{ p.name }}}</x-list>',
+      },
+      { us: users },
+    )
+    expect(html).toBe('<ul><li>A</li><li>B</li></ul>')
+  })
+
+  it('lets the fallback read the offered values', () => {
+    const { html } = r({ ...list, page: '<x-list [users]="us" />' }, { us: users })
+    expect(html).toBe('<ul><li>A?</li><li>B?</li></ul>')
+  })
+
+  it('keeps each level of a recursive component to its own values', () => {
+    const { html } = r(
+      {
+        'components/tree-node':
+          '@input node\n<li><slot name="label" [node]="node" />@for (c of node.kids; track c.name) {<tree-node [node]="c">@slot(\'label\'; let node) {[{{ node.name }}]}</tree-node>}</li>',
+        page: '<tree-node [node]="root">@slot(\'label\'; let node) {<b>{{ node.name }}</b>}</tree-node>',
+      },
+      { root: { name: 'r', kids: [{ name: 'a', kids: [{ name: 'a1', kids: [] }] }] } },
+    )
+    expect(html).toBe('<li><b>r</b><li>[a]<li>[a1]</li></li></li>')
+  })
+})

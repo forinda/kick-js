@@ -471,3 +471,45 @@ describe('passthrough to a <meta> root', () => {
     ).toEqual([expect.stringContaining('@input')])
   })
 })
+
+describe('slots that receive data', () => {
+  const list = {
+    'components/x-list':
+      '@input users\n<ul>@for (u of users; track u.id) {<li><slot name="row" [user]="u" /></li>}</ul>',
+  }
+
+  it('refuses taking a name the slot does not offer, listing what it offers', () => {
+    expect(
+      errs({ ...list, page: '<x-list [users]="us">@slot(\'row\'; let nope) {x}</x-list>' }),
+    ).toEqual([expect.stringContaining('user')])
+  })
+
+  it('refuses one slot offering different names in two places', () => {
+    expect(
+      errs(
+        { 'components/x-d': '<div><slot name="a" [x]="1" /><slot name="a" [y]="2" /></div>' },
+        'components/x-d',
+      ),
+    ).toEqual([expect.stringContaining("slot 'a'")])
+  })
+
+  it('refuses filling the default slot twice', () => {
+    expect(
+      errs({
+        'components/x-b': '<div><slot [item]="1" /></div>',
+        page: '<x-b>text @slot(default; let item) {{{ item }}}</x-b>',
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it("checks a page's lets against its layout's slot", () => {
+    const layout = { 'layouts/main': '<head><slot name="head" [t]="title" /></head><slot />' }
+    clean({
+      ...layout,
+      page: "@layout('layouts/main')\n@slot('head'; let t) {<title>{{ t }}</title>}\n<p></p>",
+    })
+    expect(
+      errs({ ...layout, page: "@layout('layouts/main')\n@slot('head'; let z) {x}\n<p></p>" }),
+    ).toEqual([expect.stringContaining('t')])
+  })
+})

@@ -104,8 +104,22 @@ export type Node =
     }
   | { k: 'let'; name: string; expr: Expr; span: Span }
   | { k: 'verbatim'; text: string; span: Span }
-  | { k: 'slot-outlet'; name?: string; fallback: Node[]; span: Span }
-  | { k: 'slot-fill'; name: string; body: Node[]; span: Span }
+  /** `<slot name="n" [x]="expr">`: the values (`offers`) it hands the caller's content */
+  | {
+      k: 'slot-outlet'
+      name?: string
+      offers: Array<{ name: string; expr: Expr; span: Span }>
+      fallback: Node[]
+      span: Span
+    }
+  /** `@slot('n'; let a, b = c) { }`: `lets` bind offered values (`from`) to names */
+  | {
+      k: 'slot-fill'
+      name: string
+      lets: Array<{ name: string; from: string }>
+      body: Node[]
+      span: Span
+    }
   | { k: 'assets'; entry: string; span: Span }
   /** `@fragment('name') { }`: a block a render can ask for on its own */
   | { k: 'fragment'; name: string; body: Node[]; span: Span }
@@ -171,6 +185,15 @@ export type CAttr =
   | { t: 'y'; n: string; e: CExpr; x?: string }
 
 /** A checked template node, as the renderer walks it. */
+/**
+ * Slot content: its nodes, compiled in the caller's scope, and the offered
+ * values it takes (`let x = from`), each bound to caller slot `s`.
+ */
+export interface CFill {
+  nodes: CNode[]
+  params?: Array<{ from: string; s: number }>
+}
+
 export type CNode =
   /** static output */
   | { k: 's'; t: string }
@@ -198,13 +221,16 @@ export type CNode =
       /** inputs of wrapped components further down the chain, by name */
       ci?: Array<{ n: string; e: CExpr }>
       fa: CAttr[]
-      f: Record<string, CNode[]>
+      f: Record<string, CFill>
       /** this call is its template's root: it takes the caller's chained attributes */
       r?: 1
       at: At
     }
-  /** `<slot name="n">fallback</slot>` */
-  | { k: 'o'; n: string; fb: CNode[] }
+  /**
+   * `<slot name="n" [x]="e">fallback</slot>`: `v` are the values it offers;
+   * while the fallback renders they sit in slots `fs` (same order).
+   */
+  | { k: 'o'; n: string; fb: CNode[]; v?: Array<{ n: string; e: CExpr }>; fs?: number[] }
   /** `@push('n') { }`: rendered, then added to stack `n` */
   | { k: 'push'; n: string; b: CNode[] }
   /** `<stack name="n" />`: filled once the render is done */
@@ -234,7 +260,7 @@ export interface CheckedTemplate {
   /** a component's inputs: name, slot, default, required */
   inputs: Array<{ n: string; s: number; d?: Literal; r: boolean }>
   /** `@slot('name') { }` fills a page passes to its layout */
-  fills: Record<string, CNode[]>
+  fills: Record<string, CFill>
   body: CNode[]
   /** a component's `<script client>`: TypeScript as written (`js: false`), or plain JS once a build stripped it */
   client?: { code: string; js: boolean }

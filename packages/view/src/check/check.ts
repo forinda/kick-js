@@ -10,6 +10,7 @@ import {
   type Attr,
   type CAttr,
   type CExpr,
+  type CFill,
   type CNode,
   type CSeg,
   type CheckedFragment,
@@ -85,7 +86,8 @@ type Binding = { kind: 'slot'; s: number } | { kind: 'meta'; s: number; w?: Loop
 interface Signature {
   name: string
   inputs: Map<string, { required: boolean; def?: unknown }>
-  outlets: Set<string>
+  /** Slot names, each with the value names it offers. */
+  outlets: Map<string, string[]>
   /** Root nodes, not counting a lifted `<script client>`. */
   roots: number
   /** The single root, when there is one: where forwarded attributes go. */
@@ -139,6 +141,8 @@ class Checker {
   private readonly loops: number[] = []
   private readonly warned = new Set<string>()
   private readonly stackNames = new Set<string>()
+  /** Per slot name: the value names it offers (sorted), to keep them consistent. */
+  private readonly offered = new Map<string, string>()
   /** Inside a `@push` body, where a `<stack>` would be filled into the wrong buffer. */
   private inPush = 0
   /** Each `@fragment`'s standalone unit, by name. */
@@ -421,9 +425,34 @@ class Checker {
       case 'verbatim':
         out.push({ k: 's', t: n.text })
         return
-      case 'slot-outlet':
-        out.push({ k: 'o', n: n.name ?? '', fb: this.scoped(() => this.nodes(n.fallback, parent)) })
+      case 'slot-outlet': {
+        const name = n.name ?? ''
+        const key = n.offers
+          .map((o) => o.name)
+          .toSorted()
+          .join(', ')
+        const prev = this.offered.get(name)
+        if (prev !== undefined && prev !== key) {
+          this.err(
+            n.span,
+            `slot '${name || 'default'}' offers ${key || 'nothing'} here but ${prev || 'nothing'} elsewhere — offer the same names everywhere`,
+          )
+        }
+        this.offered.set(name, key)
+        const v = n.offers.map((o) => ({ n: o.name, e: this.expr(o.expr) }))
+        // The fallback reads the offered values too.
+        const fs: number[] = []
+        const fb = this.scoped(() => {
+          for (const o of n.offers) {
+            const s = this.slot()
+            fs.push(s)
+            this.bind(o.name, { kind: 'slot', s })
+          }
+          return this.nodes(n.fallback, parent)
+        })
+        out.push({ k: 'o', n: name, fb, ...(v.length ? { v, fs } : {}) })
         return
+      }
       case 'slot-fill':
         this.err(
           n.span,
@@ -797,12 +826,16 @@ class Checker {
     const cached = this.signatures.get(name)
     if (cached) return cached
     const ast = this.project.templates.get(name)!
-    const outlets = new Set<string>()
+    const outlets = new Map<string, string[]>()
     const stack: Node[][] = [ast.body]
     while (stack.length) {
       for (const n of stack.pop()!) {
         if (n.k === 'slot-outlet') {
-          outlets.add(n.name ?? '')
+          if (!outlets.has(n.name ?? ''))
+            outlets.set(
+              n.name ?? '',
+              n.offers.map((o) => o.name),
+            )
           stack.push(n.fallback)
         } else if (n.k === 'element' || n.k === 'comment') stack.push(n.children)
         else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
@@ -955,7 +988,7 @@ class Checker {
     }
     // Slot content: `@slot('x') { }` fills, the rest is the default slot. It
     // is compiled here, in the caller's scope.
-    const fills: Record<string, CNode[]> = {}
+    const fills: Record<string, CFill> = {}
     const rest: Node[] = []
     for (const c of el.children) {
       if (c.k !== 'slot-fill') {
@@ -964,13 +997,18 @@ class Checker {
       }
       if (c.name in fills) this.err(c.span, `slot '${c.name}' is filled twice`)
       else if (!sig.outlets.has(c.name)) this.err(c.span, `<${el.tag}> has no slot '${c.name}'`)
-      fills[c.name] = this.scoped(() => this.nodes(c.body))
+      fills[c.name] = this.fill(c, sig.outlets.get(c.name))
     }
     if (rest.some((c) => !(c.k === 'text' && !c.value.trim()))) {
       if (!sig.outlets.has('')) {
         this.err(el.span, `<${el.tag}> has no default <slot /> for the content inside it`)
+      } else if ('' in fills) {
+        this.err(
+          el.span,
+          `<${el.tag}>'s default slot is filled twice: by the content between its tags and by @slot(default …)`,
+        )
       } else {
-        fills[''] = this.scoped(() => this.nodes(rest))
+        fills[''] = { nodes: this.scoped(() => this.nodes(rest)) }
       }
     }
     // Checked as written on the element they land on (URL attributes, …).
@@ -988,11 +1026,38 @@ class Checker {
     })
   }
 
+  /**
+   * Slot content, compiled in the caller's scope with its `let`s bound. With
+   * `offered` known, a `let` taking a name the slot doesn't offer is an error.
+   */
+  fill(f: Extract<Node, { k: 'slot-fill' }>, offered: readonly string[] | undefined): CFill {
+    return this.scoped(() => {
+      const params: Array<{ from: string; s: number }> = []
+      for (const l of f.lets) {
+        if (offered && !offered.includes(l.from)) {
+          this.err(
+            f.span,
+            `slot '${f.name || 'default'}' doesn't offer '${l.from}' — it offers ${offered.join(', ') || 'nothing'}`,
+          )
+        }
+        const s = this.slot()
+        params.push({ from: l.from, s })
+        this.bind(l.name, { kind: 'slot', s })
+      }
+      const nodes = this.nodes(f.body)
+      return params.length ? { nodes, params } : { nodes }
+    })
+  }
+
   // ── layouts ───────────────────────────────────────────────────────────
 
   /** The outlets a page can fill: its layout chain's. Reports bad names and cycles. */
-  layoutChain(start: string | undefined, span: Span, page: string): Set<string> | undefined {
-    const outlets = new Set<string>()
+  layoutChain(
+    start: string | undefined,
+    span: Span,
+    page: string,
+  ): Map<string, string[]> | undefined {
+    const outlets = new Map<string, string[]>()
     const seen = [page]
     let name = start
     while (name) {
@@ -1010,7 +1075,7 @@ class Checker {
         return undefined
       }
       seen.push(name)
-      for (const o of this.signature(name).outlets) outlets.add(o)
+      mergeOutlets(outlets, this.signature(name).outlets)
       name = ast.layout ?? undefined
     }
     return outlets
@@ -1034,6 +1099,17 @@ function rootElements(body: Node[]): Array<Element | null> {
     roots.push(n.k === 'element' ? n : null)
   }
   return roots
+}
+
+/** Slot names from `more` added to `into`, each with every name any of them offers. */
+function mergeOutlets(
+  into: Map<string, string[]>,
+  more: ReadonlyMap<string, readonly string[]>,
+): Map<string, string[]> {
+  for (const [name, offers] of more) {
+    into.set(name, [...new Set([...(into.get(name) ?? []), ...offers])])
+  }
+  return into
 }
 
 /** An attribute as the author wrote it (entities kept), double-quoted. */
@@ -1144,7 +1220,7 @@ export function check(name: string, project: Project): CheckResult {
   }
 
   // A page's top-level `@slot` blocks fill its layout's outlets.
-  const fills: Record<string, CNode[]> = {}
+  const fills: Record<string, CFill> = {}
   const body: Node[] = []
   const fillNodes: Array<Extract<Node, { k: 'slot-fill' }>> = []
   for (const n of top) {
@@ -1173,7 +1249,7 @@ export function check(name: string, project: Project): CheckResult {
     name !== base &&
     project.templates.has(base)
   ) {
-    outlets = new Set([...(outlets ?? []), ...c.signature(base).outlets])
+    outlets = mergeOutlets(outlets ?? new Map(), c.signature(base).outlets)
   }
 
   for (const f of fillNodes) {
@@ -1185,14 +1261,16 @@ export function check(name: string, project: Project): CheckResult {
       // No layout is known here — a build that doesn't have the app's
       // mapping, say. Kept, and filled if the page gets a layout with it.
       c.diagnostics.push(warning(ast.file, f.span, `@slot('${f.name}') has no layout to fill here`))
-      fills[f.name] = optimize(c.nodes(f.body))
+      const fill = c.fill(f, undefined)
+      fills[f.name] = { ...fill, nodes: optimize(fill.nodes) }
       continue
     }
     if (!outlets.has(f.name)) {
       c.diagnostics.push(error(ast.file, f.span, `the layout has no slot '${f.name}'`))
       continue
     }
-    fills[f.name] = optimize(c.nodes(f.body))
+    const fill = c.fill(f, outlets.get(f.name))
+    fills[f.name] = { ...fill, nodes: optimize(fill.nodes) }
   }
 
   const template: CheckedTemplate = {
