@@ -49,6 +49,24 @@ describe('format', () => {
     )
   })
 
+  it("writes @fragment('…') and @push('…') like @slot('…')", () => {
+    expect(fmt("@fragment ( 'rows' ){\n<tr>{{ u }}</tr>\n}\n")).toBe(
+      "@fragment('rows') {\n  <tr>{{ u }}</tr>\n}\n",
+    )
+    expect(fmt('<div>\n@push ( \'head\' ){\n<link rel="x">\n}\n</div>\n')).toBe(
+      '<div>\n  @push(\'head\') {\n    <link rel="x">\n  }\n</div>\n',
+    )
+  })
+
+  it('writes <stack> like <slot>, and is idempotent on both', () => {
+    // Tags are kept as written, as for <slot>; only indentation changes.
+    const once = fmt('<head>\n<stack name="head" />\n</head>\n')
+    expect(once).toBe('<head>\n  <stack name="head" />\n</head>\n')
+    expect(fmt(once)).toBe(once)
+    const frag = "@fragment('rows') {\n  <tr>{{ u }}</tr>\n}\n"
+    expect(fmt(frag)).toBe(frag)
+  })
+
   it('spaces pipes in interpolations and block headers', () => {
     expect(fmt("<p>{{title|titlecase}} {{ at  |date:'short'| uppercase }}</p>\n")).toBe(
       "<p>{{ title | titlecase }} {{ at | date:'short' | uppercase }}</p>\n",

@@ -239,6 +239,42 @@ createViews({
   5. The mapping.
   6. The base alone.
 
+### Stacks
+
+A page or component often needs something in the `<head>`, such as a stylesheet, a `<meta>` tag or a preload, or a script at the end of `<body>`. A layout marks the place with `<stack>`, and any template adds to it with `@push`:
+
+```kick
+{{-- src/views/layouts/main.kick --}}
+<!doctype html>
+<html>
+  <head>
+    <title>My app</title>
+    <stack name="head" />
+  </head>
+  <body>
+    <slot />
+    <stack name="scripts" />
+  </body>
+</html>
+```
+
+```kick
+{{-- src/views/components/date-picker.kick --}}
+@input name
+@push('head') {
+  <link rel="stylesheet" href="/css/date-picker.css">
+}
+<input type="date" name="{{ name }}">
+```
+
+- **Where.** `<stack name="…" />` goes in a page or layout, the base layout included. `@push('…') { … }` works anywhere: pages, layouts, components, inside `@if` and `@for`. Names are letters, digits, `-` and `_`.
+- **What counts.** Only pushes that render: one inside a false `@if` adds nothing, one inside a loop adds each time round.
+- **Once each.** Identical content pushed to the same stack is output once, so a component used fifty times links its stylesheet once. Different content is all kept.
+- **Order.** Content comes out in the order it renders. The outermost layout renders first and the page appears where it reaches `<slot />`, so a layout's push above its `<slot />` comes before the page's, and one below it comes after.
+- **Nowhere to go.** Content pushed to a name no rendered template has is dropped, with a warning in development. A partial render (`layout: false`, a [fragment](#fragments)) has no layout, so its pushes are dropped silently.
+- **One per name.** When two `<stack>`s share a name, the first gets the content; the check warns when both are in one file.
+- **`<stack>` is reserved,** like `<slot>`: it isn't output as an element.
+
 ## Components
 
 ```kick
@@ -783,6 +819,42 @@ async rows(ctx: RequestContext) {
 
 `ctx.render` also takes `status` and `headers`: `{ status: 422, headers: { 'HX-Retarget': '#form' } }`.
 
+### Fragments {#fragments}
+
+An htmx swap usually needs one piece of a page. Mark it with `@fragment`, and render just that piece with the same template, instead of a separate partial file:
+
+```kick
+{{-- src/views/users/index.kick --}}
+@layout('layouts/main')
+<h1>Users @fragment('count') {<span id="count" hx-swap-oob="true">{{ users.length }}</span>}</h1>
+<table>
+  <tbody id="rows">
+    @fragment('rows') {
+      @for (user of users; track user.id) {
+        @fragment('row') {
+          <tr id="user-{{ user.id }}"><td>{{ user.name }}</td></tr>
+        }
+      }
+    }
+  </tbody>
+</table>
+```
+
+```ts
+await ctx.render('users/index', { users }) // the whole page
+await ctx.render('users/index', { users }, { fragment: 'rows' }) // just the rows
+await ctx.render('users/index', { user }, { fragment: 'row' }) // one row, after an edit
+await ctx.render('users/index', { users }, { fragment: ['rows', 'count'] }) // out-of-band swap
+```
+
+- **In the full page** the wrapper changes nothing: the block renders where it is.
+- **On its own** it renders without any layout. A list renders each fragment in the order given, for htmx's out-of-band swaps: the extra fragments carry their own `id` and `hx-swap-oob`, like `count` above, so htmx puts each where it belongs.
+- **Names from around it.** A fragment inside `@for`, `@if (…; as x)` or after `@let` reads those names from the data you pass: the `row` above needs `user`. Leaving one out fails the render naming it. `share()` data doesn't count, so a shared `user` can't silently fill a row's. An enclosing loop's `$index` and friends can't be read directly: alias them (`let i = $index`) and pass `i`.
+- **Names are unique** in a template, made of letters, digits, `-` and `_`. Asking for one the template doesn't have fails the render, listing the ones it has.
+- **Anywhere but components.** Pages and layouts can have fragments; components can't.
+- **Scripts still ship.** A component with a [script](#components-with-a-script) inside a fragment still gets its `<script>` tag; [stack](#stacks) pushes are dropped.
+- **Edge builds.** Templates with fragments compile to a newer bundle format: rebuild with the matching `@forinda/kickjs-vite`.
+
 ## Emails, PDFs and tests
 
 `views.render()` works outside a request:
@@ -845,7 +917,7 @@ The KickJS VS Code extension understands `.kick` files:
 - highlighting for `{{ }}`, `@if` / `@for` / `@switch`, bindings and comments, on top of HTML;
 - errors as you type, from the same checks as `kick check:views`, including in unsaved files;
 - snippets for whole blocks — type `kick-` for `kick-page`, `kick-layout`, `kick-component`, `kick-component-script`, `kick-for`, `kick-form`, `kick-field` and `kick-flash`;
-- completion for `@` keywords, pipes after `|`, components and their inputs, layout and slot names, and the names in scope inside `{{ }}`;
+- completion for `@` keywords, pipes after `|`, components and their inputs, layout, slot and stack names, and the names in scope inside `{{ }}`;
 - HTML, CSS and Emmet completion inside templates;
 - hover on a pipe or a component to see its parameters or inputs;
 - go to definition on a component tag, `@layout('…')` or a pipe;

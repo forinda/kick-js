@@ -4,7 +4,9 @@ import { cursor, uri, workspaceOf } from './helpers'
 
 const FILES = {
   'src/views/page.kick': '',
-  'src/views/layouts/main.kick': '<head><slot name="head" /></head><slot />',
+  'src/views/layouts/main.kick':
+    '<head><slot name="head" /><stack name="styles" /></head><slot /><stack name="scripts" />',
+  'src/views/layouts/shell.kick': '@fragment(\'shell\') {<nav><slot name="nav" /></nav><slot />}',
   'src/views/components/user-card.kick':
     '@input user\n@input compact = false\n<div>{{ user.name }}</div>',
   'src/views/pipes.ts': 'export const initials = (name: string) => name[0]',
@@ -73,5 +75,30 @@ describe('completions', () => {
   })
   it('leaves HTML to the HTML service', async () => {
     expect(await at('<p cla§')).toEqual([])
+  })
+
+  it('@fragment and @push as snippets', async () => {
+    const items = await at('<p>@§')
+    expect(items.find((i) => i.label === 'fragment')).toMatchObject({
+      insertText: "fragment('${1:name}') {\n\t$0\n}",
+    })
+    expect(items.find((i) => i.label === 'push')).toMatchObject({
+      insertText: "push('${1:stack}') {\n\t$0\n}",
+    })
+  })
+
+  it("offers the project's stack names after @push('", async () => {
+    expect((await labels("@push('§")).toSorted()).toEqual(['scripts', 'styles'])
+  })
+
+  it('keeps loop names in scope after a @fragment closes', async () => {
+    const names = await labels(
+      "@for (u of us; track u) {@fragment('row') {<tr>{{ u }}</tr>}<p>{{ §",
+    )
+    expect(names).toContain('u')
+  })
+
+  it("offers slot names inside a layout's @fragment", async () => {
+    expect(await labels("@layout('layouts/shell')\n@slot('§")).toEqual(['nav'])
   })
 })

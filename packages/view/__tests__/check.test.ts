@@ -247,3 +247,139 @@ describe('check', () => {
     ])
   })
 })
+
+describe('stacks', () => {
+  it('refuses <stack> in a component', () => {
+    expect(errs({ 'components/x-y': '<stack name="a" /><b></b>' }, 'components/x-y')).toEqual([
+      expect.stringContaining('components'),
+    ])
+  })
+
+  it('warns about a stack named twice in one file', () => {
+    expect(warns({ page: '<stack name="a" /><stack name="a" />' })).toEqual([
+      expect.stringContaining("'a'"),
+    ])
+  })
+
+  it('accepts @push in pages, layouts and components', () => {
+    const push = '@push(\'head\') {<link rel="stylesheet" href="/a.css">}'
+    clean({ page: push })
+    clean({ 'layouts/main': `${push}<slot />` }, 'layouts/main')
+    clean({ 'components/x-y': `${push}<b></b>` }, 'components/x-y')
+  })
+})
+
+describe('fragments', () => {
+  const frag = (src: string, name: string) => clean({ page: src }).fragments?.[name]
+
+  it('refuses @fragment in a component, allows it in a layout', () => {
+    expect(errs({ 'components/x-y': "@fragment('a') {<b></b>}" }, 'components/x-y')).toEqual([
+      expect.stringContaining('components'),
+    ])
+    expect(
+      clean({ 'layouts/main': "@fragment('a') {<slot />}" }, 'layouts/main').fragments?.a,
+    ).toBeDefined()
+  })
+
+  it('refuses a fragment name used twice', () => {
+    expect(errs({ page: "@fragment('a') {x}@fragment('a') {y}" })).toEqual([
+      expect.stringContaining("'a'"),
+    ])
+  })
+
+  it('needs the names enclosing blocks bind: @for, @if as, @let', () => {
+    expect(
+      frag(
+        "@for (user of users; track user.id) {@fragment('row') {<tr>{{ user.name }}</tr>}}",
+        'row',
+      )?.needs,
+    ).toEqual(['user'])
+    expect(frag("@if (current; as u) {@fragment('me') {{{ u.name }}}}", 'me')?.needs).toEqual(['u'])
+    expect(frag("@let total = a + b;\n@fragment('t') {{{ total }}}", 't')?.needs).toEqual(['total'])
+  })
+
+  it("doesn't need page data or names bound inside it", () => {
+    expect(frag("@fragment('f') {{{ title }}}", 'f')?.needs).toEqual([])
+    expect(frag("@fragment('f') {@for (x of xs; track x) {{{ x }}}}", 'f')?.needs).toEqual([])
+  })
+
+  it('compiles nested fragments: the inner needs only what is bound outside it', () => {
+    const page = clean({
+      page: "@for (g of groups; track g.id) {@fragment('group') {@for (u of g.users; track u.id) {@fragment('user') {{{ u.name }}{{ g.id }}}}}}",
+    })
+    expect(page.fragments?.group?.needs).toEqual(['g'])
+    expect(page.fragments?.user?.needs).toEqual(['u', 'g'])
+  })
+
+  it("refuses an enclosing loop's $index, but needs its alias", () => {
+    expect(errs({ page: "@for (x of xs; track x) {@fragment('f') {{{ $index }}}}" })).toEqual([
+      expect.stringContaining('alias it'),
+    ])
+    expect(
+      frag("@for (x of xs; track x; let i = $index) {@fragment('f') {{{ i }}}}", 'f')?.needs,
+    ).toEqual(['i'])
+  })
+
+  it('leaves the inline markup as if the wrapper were not there', () => {
+    const wrapped = clean({ page: "<p>@fragment('a') {<b>{{ t }}</b>}</p>" })
+    const plain = clean({ page: '<p><b>{{ t }}</b></p>' })
+    // Source positions differ; the markup doesn't.
+    const noAt = (body: unknown) => JSON.stringify(body, (k, v) => (k === 'at' ? undefined : v))
+    expect(noAt(wrapped.body)).toBe(noAt(plain.body))
+  })
+
+  it('reports a problem inside a fragment once', () => {
+    expect(warns({ page: '@fragment(\'f\') {<stack name="a" /><stack name="a" />}' })).toHaveLength(
+      1,
+    )
+  })
+})
+
+describe('stacks inside pushes', () => {
+  it('refuses a <stack> inside @push', () => {
+    expect(errs({ page: '@push(\'h\') {<stack name="z" />}' })).toEqual([
+      expect.stringContaining('@push'),
+    ])
+  })
+})
+
+describe('review fixes', () => {
+  it('accepts fragment names that are Object.prototype members', () => {
+    const t = clean({
+      page: "@fragment('constructor') {x}@fragment('__proto__') {y}@fragment('toString') {z}",
+    })
+    expect(Object.keys(t.fragments ?? {}).toSorted()).toEqual([
+      '__proto__',
+      'constructor',
+      'toString',
+    ])
+  })
+
+  it('refuses content in a <stack>, however the stack ends', () => {
+    for (const page of [
+      '<stack name="a">x</stack>',
+      '<stack name="a">lost',
+      '<div><stack name="a">lost</div>',
+      '@if (t) {<stack name="a">lost}',
+    ]) {
+      expect(errs({ page }), page).toEqual([expect.stringContaining("can't have content")])
+    }
+    clean({ page: '<stack name="a">\n  </stack>' })
+  })
+})
+
+describe('slots inside fragments and pushes', () => {
+  it("finds a layout's slot inside its @fragment", () => {
+    clean({
+      'layouts/main': '@fragment(\'shell\') {<head><slot name="head" /></head><slot />}',
+      page: "@layout('layouts/main')\n@slot('head') {<title>t</title>}\n<p>x</p>",
+    })
+  })
+
+  it("finds a component's slot inside its @push", () => {
+    clean({
+      'components/x-box': '@push(\'h\') {<slot name="extra" />}<b>box</b>',
+      page: "<x-box>@slot('extra') {<i>e</i>}</x-box>",
+    })
+  })
+})

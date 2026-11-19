@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { clientScriptResponse, createViews, useClientFiles } from '../src/index'
+import { AST_FORMAT_VERSION } from '../src/ast'
 import { check } from '../src/check/check'
 import { parse } from '../src/parse/template'
 import { BUILTIN_PIPES } from '../src/pipes/builtins'
@@ -83,7 +84,7 @@ describe('client files on disk', () => {
     const p = project({ 'components/flash-toast': TOAST, page: '<flash-toast />' })
     return createViews({
       bundle: {
-        v: 1,
+        v: AST_FORMAT_VERSION,
         templates: {
           'components/flash-toast': check('components/flash-toast', p).template!,
           page: check('page', p).template!,
@@ -140,7 +141,7 @@ describe('client files on disk', () => {
     const p = project({ 'components/flash-toast': TOAST, page: '<flash-toast />' })
     const v = createViews({
       bundle: {
-        v: 1,
+        v: AST_FORMAT_VERSION,
         templates: { 'components/flash-toast': check('components/flash-toast', p).template! },
         client: { entries: {}, disk: ['gone.Lg0_12-x.png'] },
       },
@@ -155,7 +156,7 @@ describe('client files on disk', () => {
     const p = project({ 'components/flash-toast': TOAST })
     createViews({
       bundle: {
-        v: 1,
+        v: AST_FORMAT_VERSION,
         templates: { 'components/flash-toast': check('components/flash-toast', p).template! },
         client: { entries: {}, disk: ['a.Lg0_12-x.js'] },
       },
@@ -194,7 +195,7 @@ describe('imports', () => {
     const p = project(files)
     const v = createViews({
       bundle: {
-        v: 1,
+        v: AST_FORMAT_VERSION,
         templates: {
           'components/flash-toast': check('components/flash-toast', p).template!,
           page: check('page', p).template!,
@@ -224,7 +225,7 @@ describe('imports', () => {
     const p = project(files)
     const v = createViews({
       bundle: {
-        v: 1,
+        v: AST_FORMAT_VERSION,
         templates: {
           'components/flash-toast': check('components/flash-toast', p).template!,
           page: check('page', p).template!,

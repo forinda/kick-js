@@ -59,6 +59,17 @@ describe('Workspace', () => {
     expect(ws.dependentsOf('components/x-card')).toEqual(new Set())
   })
 
+  it('counts components used inside @fragment and @push as dependents', async () => {
+    const { ws } = workspace({
+      'src/views/page.kick': "@fragment('f') {<x-card />}@push('h') {<x-pill />}",
+      'src/views/components/x-card.kick': '<b>card</b>',
+      'src/views/components/x-pill.kick': '<i>pill</i>',
+    })
+    await ws.load()
+    expect(ws.dependentsOf('components/x-card')).toEqual(new Set(['page']))
+    expect(ws.dependentsOf('components/x-pill')).toEqual(new Set(['page']))
+  })
+
   it('re-checks pages when their layout disappears', async () => {
     const { ws, disk, uri } = workspace({
       'src/views/page.kick': "@layout('layouts/main')\n<p>x</p>",

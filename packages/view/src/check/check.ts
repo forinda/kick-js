@@ -12,6 +12,7 @@ import {
   type CExpr,
   type CNode,
   type CSeg,
+  type CheckedFragment,
   type CheckedTemplate,
   type Element,
   type Expr,
@@ -94,6 +95,18 @@ class Checker {
   private readonly scopes: Array<Map<string, Binding>> = [new Map()]
   private readonly loops: number[] = []
   private readonly warned = new Set<string>()
+  private readonly stackNames = new Set<string>()
+  /** Inside a `@push` body, where a `<stack>` would be filled into the wrong buffer. */
+  private inPush = 0
+  /** Each `@fragment`'s standalone unit, by name. */
+  // Null prototype: `constructor`, `toString` and `__proto__` are fragment names too.
+  readonly fragments: Record<string, CheckedFragment> = Object.create(null)
+  /**
+   * Set while compiling a fragment's standalone unit: the names enclosing
+   * blocks bound (read from data there, and recorded as needs), and whether
+   * it sits in a loop (whose `$index` etc. it can't read).
+   */
+  private unit?: { outer: Set<string>; inLoop: boolean; needs: string[]; errors: Diagnostic[] }
   private readonly tags = new Map<string, string[]>()
   private readonly signatures = new Map<string, Signature>()
 
@@ -178,6 +191,16 @@ class Checker {
           if (s.optional) seg.o = 1
           return seg
         })
+        if (LOOP_VARS.has(e.root) && this.unit?.inLoop && !this.loops.length) {
+          this.unit.errors.push(
+            error(
+              this.ast.file,
+              e.span,
+              `'${e.root}' comes from the @for around this fragment — alias it (let i = ${e.root}) and pass i`,
+            ),
+          )
+          return { k: 'x' }
+        }
         if (LOOP_VARS.has(e.root)) {
           const loop = this.loops[this.loops.length - 1]
           if (loop === undefined) {
@@ -189,6 +212,10 @@ class Checker {
         const b = this.lookup(e.root)
         if (b?.kind === 'meta') return { k: 'm', s: b.s, w: b.w! }
         if (b) return { k: 'v', s: b.s, p }
+        if (this.unit?.outer.has(e.root)) {
+          if (!this.unit.needs.includes(e.root)) this.unit.needs.push(e.root)
+          return { k: 'd', n: e.root, p }
+        }
         // Form state is request-wide: a form field component reads it too.
         if (FORM_GLOBALS.has(e.root)) return { k: 'd', n: e.root, p }
         if (this.component) {
@@ -362,7 +389,91 @@ class Checker {
         return
       case 'assets':
         out.push({ k: 'as', en: n.entry })
+        return
+      case 'fragment':
+        this.fragment(n, out, parent)
+        return
+      case 'push': {
+        this.inPush++
+        try {
+          out.push({ k: 'push', n: n.name, b: this.scoped(() => this.nodes(n.body, parent)) })
+        } finally {
+          this.inPush--
+        }
+        return
+      }
+      case 'stack':
+        if (n.children.some((c) => c.k !== 'text' || c.value.trim())) {
+          this.err(n.span, "<stack> can't have content: @push adds it")
+          return
+        }
+        if (this.component) {
+          this.err(n.span, '<stack> goes in a page or layout, not in components')
+          return
+        }
+        if (this.inPush) {
+          this.err(n.span, "<stack> can't go inside @push: put it in the layout itself")
+          return
+        }
+        if (this.stackNames.has(n.name)) {
+          this.warn(
+            n.span,
+            `stack '${n.name}' is already placed above: only the first one is filled`,
+          )
+        }
+        this.stackNames.add(n.name)
+        out.push({ k: 'stk', n: n.name })
     }
+  }
+
+  /**
+   * `@fragment('name') { }`: its body in place, as if unwrapped, and — outside
+   * another fragment's unit — compiled again as a standalone unit, where the
+   * names enclosing blocks bound become data the caller passes.
+   */
+  private fragment(n: Extract<Node, { k: 'fragment' }>, out: CNode[], parent?: Element): void {
+    if (this.component) {
+      this.err(n.span, "fragments aren't allowed in components")
+      return
+    }
+    out.push(...this.scoped(() => this.nodes(n.body, parent)))
+    // Inside another fragment's unit: inline only; its own unit is compiled
+    // on the page's pass.
+    if (this.unit) return
+    if (n.name in this.fragments) {
+      this.err(n.span, `fragment '${n.name}' is defined twice`)
+      return
+    }
+    const saved = {
+      scopes: this.scopes.splice(0),
+      slots: this.slots,
+      loops: this.loops.splice(0),
+      validates: this.validates,
+      reported: this.diagnostics.length,
+    }
+    const outer = new Set(saved.scopes.flatMap((scope) => [...scope.keys()]))
+    const unit = { outer, inLoop: saved.loops.length > 0, needs: [], errors: [] }
+    this.unit = unit
+    this.scopes.push(new Map())
+    this.slots = 0
+    this.validates = false
+    let body: CNode[]
+    try {
+      body = this.nodes(n.body, parent)
+    } finally {
+      this.unit = undefined
+      this.scopes.splice(0, this.scopes.length, ...saved.scopes)
+      this.loops.splice(0, this.loops.length, ...saved.loops)
+    }
+    const compiled: CheckedFragment = { needs: unit.needs, slots: this.slots, body: optimize(body) }
+    if (this.validates) compiled.validates = true
+    this.fragments[n.name] = compiled
+    this.slots = saved.slots
+    this.validates = saved.validates
+    // The inline pass already reported the body's problems; keep only the
+    // unit's own.
+    this.diagnostics.length = saved.reported
+    this.diagnostics.push(...unit.errors)
   }
 
   /** `{{ }}` inside `<script>` / `<style>`: only a JSON script's single value. */
@@ -654,7 +765,7 @@ class Checker {
         else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
         else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
         else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
-        else if (n.k === 'slot-fill') stack.push(n.body)
+        else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push') stack.push(n.body)
       }
     }
     const sig: Signature = {
@@ -798,7 +909,7 @@ function rootElements(body: Node[]): Array<Element | null> {
   const roots: Array<Element | null> = []
   for (const n of body) {
     if (n.k === 'text' && !n.value.trim()) continue
-    if (n.k === 'comment' || n.k === 'let') continue
+    if (n.k === 'comment' || n.k === 'let' || n.k === 'push') continue
     roots.push(n.k === 'element' ? n : null)
   }
   return roots
@@ -976,6 +1087,7 @@ export function check(name: string, project: Project): CheckResult {
   if (ast.layout !== undefined) template.layout = ast.layout
   if (client) template.client = client
   if (c.validates) template.validates = true
+  if (Object.keys(c.fragments).length) template.fragments = c.fragments
   const failed = c.diagnostics.some((d) => d.severity === 'error')
   return failed ? { diagnostics: c.diagnostics } : { template, diagnostics: c.diagnostics }
 }

@@ -1,7 +1,7 @@
 import type { Span } from './diagnostics'
 
 /** Bumped when the shape of a checked template changes; builds and runtimes must agree. */
-export const AST_FORMAT_VERSION = 1
+export const AST_FORMAT_VERSION = 2
 
 /** A literal value in a template expression. */
 export type Literal = string | number | boolean | null
@@ -107,6 +107,12 @@ export type Node =
   | { k: 'slot-outlet'; name?: string; fallback: Node[]; span: Span }
   | { k: 'slot-fill'; name: string; body: Node[]; span: Span }
   | { k: 'assets'; entry: string; span: Span }
+  /** `@fragment('name') { }`: a block a render can ask for on its own */
+  | { k: 'fragment'; name: string; body: Node[]; span: Span }
+  /** `@push('name') { }`: content for a layout's `<stack name>` */
+  | { k: 'push'; name: string; body: Node[]; span: Span }
+  /** `<stack name="…" />`: where pushed content goes; `children` must be blank (checked) */
+  | { k: 'stack'; name: string; children: Node[]; span: Span }
 
 /** An `@input` declaration, with its default when given. */
 export interface InputDecl {
@@ -195,9 +201,24 @@ export type CNode =
     }
   /** `<slot name="n">fallback</slot>` */
   | { k: 'o'; n: string; fb: CNode[] }
+  /** `@push('n') { }`: rendered, then added to stack `n` */
+  | { k: 'push'; n: string; b: CNode[] }
+  /** `<stack name="n" />`: filled once the render is done */
+  | { k: 'stk'; n: string }
   | { k: 'as'; en: string }
 
 /** A template after `check`: plain JSON the renderer walks, which a build can ship as data. */
+/** A page's `@fragment`, compiled to render on its own. */
+export interface CheckedFragment {
+  /** names enclosing blocks bound (loop items, aliases, `@let`): the caller passes them */
+  needs: string[]
+  /** scope slots the unit needs */
+  slots: number
+  body: CNode[]
+  /** a field in it has `validate` */
+  validates?: true
+}
+
 export interface CheckedTemplate {
   v: typeof AST_FORMAT_VERSION
   name: string
@@ -215,4 +236,6 @@ export interface CheckedTemplate {
   client?: { code: string; js: boolean }
   /** a field in it has `validate`: pages rendering it ship the validator script */
   validates?: true
+  /** its `@fragment`s, by name */
+  fragments?: Record<string, CheckedFragment>
 }

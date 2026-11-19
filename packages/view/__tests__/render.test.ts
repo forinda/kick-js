@@ -46,7 +46,7 @@ function r(
   files: Record<string, string>,
   data: object = {},
   env: SetupEnv = {},
-  opts?: { layout?: boolean | string },
+  opts?: { layout?: boolean | string; fragment?: string | string[]; callerData?: object },
 ) {
   const s = setup(files, env)
   return { html: render(s.resolve('page'), data, s.env, opts), warn: s.warn }
@@ -420,5 +420,181 @@ describe('render', () => {
       expect((e as RenderError).diagnostic.span.start).toMatchObject({ line: 2, column: 3 })
       expect((e as RenderError).message).toContain('nope')
     }
+  })
+})
+
+describe('stacks', () => {
+  const layout = '<head><stack name="head" /></head><body><slot /></body>'
+
+  it('fills a stack from the page, its layout and components, in document order', () => {
+    const { html } = r({
+      'layouts/main': `@push('head') {<i>layout</i>}${layout}`,
+      'components/x-c': "@push('head') {<i>component</i>}<b></b>",
+      page: "@layout('layouts/main')@push('head') {<i>page</i>}<x-c />",
+    })
+    expect(html).toBe('<head><i>layout</i><i>page</i><i>component</i></head><body><b></b></body>')
+  })
+
+  it('puts a layout push below its <slot /> after the page', () => {
+    const { html } = r({
+      'layouts/main': `${layout}@push('head') {<i>late</i>}`,
+      page: "@layout('layouts/main')@push('head') {<i>page</i>}",
+    })
+    expect(html).toBe('<head><i>page</i><i>late</i></head><body></body>')
+  })
+
+  it('keeps identical content once and distinct content in order', () => {
+    const { html } = r(
+      {
+        'layouts/main': layout,
+        'components/x-c': "@input x\n@push('head') {<i>{{ x }}</i>}<b></b>",
+        page: '@layout(\'layouts/main\')@for (x of xs; track x) {<x-c [x]="x" />}',
+      },
+      { xs: [1, 1, 2] },
+    )
+    expect(html).toContain('<head><i>1</i><i>2</i></head>')
+  })
+
+  it('pushes nothing from a false @if', () => {
+    const { html } = r({
+      'layouts/main': layout,
+      page: "@layout('layouts/main')@if (false) {@push('head') {<i>x</i>}}",
+    })
+    expect(html).toBe('<head></head><body></body>')
+  })
+
+  it('drops a push no stack takes, warning once', () => {
+    const { html, warn } = r({
+      'layouts/main': layout,
+      page: "@layout('layouts/main')@push('nope') {<i>1</i>}@push('nope') {<i>2</i>}",
+    })
+    expect(html).toBe('<head></head><body></body>')
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]![0]).toContain('nope')
+  })
+
+  it("doesn't count a component's @push as a root element", () => {
+    const { html } = r({
+      'components/x-c': "@push('head') {<i>x</i>}\n<b></b>",
+      page: '<x-c class="k" />',
+    })
+    expect(html).toContain('<b class="k"></b>')
+  })
+
+  it('fills the first of two stacks with one name', () => {
+    const { html } = r({ page: '<stack name="a" /><stack name="a" />@push(\'a\') {<i>x</i>}' })
+    expect(html).toBe('<i>x</i>')
+  })
+})
+
+describe('fragments', () => {
+  const files = {
+    'layouts/main': '<main><slot /></main>',
+    page:
+      "@layout('layouts/main')" +
+      "<p>@fragment('count') {<span>{{ users.length }}</span>}</p>" +
+      "<table>@fragment('rows') {@for (user of users; track user.name) {@fragment('row') {<tr>{{ user.name }}</tr>}}}</table>",
+  }
+  const users = [{ name: 'A' }, { name: 'B' }]
+
+  it('renders one fragment without layouts', () => {
+    expect(r(files, { users }, {}, { fragment: 'rows' }).html).toBe('<tr>A</tr><tr>B</tr>')
+  })
+
+  it('renders several, in the order asked', () => {
+    expect(r(files, { users }, {}, { fragment: ['count', 'rows'] }).html).toBe(
+      '<span>2</span><tr>A</tr><tr>B</tr>',
+    )
+  })
+
+  it('renders a loop row from the data passed', () => {
+    expect(r(files, { user: { name: 'A' } }, {}, { fragment: 'row' }).html).toBe('<tr>A</tr>')
+  })
+
+  it('fails when a needed name is missing', () => {
+    expect(() => r(files, {}, {}, { fragment: 'row' })).toThrow(/needs 'user'/)
+  })
+
+  it("doesn't take a needed name from data the caller didn't pass", () => {
+    expect(() =>
+      r(files, { user: { name: 'signed-in' } }, {}, { fragment: 'row', callerData: {} }),
+    ).toThrow(/needs 'user'/)
+  })
+
+  it("lists the page's fragments for an unknown name, or says it has none", () => {
+    expect(() => r(files, { users }, {}, { fragment: ['rows', 'nope'] })).toThrow(
+      /'nope'.*count, row, rows/,
+    )
+    expect(() => r({ page: '<p></p>' }, {}, {}, { fragment: 'x' })).toThrow(/no fragments/)
+  })
+
+  it('drops pushes in a fragment render, without a warning', () => {
+    const { html, warn } = r(
+      { page: "@fragment('f') {@push('head') {<i>x</i>}<b></b>}" },
+      {},
+      {},
+      { fragment: 'f' },
+    )
+    expect(html).toBe('<b></b>')
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('reports a component with a client script', () => {
+    const clientScript = vi.fn()
+    r(
+      {
+        'components/x-c':
+          '<b></b>\n<script client>customElements.define("x-b", class extends HTMLElement {})</script>',
+        page: "@fragment('f') {<x-c />}",
+      },
+      {},
+      { clientScript },
+      { fragment: 'f' },
+    )
+    expect(clientScript).toHaveBeenCalledTimes(1)
+  })
+
+  it('refills a <select> as the full page does', () => {
+    const page =
+      '<select name="s">@fragment(\'o\') {<option value="a">A</option><option value="b">B</option>}</select>'
+    const data = { $old: { s: 'b' }, $errors: {}, $flash: {} }
+    const full = r({ page }, data).html
+    const part = r({ page }, data, {}, { fragment: 'o' }).html
+    expect(full).toContain(part)
+    expect(part).toContain('selected')
+  })
+})
+
+describe('stack warnings across renders', () => {
+  const files = {
+    'layouts/main': '<main><slot /></main>',
+    'components/x-c': '@push(\'head\') {<link rel="stylesheet" href="/x.css">}<b></b>',
+    page: "@layout('layouts/main')<x-c />",
+  }
+
+  it('stays silent for a render without a layout', () => {
+    const s = setup(files)
+    for (let i = 0; i < 3; i++) render(s.resolve('page'), {}, s.env, { layout: false })
+    expect(s.warn).not.toHaveBeenCalled()
+  })
+
+  it('warns once per page and stack, however many renders', () => {
+    const s = setup(files)
+    // One checked template, as views' cache hands out.
+    const page = s.resolve('page')
+    for (let i = 0; i < 3; i++) render(page, {}, s.env)
+    expect(s.warn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('a stack reached inside a push', () => {
+  it('fails the render instead of overwriting the page', () => {
+    expect(() =>
+      r({
+        'components/x-box':
+          '@if (false) {<slot name="head" />}@push(\'head\') {<slot name="head" />}<b>box</b>',
+        page: '<p>before</p><x-box>@slot(\'head\') {<stack name="head" />}</x-box>',
+      }),
+    ).toThrow(/@push/)
   })
 })

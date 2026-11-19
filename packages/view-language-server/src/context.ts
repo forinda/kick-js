@@ -12,6 +12,7 @@ export type CursorContext =
   | { kind: 'attr'; tag: string; prefix: string }
   | { kind: 'template-name'; prefix: string }
   | { kind: 'slot-name'; prefix: string }
+  | { kind: 'stack-name'; prefix: string }
   | { kind: 'other' }
 
 export const LOOP_VARS = ['$index', '$first', '$last', '$even', '$odd', '$count']
@@ -76,7 +77,7 @@ export function scopeAt(s: string, stop: number): string[] {
     }
     if (c === '@' && !/[\w@.-]/.test(s[i - 1] ?? '')) {
       const m =
-        /^@(else\s+if|for|if|switch|case|slot|error|else|empty|default|let|input)(?![\w$-])/.exec(
+        /^@(else\s+if|for|if|switch|case|slot|error|fragment|push|else|empty|default|let|input)(?![\w$-])/.exec(
           s.slice(i, i + 16),
         )
       if (m) {
@@ -136,10 +137,12 @@ export function cursorContext(s: string, offset: number): CursorContext {
     return exprContext(before.slice(open + 2), s, offset)
   }
 
-  // @layout('… / @slot('…
-  const named = /@(layout|slot)\s*\(\s*['"]([^'"]*)$/.exec(before)
-  if (named)
-    return { kind: named[1] === 'layout' ? 'template-name' : 'slot-name', prefix: named[2]! }
+  // @layout('… / @slot('… / @push('…
+  const named = /@(layout|slot|push)\s*\(\s*['"]([^'"]*)$/.exec(before)
+  if (named) {
+    const kind = { layout: 'template-name', slot: 'slot-name', push: 'stack-name' } as const
+    return { kind: kind[named[1] as keyof typeof kind], prefix: named[2]! }
+  }
 
   // @let name = …
   const letExpr = /@let\s+[\w$]+\s*=\s*([^;\n]*)$/.exec(before)

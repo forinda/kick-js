@@ -80,7 +80,11 @@ interface Inst {
 const warnedNames = new WeakMap<CheckedTemplate, Set<string>>()
 
 class Renderer {
-  private readonly out: string[] = []
+  private out: string[] = []
+  /** Per stack: where `<stack>`s sit in `out`, and the pushed content, deduped. */
+  /** Rendering a `@push` body: a `<stack>` reached here (through a slot) has no place. */
+  private pushing = 0
+  private readonly stacks = new Map<string, { at: number[]; items: string[]; seen: Set<string> }>()
 
   constructor(private readonly env: RenderEnv) {}
 
@@ -89,6 +93,30 @@ class Renderer {
 
   html(): string {
     return this.out.join('')
+  }
+
+  private stack(name: string) {
+    let s = this.stacks.get(name)
+    if (!s) this.stacks.set(name, (s = { at: [], items: [], seen: new Set() }))
+    return s
+  }
+
+  /**
+   * Write each stack's content at its first `<stack>`. Content for a stack no
+   * template placed is dropped; with `warn`, the page's first render that does
+   * so says which stack.
+   */
+  fillStacks(page: CheckedTemplate, warn: boolean): void {
+    for (const [name, s] of this.stacks) {
+      if (s.at.length) this.out[s.at[0]!] = s.items.join('')
+      else if (s.items.length && warn) {
+        let seen = warnedNames.get(page)
+        if (!seen) warnedNames.set(page, (seen = new Set()))
+        if (seen.has(`stack:${name}`)) continue
+        seen.add(`stack:${name}`)
+        this.env.warn(`${page.file}: content pushed to stack '${name}', which no layout has`)
+      }
+    }
   }
 
   fail(inst: Inst, message: string): never {
@@ -312,6 +340,34 @@ class Renderer {
         else this.nodes(n.fb, inst)
         return
       }
+      case 'stk':
+        if (this.pushing) {
+          this.fail(
+            inst,
+            `<stack name="${n.n}"> renders inside @push content (through a slot): a stack has to be in the page or layout itself`,
+          )
+        }
+        this.stack(n.n).at.push(this.out.length)
+        this.out.push('')
+        return
+      case 'push': {
+        const outer = this.out
+        this.out = []
+        this.pushing++
+        try {
+          this.nodes(n.b, inst)
+        } finally {
+          this.pushing--
+        }
+        const html = this.out.join('')
+        this.out = outer
+        const s = this.stack(n.n)
+        if (!s.seen.has(html)) {
+          s.seen.add(html)
+          s.items.push(html)
+        }
+        return
+      }
       case 'as':
         if (this.env.assets) this.out.push(this.env.assets(n.en, inst.data))
         else
@@ -494,7 +550,13 @@ export function render(
   template: CheckedTemplate,
   data: object,
   env: RenderEnv,
-  opts: { layout?: boolean | string } = {},
+  opts: {
+    layout?: boolean | string
+    /** Render only these fragments of the page, without layouts. */
+    fragment?: string | string[]
+    /** The caller's own data, which a fragment's needs are checked against (default `data`). */
+    callerData?: object
+  } = {},
 ): string {
   const r = new Renderer(env)
   r.rootData = data as Record<string, unknown>
@@ -505,6 +567,32 @@ export function render(
     fills: {},
     stack: [template.name],
     depth: 0,
+  }
+  if (opts.fragment !== undefined) {
+    const all = template.fragments ?? {}
+    const given = opts.callerData ?? data
+    for (const name of Array.isArray(opts.fragment) ? opts.fragment : [opts.fragment]) {
+      const unit = Object.hasOwn(all, name) ? all[name] : undefined
+      if (!unit) {
+        const names = Object.keys(all).toSorted()
+        return r.fail(
+          page,
+          `'${name}' isn't a fragment of ${template.name}, which has ${names.length ? names.join(', ') : 'no fragments'}`,
+        )
+      }
+      for (const need of unit.needs) {
+        if (!(need in given)) {
+          r.fail(
+            page,
+            `fragment '${name}' needs '${need}' — it comes from a block around the fragment; pass it in the data`,
+          )
+        }
+      }
+      if (unit.validates) env.validation?.()
+      r.nodes(unit.body, { ...page, slots: Array.from({ length: unit.slots }) })
+    }
+    // No layout, so no stack: pushes are dropped (the full page loaded them).
+    return r.html()
   }
   const none = opts.layout === false || (opts.layout === undefined && template.layout === null)
   const chain: CheckedTemplate[] = []
@@ -526,6 +614,8 @@ export function render(
   if (template.validates || chain.some((t) => t.validates)) env.validation?.()
   if (!chain.length) {
     r.nodes(template.body, page)
+    // No layout (a partial): pushes have nowhere to go, and that's expected.
+    r.fillStacks(template, false)
     return r.html()
   }
   // Each layout renders the one inside it into its default slot; named fills
@@ -548,5 +638,6 @@ export function render(
     fills = outer
   }
   r.nodes(inst.t.body, inst)
+  r.fillStacks(template, true)
   return r.html()
 }
