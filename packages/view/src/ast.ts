@@ -107,6 +107,12 @@ export type Node =
   | { k: 'slot-outlet'; name?: string; fallback: Node[]; span: Span }
   | { k: 'slot-fill'; name: string; body: Node[]; span: Span }
   | { k: 'assets'; entry: string; span: Span }
+  /** `@fragment('name') { }`: a block a render can ask for on its own */
+  | { k: 'fragment'; name: string; body: Node[]; span: Span }
+  /** `@push('name') { }`: content for a layout's `<stack name>` */
+  | { k: 'push'; name: string; body: Node[]; span: Span }
+  /** `<stack name="…" />`: where pushed content goes */
+  | { k: 'stack'; name: string; span: Span }
 
 /** An `@input` declaration, with its default when given. */
 export interface InputDecl {

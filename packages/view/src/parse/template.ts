@@ -36,13 +36,16 @@ const RCDATA = new Set(['title', 'textarea'])
  */
 const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml'])
 const KEYWORDS =
-  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets)(?![\w$-])/
+  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets|fragment|push)(?![\w$-])/
+/** Fragment and stack names. */
+const PLAIN_NAME = /^[\w-]+$/
 const LOOP_VARS = new Set<LoopVar>(['$index', '$first', '$last', '$even', '$odd', '$count'])
 
 type Frame =
   | { type: 'root'; children: Node[] }
   | { type: 'element'; el: Element; children: Node[]; name: string }
-  | { type: 'slot'; children: Node[] }
+  /** `<slot>` fallback content, or a `<stack>` (whose content is an error) */
+  | { type: 'slot'; children: Node[]; tag: 'slot' | 'stack'; start: number }
   | {
       type: 'block'
       children: Node[]
@@ -339,7 +342,19 @@ class TemplateParser {
       }
       const node: Node = { k: 'slot-outlet', name: slotName, fallback: [], span: el.span }
       this.emit(node)
-      if (!selfClosing) this.frames.push({ type: 'slot', children: node.fallback })
+      if (!selfClosing) {
+        this.frames.push({ type: 'slot', children: node.fallback, tag: 'slot', start: i })
+      }
+      return
+    }
+    if (!foreign && lower === 'stack') {
+      const nameAttr = attrs.find((a) => a.name === 'name')
+      const name = nameAttr?.kind === 'static' ? String(nameAttr.parts?.[0] ?? '') : ''
+      if (!PLAIN_NAME.test(name)) {
+        this.err(i, j, '<stack> needs name="…" in letters, digits, - and _')
+      }
+      this.emit({ k: 'stack', name, span: el.span })
+      if (!selfClosing) this.frames.push({ type: 'slot', children: [], tag: 'stack', start: i })
       return
     }
     this.emit(el)
@@ -471,12 +486,19 @@ class TemplateParser {
       if (frame.type === 'block' || frame.type === 'switch' || frame.type === 'root') break
       const matches =
         frame.type === 'slot'
-          ? tag.toLowerCase() === 'slot'
+          ? tag.toLowerCase() === frame.tag
           : frame.el.foreign
             ? frame.name === tag
             : frame.name === tag.toLowerCase()
       if (matches) {
         this.flush()
+        if (
+          frame.type === 'slot' &&
+          frame.tag === 'stack' &&
+          frame.children.some((c) => c.k !== 'text' || c.value.trim())
+        ) {
+          this.err(frame.start, this.i, "<stack> can't have content: @push adds it")
+        }
         this.frames.length = f
         return
       }
@@ -557,6 +579,8 @@ class TemplateParser {
       case 'error':
       case 'layout':
       case 'assets':
+      case 'fragment':
+      case 'push':
         if (ch !== '(') return false
         break
       case 'verbatim':
@@ -668,6 +692,19 @@ class TemplateParser {
       }
       this.emit(node)
       this.frames.push({ type: 'switch', node, start: i })
+    } else if (kw === 'fragment' || kw === 'push') {
+      const name = this.stringArg(p.src, p.at, `@${kw}`)
+      if (!PLAIN_NAME.test(name)) {
+        this.err(p.at, p.end, `@${kw} names use letters, digits, - and _`)
+      }
+      const node: Extract<Node, { k: 'fragment' | 'push' }> = {
+        k: kw,
+        name,
+        body: [],
+        span: this.span(i, brace),
+      }
+      this.emit(node)
+      this.frames.push({ type: 'block', children: node.body, node, keyword: kw, start: i })
     } else {
       const name = this.stringArg(p.src, p.at, '@slot')
       const node: Node = { k: 'slot-fill', name, body: [], span: this.span(i, brace) }

@@ -30,6 +30,12 @@ function flat(nodes: Node[]): string {
           return `@slot:${n.name}[${flat(n.body)}]`
         case 'assets':
           return `@assets:${n.entry}`
+        case 'fragment':
+          return `@fragment:${n.name}[${flat(n.body)}]`
+        case 'push':
+          return `@push:${n.name}[${flat(n.body)}]`
+        case 'stack':
+          return `<stack:${n.name}>`
       }
     })
     .join('')
@@ -235,5 +241,38 @@ describe('parse', () => {
     const lf = errors('<p>\n{{ a() }}')[0]!
     expect(crlf.span.start).toMatchObject({ line: 2, column: 5 })
     expect(lf.span.start).toMatchObject({ line: 2, column: 5 })
+  })
+})
+
+describe('fragments and stacks', () => {
+  it('parses @fragment and @push blocks', () => {
+    expect(flat(ok("@fragment('rows') {<b>x</b>}").ast.body)).toBe('@fragment:rows[<b>x</b>]')
+    expect(flat(ok("@push('head') {<b>x</b>}").ast.body)).toBe('@push:head[<b>x</b>]')
+  })
+
+  it('keeps @fragment and @push without ( as text', () => {
+    expect(flat(ok('a @push b').ast.body)).toBe('a @push b')
+    expect(flat(ok('@fragment').ast.body)).toBe('@fragment')
+  })
+
+  it('refuses a fragment or stack name outside letters, digits, - and _', () => {
+    expect(errors("@fragment('a b') {x}")).toHaveLength(1)
+    expect(errors("@push('a/b') {x}")).toHaveLength(1)
+    expect(errors('<stack name="a.b" />')).toHaveLength(1)
+  })
+
+  it('parses <stack name="head" />, self-closing or empty', () => {
+    expect(flat(ok('<stack name="head" />').ast.body)).toBe('<stack:head>')
+    expect(flat(ok('<stack name="head"></stack>').ast.body)).toBe('<stack:head>')
+  })
+
+  it('rejects a stack without a plain name, or with content', () => {
+    expect(errors('<stack />')).toHaveLength(1)
+    expect(errors('<stack name="{{ x }}" />')).toHaveLength(1)
+    expect(errors('<stack name="a">x</stack>')).toHaveLength(1)
+  })
+
+  it('leaves <stack-panel> an element', () => {
+    expect(ok('<stack-panel></stack-panel>').ast.body[0]!.k).toBe('element')
   })
 })
