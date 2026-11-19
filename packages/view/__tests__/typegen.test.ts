@@ -234,3 +234,25 @@ describe('the kick/views typegen — PR review 4', () => {
     expect(out).not.toContain('Unused')
   })
 })
+
+describe('the kick/views typegen — PR review 5', () => {
+  it('drops unused default and namespace type imports', () => {
+    const out = renderViewTypes(
+      summaries({
+        a: "@import type Dflt from '@/d'\n@import type * as NS from '@/ns'\n@import type Used from '@/u'\n@input u: Used\n<p></p>",
+      }),
+      opts,
+    )
+    expect(out).toContain("import type Used from '@/u'")
+    expect(out).not.toContain('Dflt')
+    expect(out).not.toContain('NS')
+  })
+
+  it("doesn't count a name inside a string literal as a use", () => {
+    const out = renderViewTypes(
+      summaries({ a: "@import type { Unused } from '@/a'\n@input label: 'Unused'\n<p></p>" }),
+      opts,
+    )
+    expect(out).not.toContain('import type { Unused }')
+  })
+})

@@ -108,6 +108,8 @@ const escape = (name: string) => name.replace(/\$/g, '\\$')
 const refTo = (names: string[]) =>
   new RegExp(`(?<![\\w$.])(?:${names.map(escape).join('|')})(?![\\w$])(?!\\s*\\??\\s*:)`, 'g')
 
+const STRINGS = /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g
+
 /** `type` with each name in `rename` replaced, string literals left alone. */
 function renameRefs(type: string, rename: Map<string, string>): string {
   if (!rename.size) return type
@@ -229,7 +231,10 @@ export function aliasImports(
     return { ...e, summary: { ...e.summary, declared } }
   })
   // Only the names a declared type uses: an unused import fails `noUnusedLocals`.
-  const used = out.flatMap((e) => Object.values(e.summary.declared).map((d) => d.type ?? ''))
+  // String literals don't count: `'User'` isn't a use of the type `User`.
+  const used = out.flatMap((e) =>
+    Object.values(e.summary.declared).map((d) => (d.type ?? '').replace(STRINGS, "''")),
+  )
   const isUsed = (alias: string) => used.some((t) => refTo([alias]).test(t))
   const imports = [
     ...[...byModule].flatMap(([from, names]) => {
@@ -240,7 +245,11 @@ export function aliasImports(
           ]
         : []
     }),
-    ...other,
+    // `import type X from` / `import type * as X from`: kept when X is used.
+    ...[...other].filter((line) => {
+      const m = /^import\s+type\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\b/.exec(line.trim())
+      return !m || isUsed(m[1]!)
+    }),
   ]
   return { imports, entries: out }
 }
