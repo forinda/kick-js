@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Plugin } from 'vite'
+import { loadCliFromProject } from './typegen-plugin'
 
 /** Options for `kickViewsPlugin`. */
 export interface KickViewsPluginOptions {
@@ -34,6 +35,39 @@ export interface KickViewsPluginOptions {
   publicDir?: string
   /** Images and fonts up to this many bytes are inlined (`'disk'` mode). Default `4096`. */
   inlineLimit?: number
+  /**
+   * Named view roots (`billing::invoices/show`), as kick.config's
+   * `views.roots` writes them. Default: kick.config's.
+   */
+  roots?: Record<string, string>
+  /** Test seam: loads kick.config from its folder. Default: the project's `@forinda/kickjs-cli`. */
+  loadConfig?: (dir: string) => Promise<unknown>
+}
+
+/** A template name's path, without its root (`ui::components/x` → `components/x`). */
+const pathOf = (name: string) => (name.includes('::') ? name.slice(name.indexOf('::') + 2) : name)
+
+/** A resolved view root (as `resolveViewRoots` returns it). */
+interface ViewRoot {
+  name: string
+  dir: string
+  readOnly: boolean
+}
+
+const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json']
+
+/** The folder holding kick.config, from `start` up; `start` when there's none. */
+function kickConfigDir(start: string): string {
+  for (let dir = resolve(start); ; dir = dirname(dir)) {
+    if (CONFIG_FILES.some((f) => existsSync(join(dir, f)))) return dir
+    if (dirname(dir) === dir) return resolve(start)
+  }
+}
+
+/** kick.config through the project's CLI, or `null` when it isn't installed. */
+async function loadConfigWithCli(dir: string): Promise<unknown> {
+  const cli = await loadCliFromProject(dir)
+  return cli ? cli.loadKickConfig(dir).catch(() => null) : null
 }
 
 const ID = 'virtual:kick-views'
@@ -62,6 +96,26 @@ async function kickFiles(dir: string): Promise<string[]> {
  */
 export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let viewsDir = ''
+  /** Named roots, from the plugin's `roots` or kick.config's. */
+  let roots: ViewRoot[] = []
+  const rootDirs = () => new Map(roots.map((r) => [r.name, r.dir]))
+  /** Every template: the app's, then each root's as `root::path`. */
+  async function allNames(): Promise<string[]> {
+    const out = await kickFiles(viewsDir)
+    for (const r of roots) for (const n of await kickFiles(r.dir)) out.push(`${r.name}::${n}`)
+    return out
+  }
+  /** A template's file on disk. */
+  function fileOf(name: string): string {
+    const at = name.indexOf('::')
+    if (at < 0) return join(viewsDir, `${name}.kick`)
+    return join(rootDirs().get(name.slice(0, at))!, `${name.slice(at + 2)}.kick`)
+  }
+  /** What messages call it: `<name>.kick` for the app's, the project path for a root's. */
+  const labelOf = (name: string) =>
+    name.includes('::') ? relative(root, fileOf(name)).split(sep).join('/') : `${name}.kick`
+  /** Folders whose `.kick` files may back a client-script module. */
+  const viewDirs = () => [viewsDir, ...roots.map((r) => r.dir)]
   let pipesFile = ''
   let validatorsFile = ''
   /** The module that registers validators.ts's exports: a namespace import keeps every one. */
@@ -94,7 +148,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     clientOut = onDisk ? new Map() : undefined
     // The view package is optional: only apps that import this module need it.
     const view = await import('@forinda/kickjs-view')
-    const names = await kickFiles(viewsDir)
+    const names = await allNames()
     const errors: string[] = []
     const pipeNames = [...view.BUILTIN_PIPES]
     if (hasPipes) {
@@ -123,9 +177,9 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     }
     const templates = new Map()
     for (const name of names) {
-      const file = join(viewsDir, `${name}.kick`)
+      const file = fileOf(name)
       ctx.addWatchFile(file)
-      const parsed = view.parse(await readFile(file, 'utf8'), `${name}.kick`)
+      const parsed = view.parse(await readFile(file, 'utf8'), labelOf(name))
       templates.set(name, parsed.ast)
       for (const d of parsed.diagnostics) {
         if (d.severity === 'error')
@@ -153,7 +207,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       .filter(([, t]) => t.client)
       .map(([name, t]) => ({
         tag: view.componentTag(name, project.componentsDir),
-        file: join(viewsDir, `${name}.kick`),
+        file: fileOf(name),
         code: t.client!.code,
       }))
     // validators.ts: one more entry, so it's bundled even with no component scripts.
@@ -221,8 +275,25 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
 
   return {
     name: 'kickjs:views',
-    configResolved(config) {
-      viewsDir = resolve(config.root, options.viewsDir ?? 'src/views')
+    async configResolved(config) {
+      // kick.config's `views` block: folders resolve from its directory.
+      const configDir = kickConfigDir(config.root)
+      const fromConfig = options.roots
+        ? undefined
+        : (
+            (await (options.loadConfig ?? loadConfigWithCli)(configDir)) as {
+              views?: { dir?: string; roots?: Record<string, string> }
+            } | null
+          )?.views
+      viewsDir =
+        options.viewsDir || !fromConfig?.dir
+          ? resolve(config.root, options.viewsDir ?? 'src/views')
+          : resolve(configDir, fromConfig.dir)
+      const wanted = options.roots ?? fromConfig?.roots
+      roots = wanted
+        ? (await import('@forinda/kickjs-view/cli')).resolveViewRoots(configDir, { roots: wanted })
+            .roots
+        : []
       pipesFile = resolve(config.root, options.pipesFile ?? 'src/views/pipes.ts')
       // Beside the views, as the editor and `kick check:views` look for it.
       validatorsFile = options.validatorsFile
@@ -241,7 +312,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     resolveId(id) {
       if (id === ID) return RESOLVED
       // A component's client script, as a module next to its `.kick` file.
-      if (clientModuleFile(id, viewsDir)) return id
+      if (clientModuleFile(id, viewDirs())) return id
       if (isValidatorsEntry(id)) return id
       return undefined
     },
@@ -249,6 +320,9 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     // (relative, npm, aliases) resolve as they do in a build. Ahead of the app.
     configureServer(server) {
       const prefix = `${scriptPath}/`
+      // Editable roots outside the project root: watched like the app's views
+      // (an installed package's never change).
+      for (const r of roots) if (!r.readOnly) server.watcher.add(r.dir)
       // An edited template's script is rebuilt on the next request.
       server.watcher.on('change', (file) => {
         const mod = server.moduleGraph.getModuleById(resolve(file) + CLIENT_SUFFIX)
@@ -277,11 +351,11 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         try {
           const view = await import('@forinda/kickjs-view')
           const dir = options.componentsDir ?? 'components'
-          const name = (await kickFiles(viewsDir)).find(
-            (n) => n.startsWith(`${dir}/`) && view.componentTag(n, dir) === m[1],
+          const name = (await allNames()).find(
+            (n) => pathOf(n).startsWith(`${dir}/`) && view.componentTag(n, dir) === m[1],
           )
           if (!name) return next()
-          const file = join(viewsDir, `${name}.kick`)
+          const file = fileOf(name)
           if (clientScriptOf(view, await readFile(file, 'utf8')) === undefined) return next()
           const out = await server.transformRequest(file + CLIENT_SUFFIX)
           if (!out) return next()
@@ -298,7 +372,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     // imports the virtual module: a broken template always fails `kick build`.
     async buildStart() {
       // Apps without templates skip it, so they needn't install the view package.
-      if (!build || !(await kickFiles(viewsDir)).length) {
+      if (!build || !(await allNames()).length) {
         // The last template removed between rebuilds: nothing of the last build is current.
         checked = undefined
         if (clientOut) clientOut = new Map()
@@ -329,7 +403,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       }
     },
     async load(id) {
-      const kickFile = clientModuleFile(id, viewsDir)
+      const kickFile = clientModuleFile(id, viewDirs())
       if (kickFile) {
         const view = await import('@forinda/kickjs-view')
         return clientScriptOf(view, await readFile(kickFile, 'utf8'))
@@ -359,8 +433,11 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
           : 'const clientDir = undefined;',
         // kick dev: the views read the validators file this plugin serves, wherever it's configured.
         `export const validatorsFile = ${build ? 'undefined' : JSON.stringify(validatorsFile)};`,
+        // kick dev: the folders the views read (a build renders from the bundle).
+        `export const viewsDir = ${build ? 'undefined' : JSON.stringify(viewsDir)};`,
+        `export const roots = ${build ? 'undefined' : JSON.stringify(Object.fromEntries(rootDirs()))};`,
         'export { bundle, pipes, clientScriptPath, clientDir }',
-        `export default { bundle, pipes, clientScriptPath, clientDir${build ? '' : ', validatorsFile'} }`,
+        `export default { bundle, pipes, clientScriptPath, clientDir${build ? '' : ', validatorsFile, viewsDir, roots'} }`,
       ].join('\n')
     },
   }
@@ -368,12 +445,13 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
 
 /**
  * The `.kick` file behind a client-script module id — only inside the views
- * folder, so a crafted dev request can't load a template from elsewhere.
+ * folders (the app's and its roots'), so a crafted dev request can't load a
+ * template from elsewhere.
  */
-function clientModuleFile(id: string, viewsDir: string): string | undefined {
-  if (!viewsDir || !id.endsWith(`.kick${CLIENT_SUFFIX}`)) return undefined
+function clientModuleFile(id: string, dirs: string[]): string | undefined {
+  if (!dirs[0] || !id.endsWith(`.kick${CLIENT_SUFFIX}`)) return undefined
   const file = resolve(id.slice(0, -CLIENT_SUFFIX.length))
-  if (!file.startsWith(viewsDir + sep) || !existsSync(file)) return undefined
+  if (!dirs.some((d) => file.startsWith(d + sep)) || !existsSync(file)) return undefined
   return file
 }
 

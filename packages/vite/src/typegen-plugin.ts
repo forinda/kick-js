@@ -84,7 +84,7 @@ function resolveCliEntry(root: string): string | null {
   }
 }
 
-async function loadCliFromProject(root: string): Promise<TypegenCliModule | null> {
+export async function loadCliFromProject(root: string): Promise<TypegenCliModule | null> {
   try {
     const entry = resolveCliEntry(root)
     if (!entry || !existsSync(entry)) return null

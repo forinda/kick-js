@@ -356,7 +356,7 @@ describe('kickViewsPlugin', () => {
     })
     const outside = project({ 'secret.kick': '<script client>leak</script>' })
     const plugin = kickViewsPlugin() as any
-    plugin.configResolved({ root, command: 'serve', resolve: { alias: [] } })
+    await plugin.configResolved({ root, command: 'serve', resolve: { alias: [] } })
     const inside = join(root, 'src/views/components/a-b.kick.client.ts')
     expect(plugin.resolveId(inside)).toBe(inside)
     const escaped = join(outside, 'secret.kick.client.ts')
@@ -424,7 +424,7 @@ describe('validators.ts', () => {
     const watched = async (root: string) => {
       const files: string[] = []
       const plugin = kickViewsPlugin({ clientFiles: 'bundle' }) as any
-      plugin.configResolved({ root, command: 'build', build: {} })
+      await plugin.configResolved({ root, command: 'build', build: {} })
       await plugin.buildStart.call({
         addWatchFile: (f: string) => files.push(f),
         warn: () => {},
@@ -512,7 +512,7 @@ describe('validators.ts module ids', () => {
   it('the wrapper loads however Vite spells its id', async () => {
     const root = project({ 'src/views/validators.ts': 'export const phone = () => undefined' })
     const plugin = kickViewsPlugin()
-    ;(plugin.configResolved as (c: unknown) => void)({
+    await (plugin.configResolved as (c: unknown) => Promise<void>)({
       root,
       command: 'serve',
       mode: 'development',
@@ -564,5 +564,91 @@ describe('validators.ts beside a moved views folder', () => {
     })
     const code = await bundle(root, { viewsDir: 'app/views' })
     expect(code).toMatch(/"kick-validators": "kick-validators\.[\w-]{8}\.js"/)
+  })
+})
+
+describe('named view roots', () => {
+  const BILLING = 'src/modules/billing/views'
+  const roots = { billing: `./${BILLING}` }
+
+  it("bundles a root's templates by full name", async () => {
+    const root = project({
+      'src/views/home.kick': '<p>home</p>',
+      [`${BILLING}/invoices/show.kick`]: '<p>invoice</p>',
+    })
+    const code = await bundle(root, { roots })
+    expect(code).toContain('"billing::invoices/show"')
+    expect(code).toContain('"home"')
+  })
+
+  it("reads the roots from kick.config's views block", async () => {
+    const root = project({ [`${BILLING}/index.kick`]: '<p>i</p>' })
+    const code = await bundle(root, { loadConfig: async () => ({ views: { roots } }) })
+    expect(code).toContain('"billing::index"')
+  })
+
+  it("bundles a root component's script under its prefixed tag", async () => {
+    const root = project({
+      'src/views/home.kick': '<ui-button></ui-button>',
+      'ui/components/button.kick':
+        "<button></button>\n<script client>\nconsole.log('ui-btn')\n</script>",
+    })
+    const code = await bundle(root, { roots: { ui: './ui' } })
+    expect(code).toContain('ui-button')
+    expect(code).toContain('ui-btn')
+  })
+
+  it('hands the dev views the folders, and serves a root component script', async () => {
+    const root = project({
+      'src/views/home.kick': '<ui-button></ui-button>',
+      'ui/components/button.kick':
+        "<button></button>\n<script client>\nconsole.log('ui-dev')\n</script>",
+    })
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin({ roots: { ui: './ui' } })],
+      server: { middlewareMode: true, ws: false },
+    })
+    const http = createHttpServer(vite.middlewares)
+    await new Promise<void>((r) => http.listen(0, r))
+    const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+    try {
+      const mod = await vite.ssrLoadModule('virtual:kick-views')
+      expect(mod.default.roots).toEqual({ ui: join(root, 'ui') })
+      expect(mod.default.viewsDir).toBe(join(root, 'src/views'))
+      const res = await fetch(`${base}/_kick/c/ui-button.00000000.js`)
+      expect(res.status).toBe(200)
+      expect(await res.text()).toContain('ui-dev')
+    } finally {
+      http.close()
+      await vite.close()
+    }
+  })
+
+  it('watches an editable root outside the project, not an installed package', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'kick-views-outside-'))
+    mkdirSync(join(outside, 'views'), { recursive: true })
+    const root = project({
+      'node_modules/@acme/ui/package.json': '{ "name": "@acme/ui", "kick": { "views": "views" } }',
+      'node_modules/@acme/ui/views/x.kick': '<p></p>',
+    })
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin({ roots: { shared: join(outside, 'views'), ui: '@acme/ui' } })],
+      server: { middlewareMode: true, ws: false },
+    })
+    try {
+      const watched = Object.keys(vite.watcher.getWatched())
+      expect(watched).toContain(join(outside, 'views'))
+      expect(watched.some((d) => d.includes(join('node_modules', '@acme')))).toBe(false)
+    } finally {
+      await vite.close()
+    }
   })
 })
