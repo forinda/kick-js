@@ -159,7 +159,6 @@ class Checker {
   readonly topLets = new Set<string>()
   private inSnippet = false
   /** Compiling a `<component>`'s content again, for its second and later candidates. */
-  private recompiling = false
   /** Each `@fragment`'s standalone unit, by name. */
   // Null prototype: `constructor`, `toString` and `__proto__` are fragment names too.
   readonly fragments: Record<string, CheckedFragment> = Object.create(null)
@@ -565,9 +564,8 @@ class Checker {
       return
     }
     out.push(...this.scoped(() => this.nodes(n.body, parent)))
-    // Inside another fragment's unit, or a <component>'s content compiled
-    // again for a later candidate: inline only; its unit is compiled once.
-    if (this.unit || this.recompiling) return
+    // Inside another fragment's unit: inline only; its unit is compiled once.
+    if (this.unit) return
     if (n.name in this.fragments) {
       this.err(n.span, `fragment '${n.name}' is defined twice`)
       return
@@ -1221,13 +1219,14 @@ class Checker {
         continue
       }
       const one: CNode[] = []
-      const outerRecompiling = this.recompiling
-      this.recompiling = outerRecompiling || sigs.length > 0
-      try {
-        this.call({ ...el, tag: lower, attrs: rest }, names[0]!, one, el === this.rootElement, true)
-      } finally {
-        this.recompiling = outerRecompiling
-      }
+      // No slot content here: it's compiled once below, for every candidate.
+      this.call(
+        { ...el, tag: lower, attrs: rest, children: [] },
+        names[0]!,
+        one,
+        el === this.rootElement,
+        true,
+      )
       const cmp = one.find((n) => n.k === 'cmp')
       if (cmp) c[lower] = cmp
       sigs.push(this.signature(names[0]!))
@@ -1239,14 +1238,32 @@ class Checker {
       return !seen.has(key) && seen.add(key)
     })
     this.diagnostics.push(...mine)
-    const loose = el.children.some(
-      (ch) => ch.k !== 'slot-fill' && !(ch.k === 'text' && !ch.value.trim()),
-    )
-    if (loose && sigs.length && !sigs.some((s) => s.outlets.has(''))) {
-      this.err(
-        el.span,
-        'no candidate of <component> has a default <slot /> for the content inside it',
-      )
+    // Slot content, compiled once in the caller's scope; its slots and `let`s
+    // are checked across the candidates below.
+    const fills: Record<string, CFill> = {}
+    const loose: Node[] = []
+    for (const ch of el.children) {
+      if (ch.k !== 'slot-fill') {
+        loose.push(ch)
+        continue
+      }
+      if (ch.name in fills) this.err(ch.span, `slot '${ch.name || 'default'}' is filled twice`)
+      else fills[ch.name] = this.fill(ch, undefined)
+    }
+    if (loose.some((ch) => !(ch.k === 'text' && !ch.value.trim()))) {
+      if (sigs.length && !sigs.some((s) => s.outlets.has(''))) {
+        this.err(
+          el.span,
+          'no candidate of <component> has a default <slot /> for the content inside it',
+        )
+      } else if ('' in fills) {
+        this.err(
+          el.span,
+          "<component>'s default slot is filled twice: by the content between its tags and by @slot(default …)",
+        )
+      } else {
+        fills[''] = { nodes: this.scoped(() => this.nodes(loose)) }
+      }
     }
     for (const f of el.children) {
       if (f.k !== 'slot-fill') continue
@@ -1261,7 +1278,7 @@ class Checker {
         }
       }
     }
-    out.push({ k: 'dyn', e: this.expr(isA.expr), c, at: at(el.span) })
+    out.push({ k: 'dyn', e: this.expr(isA.expr), c, f: fills, at: at(el.span) })
   }
 
   /**

@@ -747,3 +747,18 @@ describe('PR review fixes', () => {
     ).toEqual([])
   })
 })
+
+describe('<component> slot content', () => {
+  it('compiles once however deeply <component>s nest', () => {
+    let page = '<i>leaf</i>'
+    for (let i = 0; i < 12; i++)
+      page = `<component [is]="k" of="x-a x-b">@slot(default) {${page}}</component>`
+    const t = clean({
+      'components/x-a': '<div><slot /></div>',
+      'components/x-b': '<p><slot /></p>',
+      page,
+    })
+    // 12 levels × 2 candidates: linear, not 2^12 copies of the leaf.
+    expect(JSON.stringify(t.body).split('leaf').length - 1).toBe(1)
+  })
+})

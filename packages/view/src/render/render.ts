@@ -368,7 +368,8 @@ class Renderer {
             `<component> got ${typeof v === 'string' ? JSON.stringify(v) : `a ${typeof v}`} — it renders one of ${Object.keys(n.c).join(', ')}`,
           )
         }
-        this.component(hit, inst)
+        // The slot content is the <component>'s, compiled once for every candidate.
+        this.component({ ...hit, f: n.f }, inst)
         return
       }
       case 'rnd':

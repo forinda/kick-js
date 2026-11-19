@@ -241,8 +241,12 @@ export type CNode =
    * while the fallback renders they sit in slots `fs` (same order).
    */
   | { k: 'o'; n: string; fb: CNode[]; v?: Array<{ n: string; e: CExpr }>; fs?: number[] }
-  /** `<component [is]="e" of="…">`: one compiled call per candidate tag, picked by `e` */
-  | { k: 'dyn'; e: CExpr; c: Record<string, CNode>; at: At }
+  /**
+   * `<component [is]="e" of="…">`: one compiled call per candidate tag, picked
+   * by `e`. The slot content `f` is compiled once, here, and given to whichever
+   * candidate renders (it's in the caller's scope, the same for all).
+   */
+  | { k: 'dyn'; e: CExpr; c: Record<string, CNode>; f: Record<string, CFill>; at: At }
   /** `@render n(args)`: run snippet `n` of the current template */
   | { k: 'rnd'; n: string; a: CExpr[]; at: At }
   /** `@push('n') { }`: rendered, then added to stack `n` */
