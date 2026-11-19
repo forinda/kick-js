@@ -7,6 +7,17 @@ export type { Attr, Ctx, Element, IfBranch, InputDecl, LoopVar, Node, TemplateAs
 export { parse, type ParseResult } from './parse/template'
 export type { CAttr, CExpr, CNode, CSeg, CheckedTemplate } from './ast'
 export { check, type CheckResult } from './check/check'
+export type {
+  KickViewTypeOptions,
+  KickViewShared,
+  KickViews,
+  RenderArgs,
+  ViewData,
+  ViewDataOf,
+  ViewName,
+  ViewNameOf,
+  ViewRenderArgs,
+} from './types'
 export {
   merge as mergeField,
   mergeSummary,

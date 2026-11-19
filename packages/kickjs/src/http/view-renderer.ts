@@ -25,7 +25,7 @@ export interface ViewRenderOptions {
    *
    * @see https://kickjs.app/guide/views#fragments
    */
-  fragment?: string | string[]
+  fragment?: string | readonly string[]
   locale?: string
   timeZone?: string
 }

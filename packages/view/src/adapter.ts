@@ -33,7 +33,7 @@ function rendererFor(views: Views): Renderer {
       ? views.render(name, data, {
           layout: opts.layout,
           // Read loosely: kickjs versions before the option don't type it.
-          fragment: (opts as { fragment?: string | string[] }).fragment,
+          fragment: (opts as { fragment?: string | readonly string[] }).fragment,
           locale: opts.locale,
           timeZone: opts.timeZone,
           ctx,

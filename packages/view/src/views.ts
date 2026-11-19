@@ -2,6 +2,7 @@
  * `createViews`: templates from a loader or a build's bundle, checked once
  * and cached, rendered with the app's pipes and shared data.
  */
+import type { ViewName, ViewRenderArgs } from './types'
 import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
@@ -60,7 +61,7 @@ export interface RenderOptions {
    * Render only these `@fragment`s of the page, in order, without layouts —
    * an htmx swap (several for out-of-band swaps).
    */
-  fragment?: string | string[]
+  fragment?: string | readonly string[]
   locale?: string
   timeZone?: string
 }
@@ -124,7 +125,7 @@ export interface ViewsOptions {
 
 /** A views instance: renders templates and serves component client scripts. */
 export interface Views {
-  render(name: string, data?: object, opts?: RenderOptions & { ctx?: unknown }): Promise<string>
+  render<N extends ViewName>(name: N, ...args: ViewRenderArgs<N>): Promise<string>
   /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
   clientScript(file: string): Promise<string | undefined>
   /** A client file (script, stylesheet, asset) by its served name, with its content type. */

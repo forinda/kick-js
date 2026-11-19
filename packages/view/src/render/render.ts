@@ -646,7 +646,7 @@ export function render(
   opts: {
     layout?: boolean | string
     /** Render only these fragments of the page, without layouts. */
-    fragment?: string | string[]
+    fragment?: string | readonly string[]
     /** The caller's own data, which a fragment's needs are checked against (default `data`). */
     callerData?: object
   } = {},

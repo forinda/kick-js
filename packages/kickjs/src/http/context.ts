@@ -1,5 +1,6 @@
 /// <reference types="multer" />
 import { setPendingResponse, viewRendererFor, type ViewRenderOptions } from './view-renderer'
+import type { ViewName, ViewRenderArgs } from './view-types'
 import type { RouteName, UrlForArgs } from './url-for'
 import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
 import type { ConnectRequest as Request, ConnectNext as NextFunction } from './connect'
@@ -1013,6 +1014,7 @@ export class RequestContext<
    * await ctx.render('users/row', { user }, { layout: false })
    * ```
    */
+  render<N extends ViewName>(template: N, ...args: ViewRenderArgs<N>): Promise<void> | void
   render(template: string, data: Record<string, any> = {}, opts: ViewRenderOptions = {}) {
     const renderer = viewRendererFor(this.req)
     if (!renderer) return this._response.render(template, data)

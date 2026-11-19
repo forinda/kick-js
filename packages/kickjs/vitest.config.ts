@@ -30,6 +30,8 @@ export default defineConfig({
         // `src`, so a broken import in `__tests__` is invisible to
         // `pnpm typecheck` and this list is the only thing that checks it.
         '**/context-decorator-public-types.test.ts',
+        // The typed ctx.render surface (KickViews registry helpers).
+        '**/view-render-types.test.ts',
       ],
     },
     environment: 'node',
