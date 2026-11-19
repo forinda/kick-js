@@ -22,8 +22,8 @@ const VOID = new Set(
   'area base br col embed hr img input link meta param source track wbr'.split(' '),
 )
 /** Block heads: control flow is spaced (`@if (a) {`), directives aren't (`@layout('x')`). */
-const HEADS = /@(else\s+if|if|for|switch|case|slot|error|layout|assets)\s*\(/y
-const DIRECTIVES = new Set(['slot', 'error', 'layout', 'assets'])
+const HEADS = /@(else\s+if|if|for|switch|case|slot|error|layout|assets|fragment|push)\s*\(/y
+const DIRECTIVES = new Set(['slot', 'error', 'layout', 'assets', 'fragment', 'push'])
 
 type Range = [number, number]
 
@@ -47,7 +47,7 @@ function rawRanges(source: string, body: Node[]): Range[] {
       else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
       else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
       else if (n.k === 'slot-outlet') stack.push(n.fallback)
-      else if (n.k === 'slot-fill') stack.push(n.body)
+      else if (n.k === 'slot-fill' || n.k === 'fragment' || n.k === 'push') stack.push(n.body)
     }
   }
   for (const m of source.matchAll(/\{\{--[\s\S]*?--\}\}/g))
@@ -141,7 +141,7 @@ function outside(source: string, ranges: Range[], fn: (s: string) => string): st
 }
 
 const TOKENS =
-  /<\/([A-Za-z][\w:.-]*)\s*>|<([A-Za-z][\w:.-]*)(?:[^>"']|"[^"]*"|'[^']*')*?(\/?)>|@(?:if|for|switch|case|slot|error|else|empty|default)\b[^{}\n]*\{|\}/g
+  /<\/([A-Za-z][\w:.-]*)\s*>|<([A-Za-z][\w:.-]*)(?:[^>"']|"[^"]*"|'[^']*')*?(\/?)>|@(?:if|for|switch|case|slot|error|fragment|push|else|empty|default)\b[^{}\n]*\{|\}/g
 
 /**
  * Re-indent lines by the blocks and elements open at their start. A closer
@@ -235,6 +235,8 @@ function childLists(n: Node): Node[][] {
     case 'slot-outlet':
       return [n.fallback]
     case 'slot-fill':
+    case 'fragment':
+    case 'push':
       return [n.body]
     default:
       return []
