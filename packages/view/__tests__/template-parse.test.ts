@@ -382,7 +382,12 @@ describe('typed @input and @import type', () => {
   })
 
   it('keeps prose that merely mentions @import as text', () => {
-    expect(errors("<p>Use @import to load files from 'the archive'.</p>")).toEqual([])
+    const src = "<p>Use @import to load files from 'the archive'.</p>"
+    expect(flat(ok(src).ast.body)).toBe(src)
+  })
+
+  it('still refuses a default-plus-namespace value import', () => {
+    expect(errors("@import Client, * as SDK from 'sdk'")).toHaveLength(1)
   })
 
   it('finds the default after a type with = inside a comment', () => {

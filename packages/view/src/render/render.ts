@@ -652,8 +652,18 @@ export function render(
   } = {},
 ): string {
   const r = new Renderer(env)
-  // A page's @input defaults sit under whatever data was given.
-  if (template.defaults) data = { ...template.defaults, ...data }
+  // A page's @input defaults sit under whatever data was given; under those,
+  // its declared @layout chain's, even when that layout doesn't render
+  // (`layout: false`, a fragment): typed render data counts them as supplied.
+  const declared: Record<string, unknown> = {}
+  const seen = new Set([template.name])
+  for (let next = template.layout; next && !seen.has(next);) {
+    seen.add(next)
+    const t = env.resolve(next)
+    for (const [k, v] of Object.entries(t.defaults ?? {})) if (!(k in declared)) declared[k] = v
+    next = t.layout
+  }
+  data = { ...declared, ...template.defaults, ...data }
   r.rootData = data as Record<string, unknown>
   const page: Inst = {
     t: template,

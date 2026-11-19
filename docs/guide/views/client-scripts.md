@@ -78,18 +78,21 @@ A toast for flash messages, built as a component with a script. Copy it into you
       this.querySelector('[data-close]')?.addEventListener('click', () => this.remove())
       const ms = Number(this.getAttribute('timeout'))
       if (ms > 0) {
-        const pause = () => window.clearTimeout(this.timer)
+        // Readers get time: hovering or focusing it holds the toast, and it
+        // only resumes once neither is true (leaving with the pointer while
+        // the button still has focus keeps it).
+        let hovered = false
+        let focused = false
         // One timer at a time: hover and focus can resume it twice in a row.
-        const start = () => {
-          pause()
-          this.timer = window.setTimeout(() => this.remove(), ms)
+        const settle = () => {
+          window.clearTimeout(this.timer)
+          if (!hovered && !focused) this.timer = window.setTimeout(() => this.remove(), ms)
         }
-        // Readers get time: hovering or focusing it holds the toast.
-        this.addEventListener('mouseenter', pause)
-        this.addEventListener('mouseleave', start)
-        this.addEventListener('focusin', pause)
-        this.addEventListener('focusout', start)
-        start()
+        this.addEventListener('mouseenter', () => ((hovered = true), settle()))
+        this.addEventListener('mouseleave', () => ((hovered = false), settle()))
+        this.addEventListener('focusin', () => ((focused = true), settle()))
+        this.addEventListener('focusout', () => ((focused = false), settle()))
+        settle()
       }
     }
   }

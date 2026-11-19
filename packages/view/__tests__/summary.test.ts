@@ -182,3 +182,12 @@ describe('mergeSummary — PR review', () => {
     expect(mergeSummary(page, layout).declared.title).toEqual({ type: 'string', optional: true })
   })
 })
+
+describe('data summary — PR review 2', () => {
+  it("doesn't let a test of a several-source alias relax each source", () => {
+    const f = fields(
+      '@let selected = show ? primary : fallback;\n@if (selected) { {{ fallback.name }} }',
+    )
+    expect(f.fallback).toMatchObject({ optional: false, nullable: false })
+  })
+})

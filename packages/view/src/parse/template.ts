@@ -604,7 +604,7 @@ class TemplateParser {
     // Only an import-shaped clause is a directive (`@import { x } from 'y'`,
     // `@import X from 'y'`); prose that mentions @import stays text.
     const importShaped =
-      /^\s+(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*(?:\s*,\s*\{[^}]*\})?)\s+from\s*['"]/.test(
+      /^\s+(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?)\s+from\s*['"]/.test(
         line,
       )
     if (!isType && !importShaped) return false

@@ -589,7 +589,9 @@ function testedPaths(
         e.root,
         e.segments.map((x) => ({ p: x.name! })),
       )
-      out.push(...p)
+      // A several-source alias (`@let x = a ? b : c`) tests whichever it
+      // holds — not each source — so it guards none of them.
+      if (p.length === 1) out.push(p[0]!)
     }
   }
   visit(cond)

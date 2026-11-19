@@ -101,6 +101,9 @@ describe('typed render', () => {
       renderLoose('users/show', {})
       // @ts-expect-error nor can they skip it through the loose overload
       renderLoose('users/show')
+      const either = 'a' as 'a' | 'external.ejs'
+      // @ts-expect-error a union that may be a registered page doesn't go loose
+      renderLoose(either)
     }
     void types
   })

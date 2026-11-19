@@ -235,8 +235,11 @@ async emailTaken(ctx: RequestContext) {
       const input = this.querySelector('input')!
       const spot = this.querySelector<HTMLElement>('[data-kick-error="email"]')!
       input.addEventListener('change', async () => {
-        const res = await fetch(`/register/email-taken?email=${encodeURIComponent(input.value)}`)
+        const email = input.value
+        const res = await fetch(`/register/email-taken?email=${encodeURIComponent(email)}`)
         const { taken } = (await res.json()) as { taken: boolean }
+        // A slower answer for an earlier value mustn't overwrite the current one.
+        if (input.value !== email) return
         spot.textContent = taken ? 'That email is already registered' : ''
         spot.hidden = !taken
       })

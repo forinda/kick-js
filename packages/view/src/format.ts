@@ -5,7 +5,7 @@
  * byte-exact. The result is re-parsed and compared with the original;
  * anything beyond whitespace changing returns the source untouched.
  */
-import type { Element, Node } from './ast'
+import type { Element, Node, TemplateAst } from './ast'
 import { warning, type Diagnostic } from './diagnostics'
 import { parse } from './parse/template'
 
@@ -29,9 +29,9 @@ const DIRECTIVES = new Set(['slot', 'error', 'layout', 'assets', 'fragment', 'pu
 type Range = [number, number]
 
 /** Source ranges formatting must not touch. */
-function rawRanges(source: string, body: Node[]): Range[] {
+function rawRanges(source: string, ast: TemplateAst): Range[] {
   const ranges: Range[] = []
-  const stack: Node[][] = [body]
+  const stack: Node[][] = [ast.body]
   while (stack.length) {
     for (const n of stack.pop()!) {
       if (n.k === 'verbatim' || n.k === 'comment') {
@@ -55,10 +55,23 @@ function rawRanges(source: string, body: Node[]): Range[] {
   }
   for (const m of source.matchAll(/\{\{--[\s\S]*?--\}\}/g))
     ranges.push([m.index, m.index + m[0].length])
-  // `@input …` / `@import type …`: a type and a default, never markup to tidy.
-  for (const m of source.matchAll(/^[ \t]*@(?:input|import)\b.*$/gm))
-    ranges.push([m.index, m.index + m[0].length])
-  return ranges.toSorted((a, b) => a[0] - b[0])
+  // What the parser read as declarations (`@input …`, `@import type …`): a
+  // type and a default, never markup to tidy. Prose that merely starts with
+  // `@import` isn't one, and stays markup.
+  for (const i of ast.inputs) ranges.push([i.span.start.offset, i.span.end.offset])
+  const imports = new Set((ast.typeImports ?? []).map((l) => `@${l}`))
+  for (const m of source.matchAll(/^[ \t]*(@import\b[^\n]*?);?[ \t]*$/gm)) {
+    if (imports.has(m[1]!.trimEnd())) ranges.push([m.index, m.index + m[0].length])
+  }
+  // Merged where they overlap (a comment scan can start inside a declaration),
+  // so `outside()` neither skips nor double-counts a span.
+  const merged: Range[] = []
+  for (const r of ranges.toSorted((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1)
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1])
+    else merged.push([r[0], r[1]])
+  }
+  return merged
 }
 
 /** `a|b` → `a | b` in an expression; `||` and quoted text are left alone. */
@@ -183,8 +196,6 @@ function reindent(source: string, ranges: Range[], unit: string): string {
       if (from < to) line = line.slice(0, from) + '\u0000'.repeat(to - from) + line.slice(to)
     }
     line = line.replace(/\{\{[\s\S]*?\}\}/g, (m) => '\u0000'.repeat(m.length))
-    // `@input u: Array<User>` / `@import type …`: a type, not markup.
-    line = line.replace(/^\s*@(?:input|import)\b.*$/, (m) => '\u0000'.repeat(m.length))
     const content = raw.trim()
     if (!content) {
       out.push('')
@@ -300,11 +311,11 @@ export function format(
   if (before.diagnostics.some((d) => d.severity === 'error'))
     return { diagnostics: before.diagnostics }
   const unit = ' '.repeat(opts.indent ?? 2)
-  const normalised = outside(source, rawRanges(source, before.ast.body), normalise)
+  const normalised = outside(source, rawRanges(source, before.ast), normalise)
   const mid = parse(normalised, file)
   let output = normalised
   if (!mid.diagnostics.some((d) => d.severity === 'error')) {
-    output = reindent(normalised, rawRanges(normalised, mid.ast.body), unit)
+    output = reindent(normalised, rawRanges(normalised, mid.ast), unit)
   }
   if (!output.endsWith('\n')) output += '\n'
   const after = parse(output, file)

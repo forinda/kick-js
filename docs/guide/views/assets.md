@@ -3,10 +3,17 @@
 `@assets('src/client/main.ts')` writes the tags for a Vite entry. Give `createViews` an `assets` function:
 
 ```ts
-import { assetTags } from '@forinda/kickjs-view'
-import manifest from '../dist/client/.vite/manifest.json' with { type: 'json' }
+import { assetTags, type AssetsMode } from '@forinda/kickjs-view'
 
-const mode = import.meta.env.DEV ? { dev: true, base: '/' } : { dev: false, manifest, base: '/' }
+// The manifest exists only after `kick build`, so it's read only then.
+const mode: AssetsMode = import.meta.env.DEV
+  ? { dev: true, base: '/' }
+  : {
+      dev: false,
+      manifest: (await import('../dist/client/.vite/manifest.json', { with: { type: 'json' } }))
+        .default,
+      base: '/',
+    }
 
 createViews({
   ...kickViews,

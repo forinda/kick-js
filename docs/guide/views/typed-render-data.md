@@ -60,6 +60,8 @@ declare module '@forinda/kickjs' {
     otherEngines: true
   }
 }
+// Makes the file a module, so this adds to the package's interface.
+export {}
 ```
 
 The view package declares the same interfaces for `views.render` outside an app (emails, the edge); typegen fills whichever of `@forinda/kickjs` and `@forinda/kickjs-view` you have installed.

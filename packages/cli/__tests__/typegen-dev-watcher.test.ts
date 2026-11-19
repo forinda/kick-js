@@ -73,6 +73,15 @@ describe('createTypegenDevWatcher', () => {
     expect(pipeline.runTypegen.mock.calls[0][0].changedFiles).toBeUndefined()
   })
 
+  it('a .kick template change runs the plugin typegens (views), anywhere in the project', async () => {
+    const { watcher, pipeline } = makeWatcher()
+    watcher.handleWatchEvent('change', '/proj/app/views/users/show.kick')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(pipeline.runAllPluginTypegens).toHaveBeenCalledTimes(1)
+    // Not a TypeScript source: the scan delta stays empty.
+    expect(pipeline.runTypegen.mock.calls[0][0].changedFiles).toEqual({ changed: [], removed: [] })
+  })
+
   it('ignores .kickjs output and .d.ts files', async () => {
     const { watcher, pipeline } = makeWatcher()
     watcher.handleWatchEvent('change', '/proj/.kickjs/types/kick__routes.ts')

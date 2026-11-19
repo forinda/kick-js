@@ -114,9 +114,10 @@ export type RenderArgs<R, S, N> = [DataOf<R, N>] extends [never]
 export type LooseViewNameOf<R, O, N> = [keyof R] extends [never]
   ? string
   : O extends { otherEngines: true }
-    ? N extends keyof R
-      ? never
-      : string
+    ? // Not distributed: a union that may be a registered page isn't loose.
+      [Extract<N, keyof R>] extends [never]
+      ? string
+      : never
     : never
 
 /** The app's template names. */

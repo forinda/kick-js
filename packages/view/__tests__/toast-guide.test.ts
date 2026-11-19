@@ -39,6 +39,16 @@ describe('the toast guide', () => {
     expect(document.querySelector('kick-toast')).toBeNull()
   })
 
+  it('stays while focused after the pointer leaves', () => {
+    vi.useFakeTimers()
+    const el = toast(1000)
+    el.dispatchEvent(new Event('focusin', { bubbles: true }))
+    el.dispatchEvent(new Event('mouseenter'))
+    el.dispatchEvent(new Event('mouseleave'))
+    vi.advanceTimersByTime(5000)
+    expect(document.querySelector('kick-toast')).not.toBeNull()
+  })
+
   it('stays while paused', () => {
     vi.useFakeTimers()
     const el = toast(1000)

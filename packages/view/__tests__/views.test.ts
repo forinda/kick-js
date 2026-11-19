@@ -271,4 +271,16 @@ describe("a layout's @input defaults", () => {
     expect(await views.render('plain')).toBe('<title>Site</title><p>x</p>')
     expect(await views.render('own')).toBe('<title>Own</title><p>x</p>')
   })
+
+  // Typed render data counts a declared layout's default as supplied, so it
+  // has to be there when the layout doesn't render too.
+  it("still fill in a page's reads without the layout, and in a fragment", async () => {
+    const files = {
+      'layouts/main': "@input title = 'Site'\n<title>{{ title }}</title><slot />",
+      page: "@layout('layouts/main')\n<h1>{{ title }}</h1>@fragment('head') {<b>{{ title }}</b>}",
+    }
+    const views = createViews({ viewsDir: dir(files), warn: () => {}, strict: true })
+    expect(await views.render('page', {}, { layout: false })).toBe('<h1>Site</h1><b>Site</b>')
+    expect(await views.render('page', {}, { fragment: 'head' })).toBe('<b>Site</b>')
+  })
 })

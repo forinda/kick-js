@@ -201,7 +201,10 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
         if (file.endsWith('.d.ts')) return
         const isTs = /\.(ts|tsx|mts|cts)$/.test(file)
         const isAsset = isAssetFile(file)
-        if (!isTs && !isAsset) return
+        // A .kick template, wherever the views live: the views typegen
+        // (a plugin's) reads it, so it needs a pass like a source change.
+        const isTemplate = file.endsWith('.kick')
+        if (!isTs && !isAsset && !isTemplate) return
         if (isAsset && hasAssetMap) assetDirty = true
         // Only `.ts` files participate in the source scan delta. Asset-
         // only changes still trigger the pass (so the asset plugin

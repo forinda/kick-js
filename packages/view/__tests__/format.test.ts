@@ -77,8 +77,19 @@ describe('format', () => {
     expect(fmt(once)).toBe(once)
   })
 
-  it("leaves an @input default's text alone", () => {
-    const src = "@input label: string = '{{hello}}'\n<p>{{ label }}</p>\n"
+  it("leaves an @input default's text alone, while formatting the body", () => {
+    expect(fmt("@input label: string = '{{hello}}'\n<p>{{label}}</p>\n")).toBe(
+      "@input label: string = '{{hello}}'\n<p>{{ label }}</p>\n",
+    )
+  })
+
+  it('treats a prose line starting with @import as markup', () => {
+    const src = '<div>\n@import your notes <b>\nx\n</b>\n</div>\n'
+    expect(fmt(src)).toBe('<div>\n  @import your notes <b>\n    x\n  </b>\n</div>\n')
+  })
+
+  it('formats a template comment a protected range overlaps', () => {
+    const src = "@input label: string = '{{--'\n{{-- docs {{x}} --}}\n<p></p>\n"
     expect(fmt(src)).toBe(src)
   })
 
