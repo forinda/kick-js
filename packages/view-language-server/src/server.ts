@@ -15,6 +15,7 @@ import { kickLanguagePlugin } from './language-plugin'
 import { createKickServicePlugin } from './plugin/index'
 import { renderDefinition, renderDiagnostics } from './plugin/render-calls'
 import { loadViewModule } from './view-module'
+import { loadKickConfig, viewsSetup } from './kick-config'
 import { Workspace } from './workspace'
 
 /** `initializationOptions`; paths are relative to the workspace folder. */
@@ -31,6 +32,8 @@ export interface ServerOptions {
   layout?: string | Record<string, string>
   /** `createViews({ baseLayout })`. */
   baseLayout?: string
+  /** Named view roots (`ui::…`), as kick.config's `views.roots` writes them. Default: kick.config's (trusted workspaces). */
+  roots?: Record<string, string>
   /**
    * The editor trusts the workspace, so the project's own `@forinda/kickjs-view`
    * may be imported. Otherwise the bundled copy is used. Default `false`.
@@ -121,7 +124,14 @@ export function startServer(): void {
     const root = folder ? URI.parse(folder).fsPath : process.cwd()
     const opts = (params.initializationOptions ?? {}) as ServerOptions
     const at = (p: string) => (isAbsolute(p) ? p : resolve(root, p))
-    const viewsDir = at(opts.viewsDir ?? 'src/views')
+    // kick.config runs the project's code: read only in a trusted workspace.
+    const setup = viewsSetup(
+      root,
+      opts,
+      opts.trusted === true && !opts.roots ? await loadKickConfig(root) : null,
+    )
+    if (setup.error) connection.console.warn(`kick views: ${setup.error}`)
+    const viewsDir = setup.viewsDir ?? at('src/views')
     const hasViews = existsSync(viewsDir)
     // A folder without templates stays quiet, even about the fallback.
     const { view } = await loadViewModule(
@@ -143,6 +153,7 @@ export function startServer(): void {
       list: listKick,
       layout: opts.layout || undefined,
       baseLayout: opts.baseLayout || undefined,
+      roots: setup.roots,
       // Read when a template is renamed: an open buffer's text, else the file's.
       // A bounded number of reads at once: a big project would otherwise run
       // out of file handles, and the failed reads would skip their calls.

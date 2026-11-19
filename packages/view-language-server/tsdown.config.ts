@@ -9,6 +9,12 @@ export default defineConfig({
   platform: 'node',
   fixedExtension: false,
   dts: true,
-  external: [/^@volar\//, /^volar-service-/, 'vscode-uri', '@forinda/kickjs-view', /^node:/],
+  external: [
+    /^@volar\//,
+    /^volar-service-/,
+    'vscode-uri',
+    /^@forinda\/kickjs-view(\/|$)/,
+    /^node:/,
+  ],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

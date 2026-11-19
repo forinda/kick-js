@@ -35,6 +35,14 @@ export interface WorkspaceOptions {
   baseLayout?: string
   /** The project's TS / JS files with their text (an open buffer's when there is one), for `ctx.render('…')` names. */
   scripts?(): Promise<Array<{ uri: string; text: string }>>
+  /** Named view roots (`ui::…`), absolute folders. */
+  roots?: Array<{ name: string; dir: string }>
+}
+
+/** `ui::components/x` → root `ui`, path `components/x`. */
+function split(name: string): { root?: string; path: string } {
+  const at = name.indexOf('::')
+  return at < 0 ? { path: name } : { root: name.slice(0, at), path: name.slice(at + 2) }
 }
 
 interface Entry {
@@ -67,18 +75,52 @@ export class Workspace {
   async load(): Promise<void> {
     await this.loadPipes()
     await this.loadValidators()
-    for (const path of await this.opts.list(this.opts.viewsDir)) {
-      const name = this.nameOfPath(path)
-      if (name) this.update(name, { disk: await this.opts.read(path) })
+    for (const { dir } of this.folders()) {
+      for (const path of await this.opts.list(dir)) {
+        const name = this.nameOfPath(path)
+        if (name) this.update(name, { disk: await this.opts.read(path) })
+      }
     }
+  }
+
+  /** The app's views folder, then each root's. */
+  private folders(): Array<{ root?: string; dir: string }> {
+    return [
+      { dir: this.opts.viewsDir },
+      ...(this.opts.roots ?? []).map((r) => ({ root: r.name, dir: r.dir })),
+    ]
+  }
+
+  /** What `ref`, written in template `from`, names: its own root's template first, then the app's. */
+  refOf(from: string | undefined, ref: string): string {
+    const root = from === undefined ? undefined : split(from).root
+    if (ref.includes('::') || root === undefined) return ref
+    const own = `${root}::${ref}`
+    return this.entries.has(own) ? own : ref
+  }
+
+  /** A template name's path, without its root. */
+  pathPart(name: string): string {
+    return split(name).path
   }
 
   // ── names ─────────────────────────────────────────────────────────────
 
   private nameOfPath(path: string): string | undefined {
-    const rel = relative(this.opts.viewsDir, path).split(sep).join(posix.sep)
-    if (rel.startsWith('..') || !rel.endsWith('.kick')) return undefined
-    return this.opts.view.templateName(rel.slice(0, -'.kick'.length))
+    for (const { root, dir } of this.folders()) {
+      const rel = relative(dir, path).split(sep).join(posix.sep)
+      if (rel.startsWith('..') || isAbsolute(rel) || !rel.endsWith('.kick')) continue
+      const name = this.opts.view.templateName(rel.slice(0, -'.kick'.length))
+      return name && (root === undefined ? name : `${root}::${name}`)
+    }
+    return undefined
+  }
+
+  private dirOf(name: string): { dir: string; path: string } {
+    const { root, path } = split(name)
+    const dir =
+      root === undefined ? this.opts.viewsDir : this.opts.roots?.find((r) => r.name === root)?.dir
+    return { dir: dir ?? this.opts.viewsDir, path }
   }
 
   /** `uri`'s path inside the views folder (`layouts/main.kick`, `layouts`); `undefined` outside it. */
@@ -92,7 +134,7 @@ export class Workspace {
   }
 
   uriOf(name: string): string {
-    return URI.file(`${this.opts.viewsDir}/${name}.kick`).toString()
+    return URI.file(this.pathOf(name)).toString()
   }
 
   componentsDir(): string {
@@ -100,7 +142,8 @@ export class Workspace {
   }
 
   pathOf(name: string): string {
-    return `${this.opts.viewsDir}/${name}.kick`
+    const { dir, path } = this.dirOf(name)
+    return `${dir}/${path}.kick`
   }
 
   names(): string[] {
@@ -325,11 +368,11 @@ export class Workspace {
   layoutOf(name: string): string | undefined {
     const ast = this.astOf(name)
     if (!ast) return undefined
-    if (ast.layout !== undefined) return ast.layout ?? undefined
+    if (ast.layout !== undefined) return ast.layout ? this.refOf(name, ast.layout) : undefined
     const { layout } = this.opts
     if (
       layout === undefined ||
-      name.startsWith(`${this.opts.componentsDir}/`) ||
+      split(name).path.startsWith(`${this.opts.componentsDir}/`) ||
       this.configuredLayouts().has(name)
     )
       return undefined

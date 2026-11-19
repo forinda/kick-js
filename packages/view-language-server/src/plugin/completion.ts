@@ -43,7 +43,9 @@ const KEYWORDS: Record<string, string> = {
 /** The template a component tag names, if any. */
 export function componentOf(ws: Workspace, tag: string): string | undefined {
   const dir = ws.componentsDir()
-  return ws.names().find((n) => n.startsWith(`${dir}/`) && ws.view.componentTag(n, dir) === tag)
+  return ws
+    .names()
+    .find((n) => ws.pathPart(n).startsWith(`${dir}/`) && ws.view.componentTag(n, dir) === tag)
 }
 
 /** Slot names the layouts above `name` declare, nearest first. */
