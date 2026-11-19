@@ -132,7 +132,14 @@ import type { z } from 'zod'
 
 /** Each field's first message, as route validation reports them. */
 function messages(form: HTMLFormElement, schema: z.ZodType): Record<string, string> {
-  const result = schema.safeParse(Object.fromEntries(new FormData(form)))
+  // A name sent more than once (checkboxes, multi-selects) stays a list.
+  const fd = new FormData(form)
+  const values: Record<string, unknown> = {}
+  for (const key of new Set(fd.keys())) {
+    const all = fd.getAll(key)
+    values[key] = all.length > 1 ? all : all[0]
+  }
+  const result = schema.safeParse(values)
   const out: Record<string, string> = {}
   if (!result.success)
     for (const issue of result.error.issues) out[String(issue.path[0] ?? 'form')] ??= issue.message

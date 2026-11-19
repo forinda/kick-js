@@ -85,7 +85,7 @@ A page or component often needs something in the `<head>`, such as a stylesheet,
 - **What counts.** Only pushes that render: one inside a false `@if` adds nothing, one inside a loop adds each time round.
 - **Once each.** Identical content pushed to the same stack is output once, so a component used fifty times links its stylesheet once. Different content is all kept.
 - **Order.** Content comes out in the order it renders. The outermost layout renders first and the page appears where it reaches `<slot />`, so a layout's push above its `<slot />` comes before the page's, and one below it comes after.
-- **Nowhere to go.** Content pushed to a name no rendered template has is dropped, with a warning in development. A partial render (`layout: false`, a [fragment](./htmx.md#fragments)) has no layout, so its pushes are dropped silently.
+- **Nowhere to go.** Content pushed to a name no rendered template has is dropped, with a warning in development. A partial render (`layout: false`) still fills the page's own `<stack>`s; a push with no stack in the page is dropped silently. A [fragment](./htmx.md#fragments) render has no stacks at all, so its pushes are dropped.
 - **One per name.** When two `<stack>`s share a name, the first gets the content; the check warns when both are in one file.
 - **`<stack>` is reserved,** like `<slot>`: it isn't output as an element.
 

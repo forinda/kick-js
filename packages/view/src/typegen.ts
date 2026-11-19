@@ -49,7 +49,9 @@ function shapeType(s: Shape): string {
 
 function fieldType(f: Field): string {
   const t = shapeType(f.shape)
-  return f.nullable ? `${t} | null | undefined` : t
+  if (f.nullable) return `${t} | null | undefined`
+  // Read as is: present and not null, whatever else it is.
+  return t === 'unknown' ? 'NonNullable<unknown>' : t
 }
 
 function objectType(props: Record<string, Field>): string {
@@ -85,16 +87,33 @@ function dataType(s: DataSummary, fields = s.fields, onlyFields = false): string
   return parts.length ? `{ ${parts.join('; ')} }` : '{}'
 }
 
+/** A relative specifier written in `templateFile`, as `outDir` reaches the same module. */
+function repoint(spec: string, templateFile: string, outDir: string, root: string): string {
+  const abs = resolve(root, dirname(templateFile), spec)
+  const rel = relative(outDir, abs).split(sep).join('/')
+  return rel.startsWith('.') ? rel : `./${rel}`
+}
+
 /** An `@import type` line, its relative specifier re-pointed from the template to `outDir`. */
 function importLine(line: string, templateFile: string, outDir: string, root: string): string {
   return line.replace(
     /(\bfrom\s*)(['"])(\.[^'"]*)\2/,
-    (_, from: string, q: string, spec: string) => {
-      const abs = resolve(root, dirname(templateFile), spec)
-      let rel = relative(outDir, abs).split(sep).join('/')
-      if (!rel.startsWith('.')) rel = `./${rel}`
-      return `${from}${q}${rel}${q}`
-    },
+    (_, from: string, q: string, spec: string) =>
+      `${from}${q}${repoint(spec, templateFile, outDir, root)}${q}`,
+  )
+}
+
+const escape = (name: string) => name.replace(/\$/g, '\\$')
+/** `name` as a type reference: not part of a longer name, a member, or a property key. */
+const refTo = (names: string[]) =>
+  new RegExp(`(?<![\\w$.])(?:${names.map(escape).join('|')})(?![\\w$])(?!\\s*\\??\\s*:)`, 'g')
+
+/** `type` with each name in `rename` replaced, string literals left alone. */
+function renameRefs(type: string, rename: Map<string, string>): string {
+  if (!rename.size) return type
+  const ref = refTo([...rename.keys()])
+  return type.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|[^'"]+/g, (part, quoted) =>
+    quoted ? part : part.replace(ref, (local) => rename.get(local)!),
   )
 }
 
@@ -194,22 +213,33 @@ export function aliasImports(
         if (alias !== local) rename.set(local, alias)
       }
     }
-    if (!rename.size) return e
-    // One pass over the original text, so `A → A_2` and `A_2 → A_2_2` don't chain.
-    const names = [...rename.keys()].map((n) => n.replace(/\$/g, '\\$')).join('|')
-    const ref = new RegExp(`(?<![\\w$.])(?:${names})(?![\\w$])`, 'g')
+    // One pass over the original text, so `A → A_2` and `A_2 → A_2_2` don't
+    // chain; and an inline `import('./x')` re-pointed like an `@import` line.
     const declared: DataSummary['declared'] = {}
     for (const [name, d] of Object.entries(e.summary.declared)) {
-      const type = d.type?.replace(ref, (local) => rename.get(local)!)
+      const type = d.type
+        ? renameRefs(d.type, rename).replace(
+            /\bimport\(\s*(['"])(\.[^'"]*)\1\s*\)/g,
+            (_, q: string, spec: string) =>
+              `import(${q}${repoint(spec, e.file, opts.outDir, opts.projectRoot)}${q})`,
+          )
+        : undefined
       declared[name] = { ...d, ...(type ? { type } : {}) }
     }
     return { ...e, summary: { ...e.summary, declared } }
   })
+  // Only the names a declared type uses: an unused import fails `noUnusedLocals`.
+  const used = out.flatMap((e) => Object.values(e.summary.declared).map((d) => d.type ?? ''))
+  const isUsed = (alias: string) => used.some((t) => refTo([alias]).test(t))
   const imports = [
-    ...[...byModule].map(
-      ([from, names]) =>
-        `import type { ${[...names].map(([x, a]) => (x === a ? x : `${x} as ${a}`)).join(', ')} } from '${from}'`,
-    ),
+    ...[...byModule].flatMap(([from, names]) => {
+      const kept = [...names].filter(([, a]) => isUsed(a))
+      return kept.length
+        ? [
+            `import type { ${kept.map(([x, a]) => (x === a ? x : `${x} as ${a}`)).join(', ')} } from '${from}'`,
+          ]
+        : []
+    }),
     ...other,
   ]
   return { imports, entries: out }

@@ -139,8 +139,15 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
   let forceFullScan = false
   let assetDirty = false
 
+  // One pass at a time: a newer pass that finished first would otherwise be
+  // overwritten by the older one's stale types.
+  let queue: Promise<unknown> = Promise.resolve()
   function firePass(delta: ScanDelta | undefined, rebuildAssets: boolean): void {
-    pipeline
+    queue = queue.then(() => runPass(delta, rebuildAssets))
+  }
+
+  function runPass(delta: ScanDelta | undefined, rebuildAssets: boolean): Promise<unknown> {
+    const scan = pipeline
       .runTypegen({
         cwd,
         silent: true,
@@ -157,7 +164,7 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
       })
       .then(() => reporter.clear('scan'))
       .catch((err) => reporter.report('scan', err))
-    pipeline
+    const plugins = pipeline
       .runAllPluginTypegens({ cwd, config, silent: true, changedFiles: delta, watch: true })
       .then((r) => pipeline.writeTypegenArtifacts(typesOutDir, r, true))
       .then(() => reporter.clear('plugins'))
@@ -169,6 +176,7 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
     if (rebuildAssets && config) {
       pipeline.buildAssets(config, { cwd, silent: true }).catch(() => {})
     }
+    return Promise.all([scan, plugins])
   }
 
   function flush(): void {

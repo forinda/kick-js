@@ -21,4 +21,6 @@ createViews({
 })
 ```
 
+TypeScript resolves the manifest path even though dev never loads it, so run `kick build` once before type-checking (or add `"dist/client/.vite/manifest.json"` as an empty `{}` until then).
+
 In dev that's the Vite client plus the module. In a build it's the hashed script, its CSS and preload tags, each with the nonce when there is one.

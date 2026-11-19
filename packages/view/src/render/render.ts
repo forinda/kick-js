@@ -660,7 +660,9 @@ export function render(
   for (let next = template.layout; next && !seen.has(next);) {
     seen.add(next)
     const t = env.resolve(next)
-    for (const [k, v] of Object.entries(t.defaults ?? {})) if (!(k in declared)) declared[k] = v
+    for (const [k, v] of Object.entries(t.defaults ?? {})) {
+      if (!Object.hasOwn(declared, k)) declared[k] = v
+    }
     next = t.layout
   }
   data = { ...declared, ...template.defaults, ...data }

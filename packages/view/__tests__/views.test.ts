@@ -282,5 +282,13 @@ describe("a layout's @input defaults", () => {
     const views = createViews({ viewsDir: dir(files), warn: () => {}, strict: true })
     expect(await views.render('page', {}, { layout: false })).toBe('<h1>Site</h1><b>Site</b>')
     expect(await views.render('page', {}, { fragment: 'head' })).toBe('<b>Site</b>')
+    const proto = createViews({
+      viewsDir: dir({
+        'layouts/main': "@input toString = 'own'\n<slot />",
+        page: "@layout('layouts/main')\n<p>{{ toString }}</p>",
+      }),
+      warn: () => {},
+    })
+    expect(await proto.render('page', {}, { layout: false })).toBe('<p>own</p>')
   })
 })

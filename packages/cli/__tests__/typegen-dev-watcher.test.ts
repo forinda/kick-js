@@ -82,6 +82,24 @@ describe('createTypegenDevWatcher', () => {
     expect(pipeline.runTypegen.mock.calls[0][0].changedFiles).toEqual({ changed: [], removed: [] })
   })
 
+  it('runs one pass at a time: a change during a pass waits for it', async () => {
+    let finish!: () => void
+    const pipeline = makePipeline()
+    pipeline.runAllPluginTypegens.mockImplementationOnce(
+      () => new Promise<[]>((r) => (finish = () => r([]))),
+    )
+    const { watcher } = makeWatcher(null, pipeline)
+    watcher.handleWatchEvent('change', '/proj/src/views/a.kick')
+    await vi.advanceTimersByTimeAsync(150)
+    watcher.handleWatchEvent('change', '/proj/src/views/a.kick')
+    await vi.advanceTimersByTimeAsync(150)
+    // The second pass can't start (and overwrite with older types) yet.
+    expect(pipeline.runAllPluginTypegens).toHaveBeenCalledTimes(1)
+    finish()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pipeline.runAllPluginTypegens).toHaveBeenCalledTimes(2)
+  })
+
   it('ignores .kickjs output and .d.ts files', async () => {
     const { watcher, pipeline } = makeWatcher()
     watcher.handleWatchEvent('change', '/proj/.kickjs/types/kick__routes.ts')

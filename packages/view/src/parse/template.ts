@@ -597,9 +597,10 @@ class TemplateParser {
    * import is refused; `@import` followed by anything else stays text.
    */
   private typeImport(i: number, after: number): boolean {
-    let eol = this.s.indexOf('\n', after)
-    if (eol < 0) eol = this.s.length
-    const line = this.s.slice(after, eol).replace(/\r$/, '')
+    // The line ends at the first CR or LF (`standalone` takes the break).
+    const br = /[\r\n]/.exec(this.s.slice(after))
+    const eol = br ? after + br.index : this.s.length
+    const line = this.s.slice(after, eol)
     const isType = /^\s+type\b/.test(line)
     // Only an import-shaped clause is a directive (`@import { x } from 'y'`,
     // `@import X from 'y'`); prose that mentions @import stays text.
@@ -1151,6 +1152,26 @@ function literalOf(e: Expr | undefined): Literal | undefined {
   return undefined
 }
 
+/** The closing backtick of the template literal opening at `at`: `${ }` holes may hold more. */
+function templateEnd(src: string, at: number): number {
+  for (let k = at + 1; k < src.length; k++) {
+    const c = src[k]!
+    if (c === '\\') k++
+    else if (c === '`') return k
+    else if (c === '$' && src[k + 1] === '{') {
+      let depth = 1
+      for (k += 2; k < src.length && depth > 0; k++) {
+        const d = src[k]!
+        if (d === '`') k = templateEnd(src, k)
+        else if (d === '{') depth++
+        else if (d === '}') depth--
+      }
+      k--
+    }
+  }
+  return src.length
+}
+
 /** Where a type annotation in `src` (from `at`) ends: a top-level `=` that isn't `=>`, or the end. */
 function typeEnd(src: string, at: number): number {
   let depth = 0
@@ -1165,7 +1186,8 @@ function typeEnd(src: string, at: number): number {
       const close = src.indexOf('*/', k + 2)
       k = close < 0 ? src.length : close + 1
     } else if (c === '/' && src[k + 1] === '/') return k
-    else if (c === "'" || c === '"' || c === '`') quote = c
+    else if (c === '`') k = templateEnd(src, k)
+    else if (c === "'" || c === '"') quote = c
     else if ('<([{'.includes(c)) depth++
     else if ('>)]}'.includes(c) && !(c === '>' && src[k - 1] === '=')) depth--
     else if (c === '=' && depth === 0 && src[k + 1] !== '>') return k

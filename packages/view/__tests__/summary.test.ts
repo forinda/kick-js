@@ -209,3 +209,30 @@ describe('data summary — PR review 3', () => {
     expect(f.records!.shape.k).toBe('unknown')
   })
 })
+
+describe('data summary — PR review 4', () => {
+  it('keeps an arithmetic operand required under ??', () => {
+    expect(fields('{{ (count + 1) ?? 0 }}').count).toMatchObject({ optional: false })
+  })
+
+  it("keeps a ?? fallback's optionality through a local", () => {
+    expect(fields("@let label = title ?? 'Guest';\n{{ label }}").title).toMatchObject({
+      optional: true,
+    })
+    expect(fields('@let label = title;\n{{ label }}').title).toMatchObject({ optional: false })
+  })
+
+  it("counts a snippet's reads only when the page renders it", () => {
+    expect(fields('@snippet label() { {{ title }} }\n<p></p>').title).toBeUndefined()
+    expect(fields('@snippet label() { {{ title }} }\n@render label()').title).toMatchObject({
+      optional: false,
+    })
+  })
+
+  it("doesn't let a layout default of another type make a page input optional", async () => {
+    const { mergeSummary } = await import('../src/check/summary')
+    const page = sum('@input total: number\n<p>{{ total }}</p>')
+    const layout = sum("@input total: string = '0'\n<b>{{ total }}</b><slot />")
+    expect(mergeSummary(page, layout).declared.total).toMatchObject({ optional: false })
+  })
+})

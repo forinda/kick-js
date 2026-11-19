@@ -41,11 +41,11 @@ describe('renderViewTypes', () => {
     expect(out).toContain('user: User')
     expect(out).toContain('title?: string')
     expect(out).toContain(
-      'posts: readonly { title: unknown }[] | ReadonlySet<{ title: unknown }> | null | undefined',
+      'posts: readonly { title: NonNullable<unknown> }[] | ReadonlySet<{ title: NonNullable<unknown> }> | null | undefined',
     )
-    expect(out).toContain('me: { name: unknown } | null | undefined')
-    expect(out).toContain('row: { needs: { p: { title: unknown } }; reads: {} }')
-    expect(out).toContain('home: {\n      data: { greeting: unknown }')
+    expect(out).toContain('me: { name: NonNullable<unknown> } | null | undefined')
+    expect(out).toContain('row: { needs: { p: { title: NonNullable<unknown> } }; reads: {} }')
+    expect(out).toContain('home: {\n      data: { greeting: NonNullable<unknown> }')
     expect(out).toContain('export {}')
   })
 
@@ -53,7 +53,7 @@ describe('renderViewTypes', () => {
     const out = renderViewTypes(
       summaries({
         'users/show':
-          "@import type { User } from '../../domain/user'\n@import type { T } from '@/t'\n<p></p>",
+          "@import type { User } from '../../domain/user'\n@import type { T } from '@/t'\n@input u: User\n@input t: T\n<p></p>",
       }),
       opts,
     )
@@ -106,7 +106,9 @@ describe('the kick/views typegen', () => {
       cwd,
       log: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
     })
-    expect(out).toMatch(/\bp: \{\n\s+data: \{ body: unknown; title: unknown \}/)
+    expect(out).toMatch(
+      /\bp: \{\n\s+data: \{ body: NonNullable<unknown>; title: NonNullable<unknown> \}/,
+    )
   })
 
   it('takes its folders from kickViewsCli options', () => {
@@ -121,10 +123,10 @@ describe('renderViewTypes — PR review', () => {
       opts,
     )
     expect(out).toContain(
-      'users: readonly { n: unknown }[] | ReadonlySet<{ n: unknown }> | null | undefined',
+      'users: readonly { n: NonNullable<unknown> }[] | ReadonlySet<{ n: NonNullable<unknown> }> | null | undefined',
     )
     expect(out).toContain(
-      'm: ReadonlyMap<unknown, { x: unknown }> | readonly (readonly [unknown, { x: unknown }])[] | null | undefined',
+      'm: ReadonlyMap<unknown, { x: NonNullable<unknown> }> | readonly (readonly [unknown, { x: NonNullable<unknown> }])[] | null | undefined',
     )
     expect(out).not.toContain('Iterable<')
   })
@@ -196,5 +198,39 @@ describe('the kick/views typegen — PR review 3', () => {
       opts,
     )
     expect(out).toContain("import type { User } from '@/a'")
+  })
+})
+
+describe('the kick/views typegen — PR review 4', () => {
+  it('leaves string literals alone when renaming a type', () => {
+    const out = renderViewTypes(
+      summaries({
+        a: "@import type { User } from '@/a'\n@input u: User\n<p></p>",
+        b: "@import type { User } from '@/b'\n@input box: { kind: 'User'; value: User }\n<p></p>",
+      }),
+      opts,
+    )
+    expect(out).toContain("box: { kind: 'User'; value: User_2 }")
+  })
+
+  it("types a required read that's otherwise unknown as non-nullish", () => {
+    expect(renderViewTypes(summaries({ p: '{{ x }}' }), opts)).toContain('x: NonNullable<unknown>')
+  })
+
+  it('re-points a relative import() in an @input type at the output folder', () => {
+    const out = renderViewTypes(
+      summaries({ 'users/show': "@input u: import('../../domain/user').User\n<p></p>" }),
+      opts,
+    )
+    expect(out).toContain("u: import('../../src/domain/user').User")
+  })
+
+  it('imports only the names a declared type uses', () => {
+    const out = renderViewTypes(
+      summaries({ a: "@import type { User, Unused } from '@/a'\n@input u: User\n<p></p>" }),
+      opts,
+    )
+    expect(out).toContain("import type { User } from '@/a'")
+    expect(out).not.toContain('Unused')
   })
 })
