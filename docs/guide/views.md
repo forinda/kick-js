@@ -312,7 +312,8 @@ A page or component often needs something in the `<head>`, such as a stylesheet,
   - A name close to an input warns: `compcat` asks whether you meant `compact`.
   - When the root is itself a component (a wrapper such as `primary-button` around `<ui-button>`), the attributes pass on: one the inner component declares becomes its input, and the rest go to its root.
   - Some attributes decide how their element is checked, so the component must declare them as inputs: `type`, `name`, `value`, `checked` and `validate` on an `<input>`, `<select>`, `<textarea>` or `<option>` root (they control form refill), and `http-equiv` and `content` on a `<meta>` root.
-  - A component with more than one root, or whose root is a `<slot>` or a `<component>`, can't take extra attributes: the check names them.
+  - A component whose root isn't a single element (several roots, a block such as `@if`, a `<slot>`) can't take extra attributes: the check names them. A `<component>` root takes only `class`, `id`, `style`, `role`, `aria-*` and `data-*`, which no check depends on; its element is only chosen at render time.
+  - `type` on a `<script>` root is refused too: it decides how `{{ }}` inside the script is checked.
 - A component sees only its inputs. Content passed between its tags uses the page's data.
 - Components can include themselves (trees), up to 64 levels deep.
 

@@ -324,3 +324,9 @@ describe('snippets', () => {
     expect(errors('<div>@snippet b() {x}</div>')).toHaveLength(1)
   })
 })
+
+describe('snippet defaults', () => {
+  it('requires defaults to be trailing', () => {
+    expect(errors('@snippet s(a = 1, b) {x}')).toHaveLength(1)
+  })
+})

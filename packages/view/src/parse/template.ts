@@ -553,6 +553,13 @@ class TemplateParser {
         if (e?.kind === 'literal') param.default = e.value
         else if (e) this.err(at, at + pm[2].length, 'a parameter default must be a literal')
       }
+      if (param.default === undefined && params.some((q) => q.default !== undefined)) {
+        this.err(
+          a.at,
+          a.at + a.src.length,
+          'a parameter without a default must come before those with one',
+        )
+      }
       params.push(param)
     }
     if (this.frames.length > 1) {

@@ -108,6 +108,8 @@ const GUARDED: Record<string, ReadonlySet<string>> = {
   textarea: FIELD_GUARDED,
   option: FIELD_GUARDED,
   meta: new Set(['http-equiv', 'content']),
+  // A script's `type` decides how `{{ }}` inside it is checked.
+  script: new Set(['type']),
 }
 
 /** Edit distance, for "did you mean" — small strings only. */
@@ -153,6 +155,8 @@ class Checker {
   /** Top-level `@let` names: a snippet can't read them (it may run before they do). */
   readonly topLets = new Set<string>()
   private inSnippet = false
+  /** Compiling a `<component>`'s content again, for its second and later candidates. */
+  private recompiling = false
   /** Each `@fragment`'s standalone unit, by name. */
   // Null prototype: `constructor`, `toString` and `__proto__` are fragment names too.
   readonly fragments: Record<string, CheckedFragment> = Object.create(null)
@@ -484,6 +488,12 @@ class Checker {
         // Only reachable nested, which the parser reports.
         return
       case 'render': {
+        // A snippet body is checked as HTML; inside SVG/MathML its markup
+        // would parse differently (e.g. <style> content as elements).
+        if (parent?.foreign) {
+          this.err(n.span, "@render can't go inside <svg> or <math>: render the snippet outside it")
+          return
+        }
         const params = this.snippetDefs.get(n.name)
         if (!params) {
           this.err(
@@ -544,10 +554,17 @@ class Checker {
       this.err(n.span, "fragments aren't allowed in components")
       return
     }
+    if (this.inSnippet) {
+      this.err(
+        n.span,
+        "a @fragment can't go inside a @snippet: put the @render inside the fragment",
+      )
+      return
+    }
     out.push(...this.scoped(() => this.nodes(n.body, parent)))
-    // Inside another fragment's unit: inline only; its own unit is compiled
-    // on the page's pass.
-    if (this.unit) return
+    // Inside another fragment's unit, or a <component>'s content compiled
+    // again for a later candidate: inline only; its unit is compiled once.
+    if (this.unit || this.recompiling) return
     if (n.name in this.fragments) {
       this.err(n.span, `fragment '${n.name}' is defined twice`)
       return
@@ -1055,15 +1072,18 @@ class Checker {
       leaf = inner
     }
     const passed = fallthrough.map((a) => a.name).join(', ')
-    if (fallthrough.length && leaf.roots !== 1) {
+    // `class`, `id`, `aria-*`… touch no tag-keyed check: they may reach a
+    // <component> root, whose element is only picked at render time.
+    const tagDependent = fallthrough.filter((a) => !isFallthrough(a))
+    if (fallthrough.length && (leaf.roots !== 1 || !leaf.root)) {
       this.err(
         fallthrough[0]!.span,
         `<${el.tag}> passes ${passed} to its root element, but ${leaf.name}.kick needs exactly one root element for that`,
       )
-    } else if (fallthrough.length && leaf.root?.k === 'el' && leaf.root.tag === 'component') {
+    } else if (tagDependent.length && leaf.root?.k === 'el' && leaf.root.tag === 'component') {
       this.err(
-        fallthrough[0]!.span,
-        `<${el.tag}> passes ${passed} to its root, but ${leaf.name}.kick's root is a <component>, whose element is only chosen at render time — declare them as inputs and pass them on`,
+        tagDependent[0]!.span,
+        `<${el.tag}> passes ${tagDependent.map((a) => a.name).join(', ')} to its root, but ${leaf.name}.kick's root is a <component>, whose element is only chosen at render time — declare them as inputs and pass them on`,
       )
     } else if (fallthrough.length && leaf.root?.k === 'slot') {
       this.err(
@@ -1149,6 +1169,10 @@ class Checker {
       return
     }
     const rest = el.attrs.filter((a) => a !== isA && a !== ofA)
+    if (!String(ofA.parts?.[0] ?? '').trim()) {
+      this.err(ofA.span, '<component> needs at least one tag in of="…"')
+      return
+    }
     const c: Record<string, CNode> = Object.create(null)
     const sigs: Signature[] = []
     const reported = this.diagnostics.length
@@ -1169,7 +1193,12 @@ class Checker {
         continue
       }
       const one: CNode[] = []
-      this.call({ ...el, tag: lower, attrs: rest }, names[0]!, one, el === this.rootElement, true)
+      this.recompiling = sigs.length > 0
+      try {
+        this.call({ ...el, tag: lower, attrs: rest }, names[0]!, one, el === this.rootElement, true)
+      } finally {
+        this.recompiling = false
+      }
       const cmp = one.find((n) => n.k === 'cmp')
       if (cmp) c[lower] = cmp
       sigs.push(this.signature(names[0]!))
@@ -1181,6 +1210,15 @@ class Checker {
       return !seen.has(key) && seen.add(key)
     })
     this.diagnostics.push(...mine)
+    const loose = el.children.some(
+      (ch) => ch.k !== 'slot-fill' && !(ch.k === 'text' && !ch.value.trim()),
+    )
+    if (loose && sigs.length && !sigs.some((s) => s.outlets.has(''))) {
+      this.err(
+        el.span,
+        'no candidate of <component> has a default <slot /> for the content inside it',
+      )
+    }
     for (const f of el.children) {
       if (f.k !== 'slot-fill') continue
       const having = sigs.filter((s) => s.outlets.has(f.name))
@@ -1450,7 +1488,20 @@ export function check(name: string, project: Project): CheckResult {
     outlets = mergeOutlets(outlets ?? new Map(), c.signature(base).outlets)
   }
 
+  const bodyContent = body.some(
+    (n) => n.k !== 'let' && n.k !== 'comment' && !(n.k === 'text' && !n.value.trim()),
+  )
   for (const f of fillNodes) {
+    if (f.name === '' && bodyContent) {
+      c.diagnostics.push(
+        error(
+          ast.file,
+          f.span,
+          "the layout's default slot is filled twice: by the page's own content and by @slot(default …)",
+        ),
+      )
+      continue
+    }
     if (f.name in fills) {
       c.diagnostics.push(error(ast.file, f.span, `slot '${f.name}' is filled twice`))
       continue

@@ -773,3 +773,17 @@ describe('dynamic components', () => {
     expect(r({ ...files, page: p }, { k: 'box-b' }).html).toBe('<p>[none]</p>')
   })
 })
+
+describe('final review fixes', () => {
+  it('passes class through a <component> root to the chosen candidate', () => {
+    const { html: out } = r(
+      {
+        'components/x-a': '<p>a</p>',
+        'components/x-w': '@input k\n<component [is]="k" of="x-a" />',
+        page: '<x-w k="x-a" class="mt-2" />',
+      },
+      {},
+    )
+    expect(out).toBe('<p class="mt-2">a</p>')
+  })
+})

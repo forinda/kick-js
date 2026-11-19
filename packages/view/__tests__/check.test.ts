@@ -610,3 +610,78 @@ describe('slots inside snippets', () => {
     })
   })
 })
+
+describe('final review fixes', () => {
+  it('refuses attributes for a single root that is not an element', () => {
+    for (const body of ['@if (true) {<a>x</a>}', '@snippet s() {<a>x</a>}\n@render s()']) {
+      expect(errs({ 'components/x-a': body, page: '<x-a hx-get="/x" />' }), body).toEqual([
+        expect.stringContaining('hx-get'),
+      ])
+    }
+  })
+
+  it('compiles a @fragment inside <component> content once', () => {
+    clean({
+      'components/x-a': '<div><slot /></div>',
+      'components/x-b': '<p><slot /></p>',
+      page: '<component [is]="k" of="x-a x-b">@slot(default) {@fragment(\'f\') {hi}}</component>',
+    })
+  })
+
+  it('refuses <component> content no candidate has a default slot for', () => {
+    expect(
+      errs({
+        'components/x-a': '<p>a</p>',
+        'components/x-b': '<p>b</p>',
+        page: '<component [is]="k" of="x-a x-b">lost content</component>',
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it("refuses a page's @slot(default …) beside its own body", () => {
+    expect(
+      errs({
+        'layouts/main': '<main><slot [n]="1" /></main>',
+        page: "@layout('layouts/main')\n@slot(default; let n) {fill {{ n }}}\nbody text",
+      }),
+    ).toEqual([expect.stringContaining('default')])
+  })
+
+  it('refuses @render inside SVG or MathML', () => {
+    expect(errs({ page: '@snippet s() {<b>x</b>}\n<svg>@render s()</svg>' })).toEqual([
+      expect.stringContaining('@render'),
+    ])
+  })
+
+  it('refuses forwarding type to a <script> root', () => {
+    expect(
+      errs({
+        'components/x-j': '<script type="application/json">{{ v | json }}</script>',
+        page: '<x-j type="module" />',
+      }),
+    ).toEqual([expect.stringContaining('@input')])
+  })
+
+  it('refuses an empty of', () => {
+    expect(errs({ 'components/x-a': '<p>a</p>', page: '<component [is]="k" of="" />' })).toEqual([
+      expect.stringContaining('of'),
+    ])
+  })
+
+  it('refuses @fragment inside a snippet', () => {
+    expect(errs({ page: "@snippet s(v) {@fragment('f') {{{ v }}}}\n@render s(1)" })).toEqual([
+      expect.stringContaining('snippet'),
+    ])
+  })
+
+  it('lets class and data-* through to a <component> root, but not tag-dependent names', () => {
+    const files = {
+      'components/x-a': '<p>a</p>',
+      'components/x-w': '@input k\n<component [is]="k" of="x-a" />',
+    }
+    clean({ ...files, page: '<x-w k="x-a" class="mt-2" data-k="1" />' })
+    expect(errs({ ...files, page: '<x-w k="x-a" hx-get="/a" />' })).toEqual([
+      expect.stringContaining('hx-get'),
+    ])
+  })
+})
