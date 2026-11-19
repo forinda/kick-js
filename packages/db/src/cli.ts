@@ -27,6 +27,9 @@ import { removeCasing } from './snapshot/casing'
 import { askRenamesInTerminal, confirmInTerminal, parseRenameFlags } from './cli/renames'
 import { remoteHost } from './cli/push-target'
 import { loadModule } from './cli/load-module'
+import { configFileOf, loadDbConfigFile } from './cli/load-config'
+
+export { configFileOf, loadDbConfigFile, readConfigModule } from './cli/load-config'
 
 /** Every folder the runner reads: `migrationsDir`, then `migrationsDirs`. */
 function runDirs(config: DbConfig): string | string[] {
@@ -232,7 +235,20 @@ export type DbConfigResolver = () => DbConfig | Promise<DbConfig>
  * the resolved {@link DbConfig} — under kickjs-cli from `ctx.config.db`,
  * standalone from `kickjs-db.config.ts`.
  */
-export function registerDbCommands(parent: Command, getConfig: DbConfigResolver): void {
+export function registerDbCommands(parent: Command, fallback: DbConfigResolver): void {
+  parent.option(
+    '-c, --config <file>',
+    'Db config file for this run, instead of the db block (or KICK_DB_CONFIG)',
+  )
+  // A named file replaces the config for the run: nothing of the db block
+  // leaks in (its adapter() would beat the file's connectionString).
+  const getConfig = async (): Promise<DbConfig> => {
+    const file = configFileOf(parent.opts())
+    if (!file) return fallback()
+    const input = await loadDbConfigFile(file)
+    console.log(`db config: ${file}`)
+    return resolveKickDbConfig(input)
+  }
   parent
     .command('generate <name>')
     .description('Generate a new migration from schema diff')

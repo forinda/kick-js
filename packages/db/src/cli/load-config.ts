@@ -1,0 +1,55 @@
+/**
+ * Reading a db config from a named file: `kick db --config db/staging.ts`.
+ * Shared by `kick db` and the standalone `kickjs-db` bin.
+ */
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+import type { KickDbConfigInput } from '../cli'
+
+/** The named config file: `--config`, else a non-empty `KICK_DB_CONFIG`. */
+export function configFileOf(
+  opts: { config?: string },
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  return opts.config || env.KICK_DB_CONFIG || undefined
+}
+
+/**
+ * A db config file's contents: its default export, or that export's `db` block
+ * (a kick.config-style file). `.ts` / `.mts` load through jiti, with the
+ * project's tsconfig `paths`; `.json` is parsed; anything else is imported.
+ * A relative `file` resolves from the working directory.
+ */
+export async function loadDbConfigFile(
+  file: string,
+  cwd = process.cwd(),
+): Promise<KickDbConfigInput> {
+  const mod = await readConfigModule(file, cwd)
+  if (!mod || typeof mod !== 'object')
+    throw new Error(
+      `kickjs-db: ${file} must export a db config (export default defineKickDbConfig({ … }))`,
+    )
+  const config = mod as KickDbConfigInput & { db?: KickDbConfigInput }
+  return config.db && typeof config.db === 'object' ? config.db : config
+}
+
+/** A config file's default export, as is (`.ts` via jiti, `.json` parsed). */
+export async function readConfigModule(file: string, cwd = process.cwd()): Promise<unknown> {
+  const abs = path.resolve(cwd, file)
+  if (!existsSync(abs)) throw new Error(`kickjs-db: no config file at ${file}`)
+  return importConfig(abs)
+}
+
+async function importConfig(file: string): Promise<unknown> {
+  if (file.endsWith('.json')) return JSON.parse(await readFile(file, 'utf8'))
+  if (file.endsWith('.ts') || file.endsWith('.mts')) {
+    const { createJiti } = await import('jiti')
+    // From the file's own location, with tsconfig `paths`, as the app resolves them.
+    const jiti = createJiti(pathToFileURL(file).href, { tsconfigPaths: true })
+    return jiti.import(file, { default: true })
+  }
+  const mod = (await import(pathToFileURL(file).href)) as { default?: unknown }
+  return mod.default ?? mod
+}
