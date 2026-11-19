@@ -7,18 +7,15 @@
  * export default defineConfig({ plugins: [viewCliPlugin] })
  * ```
  */
-import { existsSync } from 'node:fs'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import type { KickCliPlugin } from '@forinda/kickjs-cli-kit'
 import type { Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import type { Project } from './check/project'
 import { format } from './format'
-import { parse } from './parse/template'
-import { BUILTIN_PIPES } from './pipes/builtins'
-import { readPipeExports } from './pipes/read-exports'
-import { readValidatorExports } from './validators'
+import { loadViewsProject, templates } from './load-project'
+import { viewsTypegen } from './typegen'
 
 export interface ViewsCliOptions {
   /** Project root. */
@@ -34,25 +31,6 @@ const line = (d: Diagnostic, prefix: string) =>
   `${prefix}${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`
 
 /** Template names (`users/show`) under the views folder, or those `paths` name. */
-async function templates(viewsDir: string, root: string, paths?: string[]): Promise<string[]> {
-  if (paths?.length) {
-    return paths
-      .map((p) => relative(viewsDir, resolve(root, p)))
-      .filter((p) => p.endsWith('.kick') && !p.startsWith('..'))
-      .map((p) => p.slice(0, -'.kick'.length).split(sep).join('/'))
-  }
-  if (!existsSync(viewsDir)) return []
-  const entries = await readdir(viewsDir, { recursive: true, withFileTypes: true })
-  return entries
-    .filter((e) => e.isFile() && e.name.endsWith('.kick'))
-    .map((e) =>
-      relative(viewsDir, join(direntDir(e), e.name))
-        .slice(0, -'.kick'.length)
-        .split(sep)
-        .join('/'),
-    )
-    .toSorted()
-}
 
 /** Format templates in place, or with `check` report the ones that would change. Returns the exit code. */
 export async function fmtViews(
@@ -93,46 +71,15 @@ export async function checkViews(
     baseLayout?: string
   },
 ): Promise<number> {
-  const dir = opts.dir ?? 'src/views'
-  const viewsDir = resolve(opts.root, dir)
-  const pipesFile = resolve(opts.root, opts.pipesFile ?? join(dir, 'pipes.ts'))
-  const validatorsFile = resolve(opts.root, opts.validatorsFile ?? join(dir, 'validators.ts'))
-  const all = await templates(viewsDir, opts.root)
-  const pipes = new Set(BUILTIN_PIPES)
+  const loaded = await loadViewsProject({ ...opts, pipesFile: opts.pipesFile })
+  const { project, dir, viewsDir, unparsed: syntax } = loaded
   let errors = 0
   const report = (d: Diagnostic, prefix: string) => {
     if (d.severity === 'error') errors++
     opts.log(line(d, prefix))
   }
-  if (existsSync(pipesFile)) {
-    const read = readPipeExports(await readFile(pipesFile, 'utf8'), relative(opts.root, pipesFile))
-    for (const n of read.names) pipes.add(n)
-    for (const d of read.diagnostics) report(d, '')
-  }
-  const validators = new Set<string>()
-  if (existsSync(validatorsFile)) {
-    const read = readValidatorExports(
-      await readFile(validatorsFile, 'utf8'),
-      relative(opts.root, validatorsFile),
-    )
-    for (const n of read.names) validators.add(n)
-    for (const d of read.diagnostics) report(d, '')
-  }
-  const project: Project = {
-    templates: new Map(),
-    pipes,
-    validators,
-    componentsDir: opts.componentsDir ?? 'components',
-    layouts: opts.layouts,
-    baseLayout: opts.baseLayout,
-  }
-  const syntax = new Set<string>()
-  for (const name of all) {
-    const r = parse(await readFile(join(viewsDir, `${name}.kick`), 'utf8'), `${name}.kick`)
-    project.templates.set(name, r.ast)
-    for (const d of r.diagnostics) report(d, `${dir}/`)
-    if (r.diagnostics.some((d) => d.severity === 'error')) syntax.add(name)
-  }
+  for (const { d, prefix } of loaded.diagnostics) report(d, prefix)
+  const all = loaded.names
   const wanted = opts.paths?.length ? await templates(viewsDir, opts.root, opts.paths) : all
   for (const name of wanted) {
     if (syntax.has(name)) continue
@@ -142,45 +89,78 @@ export async function checkViews(
   return errors ? 1 : 0
 }
 
-export const viewCliPlugin: KickCliPlugin = {
-  name: 'kick/view',
-  register(program, ctx) {
-    program
-      .command('fmt:views [paths...]')
-      .description('Format .kick templates (spacing and indentation; raw regions untouched)')
-      .option('--check', 'list files that would change and exit 1, writing nothing')
-      .option('--dir <dir>', 'views folder', 'src/views')
-      .action(async (paths: string[], o: { check?: boolean; dir: string }) => {
-        process.exitCode = await fmtViews({
-          root: ctx.projectRoot,
-          dir: o.dir,
-          paths,
-          check: o.check,
-          log: ctx.log,
-        })
-      })
-    program
-      .command('check:views [paths...]')
-      .description(
-        'Check .kick templates for errors: syntax, unknown pipes, inputs, slots, layouts, unsafe interpolation',
-      )
-      .option('--dir <dir>', 'views folder', 'src/views')
-      .option('--pipes <file>', 'pipes file (default <dir>/pipes.ts)')
-      .option('--validators <file>', 'validators file (default <dir>/validators.ts)')
-      .action(async (paths: string[], o: { dir: string; pipes?: string; validators?: string }) => {
-        process.exitCode = await checkViews({
-          root: ctx.projectRoot,
-          dir: o.dir,
-          paths,
-          pipesFile: o.pipes,
-          validatorsFile: o.validators,
-          log: ctx.log,
-        })
-      })
-  },
+/** Where the app's views live, for the commands' defaults and the `kick/views` typegen. */
+export interface KickViewsCliOptions {
+  /** Views folder, relative to the project root. Default `src/views`. */
+  dir?: string
+  /** Components folder, inside the views folder. Default `components`. */
+  componentsDir?: string
+  /** Pipes file. Default `<dir>/pipes.ts`. */
+  pipes?: string
+  /** Validators file. Default `<dir>/validators.ts`. */
+  validators?: string
 }
 
-/** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */
-function direntDir(e: { parentPath?: string; path?: string }): string {
-  return e.parentPath ?? e.path ?? ''
+/**
+ * The view package's CLI plugin: `kick check:views`, `kick fmt:views`, and the
+ * `kick/views` typegen that types `ctx.render` from your templates. Pass the
+ * options when your views aren't in `src/views`:
+ *
+ * ```ts
+ * // kick.config.ts
+ * plugins: [kickViewsCli({ dir: 'app/views' })]
+ * ```
+ *
+ * @see https://kickjs.app/guide/views#typed-render-data
+ */
+export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
+  const dir = options.dir ?? 'src/views'
+  return {
+    name: 'kick/view',
+    typegens: [viewsTypegen(options)],
+    register(program, ctx) {
+      program
+        .command('fmt:views [paths...]')
+        .description('Format .kick templates (spacing and indentation; raw regions untouched)')
+        .option('--check', 'list files that would change and exit 1, writing nothing')
+        .option('--dir <dir>', 'views folder', dir)
+        .action(async (paths: string[], o: { check?: boolean; dir: string }) => {
+          process.exitCode = await fmtViews({
+            root: ctx.projectRoot,
+            dir: o.dir,
+            paths,
+            check: o.check,
+            log: ctx.log,
+          })
+        })
+      program
+        .command('check:views [paths...]')
+        .description(
+          'Check .kick templates for errors: syntax, unknown pipes, inputs, slots, layouts, unsafe interpolation',
+        )
+        .option('--dir <dir>', 'views folder', dir)
+        .option('--pipes <file>', 'pipes file (default <dir>/pipes.ts)', options.pipes)
+        .option(
+          '--validators <file>',
+          'validators file (default <dir>/validators.ts)',
+          options.validators,
+        )
+        .action(
+          async (paths: string[], o: { dir: string; pipes?: string; validators?: string }) => {
+            process.exitCode = await checkViews({
+              root: ctx.projectRoot,
+              dir: o.dir,
+              paths,
+              pipesFile: o.pipes,
+              validatorsFile: o.validators,
+              componentsDir: options.componentsDir,
+              log: ctx.log,
+            })
+          },
+        )
+    },
+  }
 }
+
+/** The plugin with default folders — `kickViewsCli()`. */
+export const viewCliPlugin: KickCliPlugin = kickViewsCli()
