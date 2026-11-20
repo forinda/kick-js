@@ -105,8 +105,10 @@ export function createTranslator(
     const chain = [locale, language(locale), opts.defaultLocale, language(opts.defaultLocale)]
     let found: { m: Message; locale: string } | undefined
     for (const l of chain) {
-      const m = messages[l]?.[key]
-      if (m !== undefined) {
+      // Own properties only: a key like `constructor` mustn't find Object's.
+      const catalog = Object.hasOwn(messages, l) ? messages[l] : undefined
+      const m = catalog && Object.hasOwn(catalog, key) ? catalog[key] : undefined
+      if (typeof m === 'string' || (typeof m === 'object' && m !== null)) {
         found = { m, locale: l }
         break
       }

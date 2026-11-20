@@ -177,6 +177,8 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
     truncate: (v, n, suffix = '…') => {
       const chars = [...str(v)]
       const max = Number(n)
+      // No usable length: the text as is, never just the suffix.
+      if (!Number.isFinite(max) || max < 0) return chars.join('')
       return chars.length <= max ? chars.join('') : chars.slice(0, max).join('') + str(suffix)
     },
     default: (v, fallback) => (v === null || v === undefined || v === '' ? fallback : v),

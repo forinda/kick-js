@@ -192,6 +192,8 @@ interface State {
   project: Project
   /** `validators.ts`'s source, when there's one and no bundle. */
   validators?: string
+  /** The catalogues the check used, as JSON: in dev, a change re-checks. */
+  messagesJson: string
   /** Syntax errors from parsing, raised when the template is first used. */
   parseErrors: Map<string, Diagnostic>
   versions: Map<string, number>
@@ -342,10 +344,13 @@ export function createViews(options: ViewsOptions = {}): Views {
   const defaultLocale = options.messagesLocale ?? options.locale ?? 'en-US'
   const readMessages = async (): Promise<Messages> =>
     options.messages ??
-    (bundle
+    // No file system (the edge), or templates from a custom loader with no
+    // views folder named: nothing to read, rather than the cwd's src/views.
+    (bundle || !fileLoaderModule || (options.loader && !options.viewsDir)
       ? {}
-      : ((await (await fileLoaders()).readCatalogs(`${options.viewsDir ?? 'src/views'}/locales`)) ??
-        {}))
+      : ((await (
+          await fileLoaderModule()
+        ).readCatalogs(`${options.viewsDir ?? 'src/views'}/locales`)) ?? {}))
   let translator: Promise<{ json: string; t: ReturnType<typeof createTranslator> }> | undefined
   /** The message lookup; in dev the catalogues are re-read, keeping the translator while they're unchanged. */
   const getTranslator = async (): Promise<ReturnType<typeof createTranslator>> => {
@@ -407,7 +412,9 @@ export function createViews(options: ViewsOptions = {}): Views {
         if (dev && l.version) versions.set(name, await l.version(name))
       }),
     )
+    const messages = await readMessages()
     return {
+      messagesJson: JSON.stringify(messages),
       project: {
         templates,
         pipes: new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES, ...Object.keys(pipes)]),
@@ -415,7 +422,7 @@ export function createViews(options: ViewsOptions = {}): Views {
         messages: Object.hasOwn(pipes, 't')
           ? undefined
           : catalogIndex(
-              await readMessages(),
+              messages,
               options.messages ? 'messages' : `${options.viewsDir ?? 'src/views'}/locales`,
             ),
         validators: new Set(custom?.names),
@@ -444,7 +451,13 @@ export function createViews(options: ViewsOptions = {}): Views {
         Boolean,
       )
     // An edited validators.ts changes which names check and what's served.
-    if (!stale && (await readValidators()) === s.validators) return s
+    // So does an edited catalogue: `t` keys are checked against it.
+    if (
+      !stale &&
+      (await readValidators()) === s.validators &&
+      JSON.stringify(await readMessages()) === s.messagesJson
+    )
+      return s
     return reload()
   }
 
