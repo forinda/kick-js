@@ -76,8 +76,14 @@ export interface ContainerSpec extends ReuseOptions {
   tmpfs?: Record<string, string>
   /** A log line that means "ready"; checked `times` times (default 1). */
   waitFor?: { log: RegExp; times?: number }
-  /** Build the connection URL from the mapped host and port. */
-  url: (host: string, port: number) => string
+  /** Build the connection URL from the mapped host and port (and the container's env). */
+  url: (host: string, port: number, env: Record<string, string>) => string
+  /**
+   * A fixed host port instead of a random one — for a tool outside the tests
+   * that needs a known port. Two runs at once (or a reused container from an
+   * older config) then clash on it; leave it random unless you need it.
+   */
+  hostPort?: number
 }
 
 /**
@@ -88,6 +94,14 @@ export interface ContainerSpec extends ReuseOptions {
 export interface ServiceOptions extends ReuseOptions {
   /** Override the preset's image, e.g. `'postgres:16-alpine'`. */
   image?: string
+  /** Merged over the preset's env; the URL follows (user, password, database). */
+  env?: Record<string, string>
+  /** Replaces the preset's command (the Postgres/MySQL presets' tuning flags go with it). */
+  command?: string[]
+  /** `false` keeps the data directory on disk; a map replaces the preset's in-memory folders. */
+  tmpfs?: false | Record<string, string>
+  /** A fixed host port (see {@link ContainerSpec.hostPort}). */
+  hostPort?: number
 }
 
 const PRESETS = {
@@ -97,7 +111,8 @@ const PRESETS = {
     env: { POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' },
     // Postgres logs this once for its init run and again when really ready.
     waitFor: { log: /database system is ready to accept connections/, times: 2 },
-    url: (host: string, port: number) => `postgres://test:test@${host}:${port}/test`,
+    url: (host: string, port: number, env: Record<string, string>) =>
+      `postgres://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@${host}:${port}/${env.POSTGRES_DB}`,
     // Test data never has to survive a crash: memory, and no waiting on disk.
     tmpfs: { '/var/lib/postgresql/data': 'rw' },
     command: [
@@ -117,7 +132,8 @@ const PRESETS = {
     env: { MYSQL_ROOT_PASSWORD: 'test', MYSQL_DATABASE: 'test' },
     // The init run logs "ready for connections" on port 0; the real server on 3306.
     waitFor: { log: /ready for connections.*port: 3306/ },
-    url: (host: string, port: number) => `mysql://root:test@${host}:${port}/test`,
+    url: (host: string, port: number, env: Record<string, string>) =>
+      `mysql://root:${env.MYSQL_ROOT_PASSWORD}@${host}:${port}/${env.MYSQL_DATABASE}`,
     tmpfs: { '/var/lib/mysql': 'rw' },
     command: ['--innodb-flush-log-at-trx-commit=0', '--sync-binlog=0'],
   },
@@ -160,9 +176,9 @@ async function loadTestcontainers(): Promise<Testcontainers> {
 
 /** What a container is, for "is the one with this name the same?" — a short hash. */
 function configOf(spec: ContainerSpec): string {
-  const { image, port, env, entrypoint, command, tmpfs } = spec
+  const { image, port, env, entrypoint, command, tmpfs, hostPort } = spec
   return createHash('sha256')
-    .update(JSON.stringify({ image, port, env, entrypoint, command, tmpfs }))
+    .update(JSON.stringify({ image, port, env, entrypoint, command, tmpfs, hostPort }))
     .digest('hex')
     .slice(0, 16)
 }
@@ -212,11 +228,13 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
   const { GenericContainer, Wait } = tc
   const reused = reuseEnabled(spec.reuse, spec.name)
   const config = configOf(spec)
-  let container = new GenericContainer(spec.image).withExposedPorts(spec.port).withLabels({
-    [TEST_LABEL]: 'true',
-    [CONFIG_LABEL]: config,
-    ...(reused ? { [NAME_LABEL]: spec.name! } : {}),
-  })
+  let container = new GenericContainer(spec.image)
+    .withExposedPorts(spec.hostPort ? { container: spec.port, host: spec.hostPort } : spec.port)
+    .withLabels({
+      [TEST_LABEL]: 'true',
+      [CONFIG_LABEL]: config,
+      ...(reused ? { [NAME_LABEL]: spec.name! } : {}),
+    })
   if (spec.env) container = container.withEnvironment(spec.env)
   if (spec.entrypoint) container = container.withEntrypoint(spec.entrypoint)
   if (spec.command) container = container.withCommand(spec.command)
@@ -241,7 +259,7 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
   const host = started.getHost()
   const port = started.getMappedPort(spec.port)
   return {
-    url: spec.url(host, port),
+    url: spec.url(host, port, spec.env ?? {}),
     host,
     port,
     reused,
@@ -260,6 +278,10 @@ export function startService(
   return startContainer({
     ...preset,
     image: options.image ?? preset.image,
+    env: preset.env || options.env ? { ...preset.env, ...options.env } : undefined,
+    command: options.command ?? preset.command,
+    tmpfs: options.tmpfs === false ? undefined : (options.tmpfs ?? preset.tmpfs),
+    hostPort: options.hostPort,
     name: options.name,
     reuse: options.reuse,
   })

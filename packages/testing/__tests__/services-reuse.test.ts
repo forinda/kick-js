@@ -207,3 +207,50 @@ describe('presets', () => {
     expect(called('withTmpFs')[0]![0]).toHaveProperty('/var/lib/mysql')
   })
 })
+
+describe('preset overrides', () => {
+  it('merges env over the preset, and builds the URL from it', async () => {
+    const s = await startService('postgres', {
+      env: { POSTGRES_DB: 'app_test', POSTGRES_PASSWORD: 'pw' },
+    })
+    expect(called('withEnvironment')[0]![0]).toMatchObject({
+      POSTGRES_USER: 'test',
+      POSTGRES_DB: 'app_test',
+      POSTGRES_PASSWORD: 'pw',
+    })
+    expect(s.url).toBe('postgres://test:pw@h:1/app_test')
+    const m = await startService('mysql', {
+      env: { MYSQL_DATABASE: 'shop_test', MYSQL_ROOT_PASSWORD: 'r' },
+    })
+    expect(m.url).toBe('mysql://root:r@h:1/shop_test')
+  })
+
+  it('replaces the command, and turns tmpfs off', async () => {
+    await startService('postgres', {
+      command: ['postgres', '-c', 'max_connections=300'],
+      tmpfs: false,
+    })
+    expect(called('withCommand')).toEqual([[['postgres', '-c', 'max_connections=300']]])
+    expect(called('withTmpFs')).toEqual([])
+  })
+
+  it('maps a fixed host port, for presets and any container', async () => {
+    const s = await startService('redis', { hostPort: 56379 })
+    expect(called('withExposedPorts')).toEqual([[{ container: 6379, host: 56379 }]])
+    expect(s.port).toBe(1) // what the started container reports
+    await startContainer({ ...spec, hostPort: 55000 })
+    expect(called('withExposedPorts')).toEqual([[{ container: 5432, host: 55000 }]])
+  })
+
+  it('counts an override as another config, so reuse never attaches across them', async () => {
+    fake.containers.push({
+      Id: 'old',
+      Names: ['/x'],
+      Labels: { 'kickjs.test': 'true', 'kickjs.test.name': 'x', 'kickjs.test.config': 'stale' },
+      State: 'exited',
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await startService('postgres', { name: 'x', hostPort: 55432 })
+    expect(fake.removed).toEqual(['old'])
+  })
+})
