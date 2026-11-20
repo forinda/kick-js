@@ -160,7 +160,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     const view = await import('@forinda/kickjs-view')
     const names = await allNames()
     const errors: string[] = []
-    const pipeNames = [...view.BUILTIN_PIPES]
+    // OVERRIDABLE_PIPES: absent from a view package older than group D.
+    const pipeNames = [...view.BUILTIN_PIPES, ...(view.OVERRIDABLE_PIPES ?? [])]
     if (hasPipes) {
       const read = view.readPipeExports(await readFile(pipesFile, 'utf8'), pipesFile)
       pipeNames.push(...read.names)

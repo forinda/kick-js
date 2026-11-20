@@ -26,6 +26,27 @@ export const BUILTIN_PIPES: readonly string[] = [
   'kvQuery',
 ]
 
+/**
+ * Built-ins added later: an app pipe of the same name wins, so apps that
+ * already had their own `ago` or `truncate` keep it.
+ */
+export const OVERRIDABLE_PIPES: readonly string[] = [
+  'truncate',
+  'default',
+  'nl2br',
+  'striptags',
+  'first',
+  'last',
+  'length',
+  'sort',
+  'groupBy',
+  'sum',
+  'plural',
+  'ago',
+  'filesize',
+  't',
+]
+
 /** What built-in pipes read from the render: locale, time zone, and the request's `urlFor`. */
 export interface PipeEnv {
   locale: string
@@ -85,6 +106,34 @@ const toNumber = (v: unknown): number | undefined => {
 
 const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
 
+/** A list pipe's input as an array: arrays and Sets as is, anything else empty. */
+const list = (v: unknown): unknown[] =>
+  Array.isArray(v) ? v : v instanceof Set ? [...v] : typeof v === 'string' ? [...v] : []
+
+/** `item[key]`, or the item itself without a key. */
+const pick = (item: unknown, key: unknown): unknown =>
+  key === undefined || key === null ? item : (item as Record<string, unknown> | null)?.[str(key)]
+
+const ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
+
+/** Units for `ago`, largest first, in seconds. */
+const AGO_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ['year', 31_536_000],
+  ['month', 2_592_000],
+  ['week', 604_800],
+  ['day', 86_400],
+  ['hour', 3_600],
+  ['minute', 60],
+  ['second', 1],
+]
+const SIZE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte']
+
 /**
  * The built-in pipes bound to a render's locale and time zone (`date`, `currency`, `kvRoute`, ...).
  *
@@ -122,6 +171,83 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
         params.map((p) => (typeof p === 'number' ? p : str(p))),
       )
     },
+    // ── overridable (OVERRIDABLE_PIPES) ──
+    truncate: (v, n, suffix = '…') => {
+      const chars = [...str(v)]
+      const max = Number(n)
+      return chars.length <= max ? chars.join('') : chars.slice(0, max).join('') + str(suffix)
+    },
+    default: (v, fallback) => (v === null || v === undefined || v === '' ? fallback : v),
+    nl2br: (v) =>
+      new SafeHtml(
+        str(v)
+          .replace(/[&<>"']/g, (c) => ESCAPES[c]!)
+          .replace(/\r?\n/g, '<br>'),
+      ),
+    striptags: (v) => str(v).replace(/<[^>]*>/g, ''),
+    first: (v) => list(v)[0],
+    last: (v) => list(v).at(-1),
+    length: (v) =>
+      typeof v === 'string' || Array.isArray(v)
+        ? v.length
+        : v instanceof Set || v instanceof Map
+          ? v.size
+          : v && typeof v === 'object'
+            ? Object.keys(v).length
+            : 0,
+    sort: (v, key) =>
+      list(v).toSorted((a, b) => {
+        const x = pick(a, key)
+        const y = pick(b, key)
+        return typeof x === 'number' && typeof y === 'number'
+          ? x - y
+          : str(x).localeCompare(str(y), env.locale)
+      }),
+    groupBy: (v, key) => {
+      const groups = new Map<unknown, unknown[]>()
+      for (const item of list(v)) {
+        const g = pick(item, key)
+        const at = groups.get(g)
+        if (at) at.push(item)
+        else groups.set(g, [item])
+      }
+      return [...groups]
+    },
+    sum: (v, key) => list(v).reduce<number>((t, item) => t + (toNumber(pick(item, key)) ?? 0), 0),
+    plural: (v, one, other) => {
+      const n = toNumber(v) ?? 0
+      const form = new Intl.PluralRules(env.locale).select(n)
+      const nf = cached(`n|${env.locale}|`, () => new Intl.NumberFormat(env.locale))
+      return `${nf.format(n)} ${str(form === 'one' ? one : other)}`
+    },
+    ago: (v) => {
+      if (v === null || v === undefined || v === '') return ''
+      const at = v instanceof Date ? v : new Date(v as string | number)
+      if (Number.isNaN(+at)) return ''
+      const secs = (+at - Date.now()) / 1000
+      const [unit, size] = AGO_UNITS.find(([, s]) => Math.abs(secs) >= s) ?? AGO_UNITS.at(-1)!
+      return new Intl.RelativeTimeFormat(env.locale).format(Math.round(secs / size), unit)
+    },
+    filesize: (v) => {
+      let n = toNumber(v) ?? 0
+      let i = 0
+      while (Math.abs(n) >= 1000 && i < SIZE_UNITS.length - 1) {
+        n /= 1000
+        i++
+      }
+      const unit = SIZE_UNITS[i]!
+      return cached(
+        `size|${env.locale}|${unit}`,
+        () =>
+          new Intl.NumberFormat(env.locale, {
+            style: 'unit',
+            unit,
+            unitDisplay: 'short',
+            maximumFractionDigits: 1,
+          }),
+      ).format(n)
+    },
+    // ── reserved (BUILTIN_PIPES) ──
     uppercase: (v) => str(v).toUpperCase(),
     lowercase: (v) => str(v).toLowerCase(),
     titlecase: (v) => str(v).replace(/\b\p{L}/gu, (c) => c.toUpperCase()),

@@ -9,7 +9,7 @@ import type { Diagnostic } from './diagnostics'
 import { qualify, splitName, type Project } from './check/project'
 import type { ViewRoot } from './roots'
 import { parse } from './parse/template'
-import { BUILTIN_PIPES } from './pipes/builtins'
+import { BUILTIN_PIPES, OVERRIDABLE_PIPES } from './pipes/builtins'
 import { readPipeExports } from './pipes/read-exports'
 import { readValidatorExports } from './validators'
 
@@ -94,7 +94,7 @@ export async function loadViewsProject(loc: ViewsLocation): Promise<{
   const pipesFile = resolve(loc.root, loc.pipesFile ?? join(dir, 'pipes.ts'))
   const validatorsFile = resolve(loc.root, loc.validatorsFile ?? join(dir, 'validators.ts'))
   const diagnostics: Array<{ d: Diagnostic; prefix: string }> = []
-  const pipes = new Set(BUILTIN_PIPES)
+  const pipes = new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES])
   if (existsSync(pipesFile)) {
     const read = readPipeExports(await readFile(pipesFile, 'utf8'), relative(loc.root, pipesFile))
     for (const n of read.names) pipes.add(n)

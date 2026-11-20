@@ -2,7 +2,7 @@ import type { Pipe } from '../render/render'
 import { SafeHtml } from '../render/safe'
 import { builtinPipes, type PipeEnv } from './builtins'
 
-export { BUILTIN_PIPES, builtinPipes, type PipeEnv } from './builtins'
+export { BUILTIN_PIPES, OVERRIDABLE_PIPES, builtinPipes, type PipeEnv } from './builtins'
 
 const ENV_PIPE = Symbol.for('kickjs.view.envPipe')
 

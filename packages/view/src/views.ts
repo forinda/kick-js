@@ -36,7 +36,7 @@ import { readValidatorExports, VALIDATORS_TAG } from './validators'
 const VALIDATE_TAG = 'kick-validate'
 const VALIDATE_HASH = fnv1a(VALIDATE_RUNTIME)
 import { parse } from './parse/template'
-import { BUILTIN_PIPES, type PipeEnv } from './pipes/builtins'
+import { BUILTIN_PIPES, OVERRIDABLE_PIPES, type PipeEnv } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
 import { render, RenderError, type Pipe } from './render/render'
 
@@ -372,7 +372,7 @@ export function createViews(options: ViewsOptions = {}): Views {
     return {
       project: {
         templates,
-        pipes: new Set([...BUILTIN_PIPES, ...Object.keys(pipes)]),
+        pipes: new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES, ...Object.keys(pipes)]),
         validators: new Set(custom?.names),
         componentsDir,
         layouts: options.layout,
