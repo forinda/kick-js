@@ -95,8 +95,6 @@ export default defineConfig({
     },
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
-    // A client terminated as its container stops mustn't fail the run.
-    setupFiles: ['__tests__/setup/pg-teardown.ts'],
     // One Postgres and one MySQL for every file (reused locally across runs).
     globalSetup: ['__tests__/setup/services.ts'],
     globals: false,
