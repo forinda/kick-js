@@ -13,7 +13,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { sql } from 'kysely'
 
@@ -27,7 +27,7 @@ import {
 } from '@forinda/kickjs-db'
 import { pgDialect } from '@forinda/kickjs-db/pg'
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 const sleeper = table('sleeper', {
@@ -41,7 +41,7 @@ const sleeperRelations = relations(sleeper, () => ({}))
 const schema = { sleeper, sleeperRelations }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({
     host: container.getHost(),
     port: container.getMappedPort(5432),

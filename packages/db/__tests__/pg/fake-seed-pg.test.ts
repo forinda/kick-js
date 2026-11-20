@@ -1,17 +1,17 @@
 /** D.29 on Postgres: seeded rows insert with real foreign keys and come back filled in. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { createDbClient, pushSchema, seedFake } from '@forinda/kickjs-db'
 import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import * as all from '../setup/fake-schema'
 
 const { notes: _notes, ...schema } = all
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
   await pushSchema({ adapter: pgAdapter({ pool }), schema })

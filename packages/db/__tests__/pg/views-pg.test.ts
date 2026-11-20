@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import {
   checkDrift,
@@ -41,12 +41,12 @@ const schemaV2 = schemaV1
     "active: integer().notNull() }, { comment: 'People' })",
   )
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 let dir: string
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   dir = await mkdtemp(path.join(here, '../fixtures/tmp-views-pg-'))
 }, 120_000)

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 
 import {
@@ -43,11 +43,11 @@ const posts = table(
 
 const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }))
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let client: pg.Client
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   client = new pg.Client({
     host: container.getHost(),
     port: container.getMappedPort(5432),

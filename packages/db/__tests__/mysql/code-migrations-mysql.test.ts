@@ -3,18 +3,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
+import { sharedMysql, type SharedServer } from '../setup/shared-server'
 import { createPool, type Pool } from 'mysql2/promise'
 import { generate, migrateDown, migrateLatest } from '@forinda/kickjs-db'
 import { mysqlAdapter } from '@forinda/kickjs-db/mysql'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-let container: StartedMySqlContainer
+let container: SharedServer
 let pool: Pool
 let dir: string
 
 beforeAll(async () => {
-  container = await new MySqlContainer('mysql:8.0').start()
+  container = await sharedMysql()
   pool = createPool({
     host: container.getHost(),
     port: container.getPort(),

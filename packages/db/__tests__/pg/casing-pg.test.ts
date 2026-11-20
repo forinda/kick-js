@@ -1,6 +1,6 @@
 /** D.21 on Postgres: snake_case columns, camelCase keys, nested relational reads included. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import {
   checkDrift,
@@ -36,11 +36,11 @@ const postRelations = relations(blogPosts, ({ one }) => ({
 }))
 const schema = { users, blogPosts, userRelations, postRelations }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
 }, 120_000)

@@ -4,7 +4,7 @@
  * recovering from a genuine serialization failure.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { PostgresDialect } from 'kysely'
 import { createDbClient, integer, table, varchar, type KickDbClient } from '@forinda/kickjs-db'
@@ -18,7 +18,7 @@ const schema = {
   counters: table('counters', { id: integer().primaryKey(), n: integer() }),
 }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 let db: KickDbClient<DB>
 
@@ -26,7 +26,7 @@ const notes = async () =>
   (await db.selectFrom('log').select('note').orderBy('id').execute()).map((r) => r.note)
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({
     host: container.getHost(),
     port: container.getMappedPort(5432),

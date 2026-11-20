@@ -3,18 +3,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { generate, migrateDown, migrateLatest } from '@forinda/kickjs-db'
 import { pgAdapter } from '@forinda/kickjs-db/pg'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 let dir: string
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
   dir = await mkdtemp(path.join(here, '../fixtures/tmp-code-migrations-pg-'))

@@ -18,7 +18,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { PostgresDialect, type Generated } from 'kysely'
 
@@ -83,12 +83,12 @@ declare module '@forinda/kickjs-db' {
   }
 }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 let db: KickDbClient<DB>
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({
     host: container.getHost(),
     port: container.getMappedPort(5432),

@@ -1,6 +1,6 @@
 /** Many-to-many relational reads on MySQL. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
+import { sharedMysql, type SharedServer } from '../setup/shared-server'
 import { createPool, type Pool } from 'mysql2/promise'
 import { sql } from 'kysely'
 import {
@@ -35,11 +35,11 @@ const postRelations = relations(posts, ({ many }) => ({ tags: many(tags, { throu
 const tagRelations = relations(tags, ({ many }) => ({ posts: many(posts, { through: postTags }) }))
 const schema = { posts, tags, postTags, postRelations, tagRelations }
 
-let container: StartedMySqlContainer
+let container: SharedServer
 let pool: Pool
 
 beforeAll(async () => {
-  container = await new MySqlContainer('mysql:8.0').start()
+  container = await sharedMysql()
   pool = createPool({
     host: container.getHost(),
     port: container.getPort(),

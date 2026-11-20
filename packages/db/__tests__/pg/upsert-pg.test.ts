@@ -3,7 +3,7 @@
  * findOrCreate exists for: concurrent callers get one row, created once.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { sql } from 'kysely'
 import {
@@ -36,11 +36,11 @@ const handles = table('handles', {
 })
 const schema = { users, handles }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri(), max: 10 })
   pool.on('error', () => {})
   const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }

@@ -1,6 +1,6 @@
 /** Many-to-many relational reads on Postgres. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import {
   createDbClient,
@@ -34,11 +34,11 @@ const postRelations = relations(posts, ({ many }) => ({ tags: many(tags, { throu
 const tagRelations = relations(tags, ({ many }) => ({ posts: many(posts, { through: postTags }) }))
 const schema = { posts, tags, postTags, postRelations, tagRelations }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
   const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }

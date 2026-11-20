@@ -2,7 +2,7 @@
  * `db.insertMany()` on MySQL: counts rows, and returns them through `readBack`.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
+import { sharedMysql, type SharedServer } from '../setup/shared-server'
 import { createPool, type Pool } from 'mysql2/promise'
 import {
   createDbClient,
@@ -25,11 +25,11 @@ const events = table('events', {
 })
 const schema = { events }
 
-let container: StartedMySqlContainer
+let container: SharedServer
 let pool: Pool
 
 beforeAll(async () => {
-  container = await new MySqlContainer('mysql:8.0').start()
+  container = await sharedMysql()
   pool = createPool({
     host: container.getHost(),
     port: container.getPort(),

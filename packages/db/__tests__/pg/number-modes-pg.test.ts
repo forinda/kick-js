@@ -3,7 +3,7 @@
  * `pg` returns both as strings.
  */
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import { bigint, integer, numeric, relations, serial, table } from '@forinda/kickjs-db'
 import { createPgTestDb, type PgTestDb } from '@forinda/kickjs-db/testing'
 
@@ -27,11 +27,11 @@ const entryRelations = relations(entries, ({ one }) => ({
 }))
 const schema = { accounts, entries, accountRelations, entryRelations }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let t: PgTestDb<typeof schema>
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   t = await createPgTestDb({ schema, connectionString: container.getConnectionUri() })
 }, 120_000)
 afterAll(async () => {

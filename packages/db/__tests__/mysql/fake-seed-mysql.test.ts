@@ -1,17 +1,17 @@
 /** D.29 on MySQL: seeded rows insert with real foreign keys and come back filled in. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
+import { sharedMysql, type SharedServer } from '../setup/shared-server'
 import { createPool, type Pool } from 'mysql2/promise'
 import { createDbClient, pushSchema, seedFake } from '@forinda/kickjs-db'
 import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db/mysql'
 import * as all from '../setup/fake-schema'
 
 const { notes: _notes, ...schema } = all
-let container: StartedMySqlContainer
+let container: SharedServer
 let pool: Pool
 
 beforeAll(async () => {
-  container = await new MySqlContainer('mysql:8.0').start()
+  container = await sharedMysql()
   pool = createPool({
     host: container.getHost(),
     port: container.getPort(),
