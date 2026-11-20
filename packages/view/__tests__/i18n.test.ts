@@ -3,7 +3,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { createTranslator, flattenCatalog, placeholders, readCatalogs } from '../src/i18n'
+import { createTranslator, flattenCatalog, placeholders } from '../src/i18n'
+import { readCatalogs } from '../src/loaders/file'
 
 const en = flattenCatalog(
   {

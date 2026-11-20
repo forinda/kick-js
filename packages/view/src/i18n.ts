@@ -49,29 +49,26 @@ export function placeholders(m: Message): Set<string> {
   return out
 }
 
-/** Every `<locale>.json` in `dir`; `undefined` when there's no such folder. */
-export async function readCatalogs(dir: string): Promise<Messages | undefined> {
-  const { readdir, readFile } = await import('node:fs/promises')
-  const { join } = await import('node:path')
-  let files: string[]
-  try {
-    files = (await readdir(dir)).filter((f) => f.endsWith('.json')).toSorted()
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw err
-  }
-  const out: Messages = {}
-  for (const f of files) {
-    const file = join(dir, f)
-    let json: unknown
-    try {
-      json = JSON.parse(await readFile(file, 'utf8'))
-    } catch (err) {
-      throw new Error(`${file}: ${(err as Error).message}`, { cause: err })
+/** What the check knows of the catalogues: each key's locales and placeholders. */
+export interface CatalogIndex {
+  /** The catalogue folder, as messages name it (`src/views/locales`). */
+  where: string
+  locales: string[]
+  keys: Map<string, { locales: Set<string>; params: Set<string> }>
+}
+
+/** The catalogues indexed for checking `t` calls. */
+export function catalogIndex(messages: Messages, where: string): CatalogIndex {
+  const keys: CatalogIndex['keys'] = new Map()
+  for (const [locale, catalog] of Object.entries(messages)) {
+    for (const [key, m] of Object.entries(catalog)) {
+      let entry = keys.get(key)
+      if (!entry) keys.set(key, (entry = { locales: new Set(), params: new Set() }))
+      entry.locales.add(locale)
+      for (const p of placeholders(m)) entry.params.add(p)
     }
-    out[f.slice(0, -'.json'.length)] = flattenCatalog(json, file)
   }
-  return out
+  return { where, locales: Object.keys(messages), keys }
 }
 
 /** `sw-KE` → `sw`; `zh-Hant-TW` → `zh`. */

@@ -240,6 +240,30 @@ describe('kickViewsPlugin', () => {
     expect(data).not.toMatch(/function|=>/)
   })
 
+  it('bundles the message catalogues and checks t calls against them', async () => {
+    const files = {
+      'src/views/p.kick': "{{ 'hi' | t:'name':n }}",
+      'src/views/locales/en.json': '{ "hi": "Hello {name}" }',
+    }
+    const code = await bundle(project(files))
+    expect(code).toContain('Hello {name}')
+    await expect(
+      bundle(project({ ...files, 'src/views/p.kick': "{{ 'nope' | t }}" })),
+    ).rejects.toThrow(/unknown message 'nope'/)
+    await expect(bundle(project({ ...files, 'src/views/locales/sw.json': '{' }))).rejects.toThrow(
+      /sw\.json/,
+    )
+    // The app's own t: no catalogue check.
+    await bundle(
+      project({
+        ...files,
+        'src/views/p.kick': "{{ 'nope' | t }}",
+        // Untyped: a `(k: string) =>` string here stops vitest loading this file.
+        'src/views/pipes.ts': 'export const t = (k) => k',
+      }),
+    )
+  })
+
   it('an unknown pipe fails the build', async () => {
     const root = project({ 'src/views/p.kick': '{{ x | nope }}' })
     await expect(bundle(root)).rejects.toThrow(/unknown pipe 'nope'/)

@@ -36,7 +36,7 @@ import { readValidatorExports, VALIDATORS_TAG } from './validators'
 const VALIDATE_TAG = 'kick-validate'
 const VALIDATE_HASH = fnv1a(VALIDATE_RUNTIME)
 import { parse } from './parse/template'
-import { createTranslator, readCatalogs, type Messages } from './i18n'
+import { catalogIndex, createTranslator, type Messages } from './i18n'
 import { BUILTIN_PIPES, OVERRIDABLE_PIPES, type PipeEnv } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
 import { render, RenderError, type Pipe } from './render/render'
@@ -342,7 +342,10 @@ export function createViews(options: ViewsOptions = {}): Views {
   const defaultLocale = options.messagesLocale ?? options.locale ?? 'en-US'
   const readMessages = async (): Promise<Messages> =>
     options.messages ??
-    (bundle ? {} : ((await readCatalogs(`${options.viewsDir ?? 'src/views'}/locales`)) ?? {}))
+    (bundle
+      ? {}
+      : ((await (await fileLoaders()).readCatalogs(`${options.viewsDir ?? 'src/views'}/locales`)) ??
+        {}))
   let translator: Promise<{ json: string; t: ReturnType<typeof createTranslator> }> | undefined
   /** The message lookup; in dev the catalogues are re-read, keeping the translator while they're unchanged. */
   const getTranslator = async (): Promise<ReturnType<typeof createTranslator>> => {
@@ -408,6 +411,13 @@ export function createViews(options: ViewsOptions = {}): Views {
       project: {
         templates,
         pipes: new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES, ...Object.keys(pipes)]),
+        // The app's own `t` isn't checked against catalogues.
+        messages: Object.hasOwn(pipes, 't')
+          ? undefined
+          : catalogIndex(
+              await readMessages(),
+              options.messages ? 'messages' : `${options.viewsDir ?? 'src/views'}/locales`,
+            ),
         validators: new Set(custom?.names),
         componentsDir,
         layouts: options.layout,

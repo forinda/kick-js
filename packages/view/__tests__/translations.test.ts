@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createViews } from '../src/index'
+import { builtinPipes } from '../src/pipes/builtins'
 
 const messages = {
   en: {
@@ -39,18 +40,17 @@ describe('t pipe', () => {
     expect(await v.render('page', { who: '<i>' })).toBe('&lt;b&gt;&lt;i&gt;&lt;/b&gt;')
   })
 
-  it('ignores a dangling param name', async () => {
-    const v = views({ page: "{{ 'cart.title' | t:'count' }}" })
-    expect(await v.render('page')).toBe('Cart')
+  it('ignores a dangling param name at render (the check reports it)', () => {
+    const translate = vi.fn((k: string) => k)
+    builtinPipes({ locale: 'en', timeZone: 'UTC', translate }).t!('cart.title', 'count')
+    expect(translate).toHaveBeenCalledWith('cart.title', {})
+    expect(builtinPipes({ locale: 'en', timeZone: 'UTC' }).t!('x.y')).toBe('x.y')
   })
 
-  it('prints the key, and warns, with no catalogues', async () => {
+  it('prints the key, and warns, for a key no catalogue has', async () => {
     const warn = vi.fn()
-    const v = createViews({
-      loader: { list: async () => ['page'], read: async () => "{{ 'x.y' | t }}" },
-      warn,
-    })
-    expect(await v.render('page')).toBe('x.y')
+    const v = views({ page: '{{ key | t }}' }, { warn })
+    expect(await v.render('page', { key: 'x.y' })).toBe('x.y')
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/x\.y/))
   })
 
