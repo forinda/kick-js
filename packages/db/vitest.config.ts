@@ -61,6 +61,11 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'src/mysql.ts'),
       },
       {
+        // Before ./testing: aliases match by prefix.
+        find: '@forinda/kickjs-db/testing/vitest',
+        replacement: path.resolve(__dirname, 'src/testing-vitest.ts'),
+      },
+      {
         find: '@forinda/kickjs-db/testing',
         replacement: path.resolve(__dirname, 'src/testing.ts'),
       },

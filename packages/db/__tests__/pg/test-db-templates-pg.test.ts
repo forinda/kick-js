@@ -23,6 +23,8 @@ vi.mock('../../src/migrate/runner', async (orig) => {
 })
 
 const { createPgTestDb, templateKey } = await import('@forinda/kickjs-db/testing')
+const { useTestDb } = await import('@forinda/kickjs-db/testing/vitest')
+const { serial, table, text } = await import('@forinda/kickjs-db')
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 let container: StartedPostgreSqlContainer
@@ -33,6 +35,8 @@ let migrationsDir: string
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:17-alpine').start()
   server = container.getConnectionUri()
+  // As kickTestServices sets it: useTestDb below reads it.
+  process.env.KICK_TEST_POSTGRES_URL = server
   dir = await mkdtemp(path.join(here, '../fixtures/tmp-test-db-tpl-'))
   const schemaPath = path.join(dir, 'schema.ts')
   await writeFile(
@@ -178,5 +182,16 @@ describe('createPgTestDb — leftovers', () => {
     expect(left).toContain('kick_test_recent')
     await holder.end()
     await e.drop()
+  })
+})
+
+describe('useTestDb on the shared Postgres', () => {
+  const t = useTestDb({
+    schema: { notes: table('notes', { id: serial().primaryKey(), body: text().notNull() }) },
+  })
+  it('makes its database on the server KICK_TEST_POSTGRES_URL names', async () => {
+    expect(t.connectionString).toMatch(/kick_test_/)
+    await t.db.insertInto('notes').values({ body: 'x' }).execute()
+    expect(await t.db.selectFrom('notes').select('body').execute()).toEqual([{ body: 'x' }])
   })
 })
