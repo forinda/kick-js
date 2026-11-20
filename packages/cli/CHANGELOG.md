@@ -1,5 +1,41 @@
 # @forinda/kickjs-cli
 
+## 8.19.0
+
+### Minor Changes
+
+- [#1163](https://github.com/forinda/kick-js/pull/1163) [`c9abeb9`](https://github.com/forinda/kick-js/commit/c9abeb9329bf5ec4990dda0fb3a9f8a2114da05b) Thanks [@forinda](https://github.com/forinda)! - Named view roots: `.kick` templates can live in more folders than `src/views` — a module's own views folder, or a package that ships views — addressed as `root::path` (`ctx.render('billing::invoices/show')`). Declare them once in `kick.config.ts` under `views: { dir, roots }`; the runtime, the Vite build and dev server, `kick check:views`, `kick fmt:views`, typegen and the language server all read it. A root's references resolve in that root first, then the app's; its component tags start with the root's name (`<ui-button>`). A package says where its views are with `"kick": { "views": "<folder>" }` in its package.json.
+
+### Patch Changes
+
+- [#1156](https://github.com/forinda/kick-js/pull/1156) [`50327cb`](https://github.com/forinda/kick-js/commit/50327cb6c988bf6bc5a58d927ffc823d9749993e) Thanks [@forinda](https://github.com/forinda)! - JSDoc for the remaining public exports, shown on hover in editors.
+
+- [#1152](https://github.com/forinda/kick-js/pull/1152) [`0656616`](https://github.com/forinda/kick-js/commit/0656616a5c4c67f01a11d10f3507cd78762d09da) Thanks [@forinda](https://github.com/forinda)! - JSDoc and messages now link https://kickjs.app instead of repo files and design-note sections.
+  
+  - Every public decorator and adapter has JSDoc with a `@see` link to its guide, shown on hover. New JSDoc for `@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`, `@Cacheable`, `@CacheResponse`, `KickCronAdapter`, `InertiaAdapter`, `StorageAdapter`, `KickView` and `SocketIoAdapter`.
+  - JSDoc that a statement had separated from its export is back on it, so editors show it: `session`, `DevToolsAdapter`, `defineTenancy`, `ContextMetaKey`, `VIEW_RENDERER`, `ResolvedRelation`, `useFileLoader`, `useStripTypes`, `useClientFiles`.
+  - Messages that pointed at design-note sections or `guide/…` paths now give the page's URL: `defineModule` and `defineContextDecorator` option errors, kick-lint's token suggestion, and `kick` runtime swap's manual-step note.
+
+- [#1161](https://github.com/forinda/kick-js/pull/1161) [`3a0e2d2`](https://github.com/forinda/kick-js/commit/3a0e2d237048e4a68e9d5a1d88c9d1865a295166) Thanks [@forinda](https://github.com/forinda)! - `ctx.render` and `views.render` are type-checked against your `.kick` templates.
+  
+  - **Typegen:** `kick typegen` writes `.kickjs/types/kick__views.ts` from every page. Only real template names compile, and the data must include what the page reads.
+    - The shape comes from paths and loops.
+    - A name a condition tests (`@if (x)`, `&&`, ternaries, `@for` sources) may be `null`; `??` and `?.` let it be left out.
+    - Extra keys are fine.
+    - `{ fragment }` renders take just what that fragment reads; its needs aren't covered by shared names.
+  - **Annotations:** `@input user: User` with `@import type { User } from '…'` types a page's data. Pages and layouts may now declare `@input`s, and a default (`@input title = 'Home'`) fills in when nobody passes the name; the page's layouts see it.
+  - **Shared names:** declare what `createViews({ share })` supplies once in `interface KickViewShared`; `kick add views` scaffolds `src/views/shared.ts`.
+  - **Other engines:** `interface KickViewTypeOptions { otherEngines: true }` lets names outside the registry through, for apps that also use `ViewAdapter`.
+  - **Unchanged without typegen:** an empty registry keeps `ctx.render` as loose as before.
+  - **New `kickViewsCli({ dir, componentsDir, pipes, validators })`:** configures the view CLI plugin and its typegen; `viewCliPlugin` is `kickViewsCli()`.
+  - **Type tests now run:** `@forinda/kickjs` and `@forinda/kickjs-view` run their type tests with `vitest --typecheck`.
+
+- [#1162](https://github.com/forinda/kick-js/pull/1162) [`549b584`](https://github.com/forinda/kick-js/commit/549b584223ef42f2dfdfab15d104f685ff11e7d4) Thanks [@forinda](https://github.com/forinda)! - Links into the views guide point at its new pages: the guide is now a section of pages (syntax, layouts, components, forms, typed render data, tooling and more) instead of one long page. Old `/guide/views#section` links forward to the new page.
+- Updated dependencies [[`47e24d5`](https://github.com/forinda/kick-js/commit/47e24d5d99d7fcf734cd4045b605513497026f62), [`f9da41e`](https://github.com/forinda/kick-js/commit/f9da41e1809ff4886f71950b6cd6a0a4582b4d41), [`c1daf7e`](https://github.com/forinda/kick-js/commit/c1daf7e73063386bb547be51615ec8726702388c), [`c1daf7e`](https://github.com/forinda/kick-js/commit/c1daf7e73063386bb547be51615ec8726702388c), [`0656616`](https://github.com/forinda/kick-js/commit/0656616a5c4c67f01a11d10f3507cd78762d09da), [`5bcf6a7`](https://github.com/forinda/kick-js/commit/5bcf6a79b37c073135dc7cf10ae26f3e41a79ef5), [`d18dece`](https://github.com/forinda/kick-js/commit/d18dece777cb9c5119a23309496cf79f8189f789), [`3a0e2d2`](https://github.com/forinda/kick-js/commit/3a0e2d237048e4a68e9d5a1d88c9d1865a295166), [`549b584`](https://github.com/forinda/kick-js/commit/549b584223ef42f2dfdfab15d104f685ff11e7d4)]:
+  - @forinda/kickjs-db@8.13.0
+  - @forinda/kickjs@10.15.0
+  - @forinda/kickjs-cli-kit@0.1.4
+
 ## 8.18.0
 
 ### Minor Changes

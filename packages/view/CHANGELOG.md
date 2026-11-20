@@ -1,5 +1,65 @@
 # @forinda/kickjs-view
 
+## 0.6.0
+
+### Minor Changes
+
+- [#1160](https://github.com/forinda/kick-js/pull/1160) [`6f12759`](https://github.com/forinda/kick-js/commit/6f1275918a4c8a258aa208cc7aab2d40ecf45660) Thanks [@forinda](https://github.com/forinda)! - `.kick` components get four features from other template engines.
+  
+  - **Attribute passthrough:** every attribute on a component tag that isn't a declared `@input` goes to the component's root element, checked as if written there, so `<ui-button type="submit" hx-post="/save">` works. Through a wrapper component, attributes reach the inner component as inputs, or its root. A name close to an input warns.
+  - **Slots that receive data:** `<slot name="row" [user]="u" />` in a component, `@slot('row'; let user) { … }` in the caller.
+  - **Snippets:** `@snippet badge(label, tone = 'info') { … }` and `@render badge(x)`, within one template.
+  - **Dynamic components:** `<component [is]="w.type" of="chart-bar chart-line" />` renders one of the listed components, every one of them checked.
+  
+  The editor completes snippet names, a slot's values and `of` tags; the formatter handles the new headers.
+  
+  Compatibility:
+  
+  - An attribute that isn't an input used to fail the check ("unknown input"); it now goes to the root element. `type`, `name`, `value`, `checked` and `validate` on a form-field root, and `http-equiv` and `content` on a `<meta>` root, still fail: declare them as inputs.
+  - A `<slot>` takes only `name="…"` and `[value]="…"` bindings: other attributes on it, which used to be ignored, are now an error.
+  - `<component>` is reserved; `@snippet name(` and `@render name(` in template text start blocks.
+  - Compiled templates use bundle format v3: rebuild edge bundles.
+
+- [#1159](https://github.com/forinda/kick-js/pull/1159) [`d18dece`](https://github.com/forinda/kick-js/commit/d18dece777cb9c5119a23309496cf79f8189f789) Thanks [@forinda](https://github.com/forinda)! - `.kick` views get fragments and stacks.
+  
+  - **Fragments:** mark a block of a page with `@fragment('rows') { … }`, and render only that block, without layouts, with `ctx.render('users/index', data, { fragment: 'rows' })`, or several at once with `{ fragment: ['rows', 'count'] }` for htmx out-of-band swaps. A fragment inside `@for`, `@if (…; as x)` or after `@let` reads those names from the data the controller passes; a missing one fails the render. `share()` data doesn't count towards them.
+  - **Stacks:** a layout marks a place with `<stack name="head" />`, and pages, layouts and components add to it with `@push('head') { … }`, from anywhere in the page. Identical content is output once.
+  - **Editor:** completion for `@fragment`, `@push` and stack names; the formatter handles both blocks.
+  
+  Compatibility:
+  
+  - `@fragment(` and `@push(` in template text now start a block; without `(` they stay text.
+  - `<stack>` is reserved, like `<slot>`.
+  - Compiled templates use bundle format v2: an edge build made with the previous `@forinda/kickjs-view` is refused at startup until it's rebuilt.
+
+- [#1163](https://github.com/forinda/kick-js/pull/1163) [`c9abeb9`](https://github.com/forinda/kick-js/commit/c9abeb9329bf5ec4990dda0fb3a9f8a2114da05b) Thanks [@forinda](https://github.com/forinda)! - Named view roots: `.kick` templates can live in more folders than `src/views` — a module's own views folder, or a package that ships views — addressed as `root::path` (`ctx.render('billing::invoices/show')`). Declare them once in `kick.config.ts` under `views: { dir, roots }`; the runtime, the Vite build and dev server, `kick check:views`, `kick fmt:views`, typegen and the language server all read it. A root's references resolve in that root first, then the app's; its component tags start with the root's name (`<ui-button>`). A package says where its views are with `"kick": { "views": "<folder>" }` in its package.json.
+
+- [#1161](https://github.com/forinda/kick-js/pull/1161) [`3a0e2d2`](https://github.com/forinda/kick-js/commit/3a0e2d237048e4a68e9d5a1d88c9d1865a295166) Thanks [@forinda](https://github.com/forinda)! - `ctx.render` and `views.render` are type-checked against your `.kick` templates.
+  
+  - **Typegen:** `kick typegen` writes `.kickjs/types/kick__views.ts` from every page. Only real template names compile, and the data must include what the page reads.
+    - The shape comes from paths and loops.
+    - A name a condition tests (`@if (x)`, `&&`, ternaries, `@for` sources) may be `null`; `??` and `?.` let it be left out.
+    - Extra keys are fine.
+    - `{ fragment }` renders take just what that fragment reads; its needs aren't covered by shared names.
+  - **Annotations:** `@input user: User` with `@import type { User } from '…'` types a page's data. Pages and layouts may now declare `@input`s, and a default (`@input title = 'Home'`) fills in when nobody passes the name; the page's layouts see it.
+  - **Shared names:** declare what `createViews({ share })` supplies once in `interface KickViewShared`; `kick add views` scaffolds `src/views/shared.ts`.
+  - **Other engines:** `interface KickViewTypeOptions { otherEngines: true }` lets names outside the registry through, for apps that also use `ViewAdapter`.
+  - **Unchanged without typegen:** an empty registry keeps `ctx.render` as loose as before.
+  - **New `kickViewsCli({ dir, componentsDir, pipes, validators })`:** configures the view CLI plugin and its typegen; `viewCliPlugin` is `kickViewsCli()`.
+  - **Type tests now run:** `@forinda/kickjs` and `@forinda/kickjs-view` run their type tests with `vitest --typecheck`.
+
+### Patch Changes
+
+- [#1152](https://github.com/forinda/kick-js/pull/1152) [`0656616`](https://github.com/forinda/kick-js/commit/0656616a5c4c67f01a11d10f3507cd78762d09da) Thanks [@forinda](https://github.com/forinda)! - JSDoc and messages now link https://kickjs.app instead of repo files and design-note sections.
+  
+  - Every public decorator and adapter has JSDoc with a `@see` link to its guide, shown on hover. New JSDoc for `@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`, `@Cacheable`, `@CacheResponse`, `KickCronAdapter`, `InertiaAdapter`, `StorageAdapter`, `KickView` and `SocketIoAdapter`.
+  - JSDoc that a statement had separated from its export is back on it, so editors show it: `session`, `DevToolsAdapter`, `defineTenancy`, `ContextMetaKey`, `VIEW_RENDERER`, `ResolvedRelation`, `useFileLoader`, `useStripTypes`, `useClientFiles`.
+  - Messages that pointed at design-note sections or `guide/…` paths now give the page's URL: `defineModule` and `defineContextDecorator` option errors, kick-lint's token suggestion, and `kick` runtime swap's manual-step note.
+
+- [#1153](https://github.com/forinda/kick-js/pull/1153) [`be8a293`](https://github.com/forinda/kick-js/commit/be8a2936d25dbe093a9b7d0f09ca875326c92c95) Thanks [@forinda](https://github.com/forinda)! - JSDoc for the remaining public exports, shown on hover in editors.
+
+- [#1162](https://github.com/forinda/kick-js/pull/1162) [`549b584`](https://github.com/forinda/kick-js/commit/549b584223ef42f2dfdfab15d104f685ff11e7d4) Thanks [@forinda](https://github.com/forinda)! - Links into the views guide point at its new pages: the guide is now a section of pages (syntax, layouts, components, forms, typed render data, tooling and more) instead of one long page. Old `/guide/views#section` links forward to the new page.
+
 ## 0.5.0
 
 ### Minor Changes

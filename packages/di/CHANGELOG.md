@@ -1,5 +1,25 @@
 # @forinda/kickjs-di
 
+## 0.4.0
+
+### Minor Changes
+
+- [#1158](https://github.com/forinda/kick-js/pull/1158) [`5bcf6a7`](https://github.com/forinda/kick-js/commit/5bcf6a79b37c073135dc7cf10ae26f3e41a79ef5) Thanks [@forinda](https://github.com/forinda)! - Settings sections no longer keep an old value across a dev reload. A section bound once was carried into every later `Container.reset()`, so after a save that made it `.optional()` or stopped declaring it, `get()` and injection kept returning the value read at the first start, whatever `.env` said. Bound sections are now forgotten on reset and read afresh; a failed `rebuild()` still serves the running app's values through `get()`.
+  
+  `Container.registerInstance()` takes `{ persist: false }` for a value that must not survive `Container.reset()`.
+  
+  `Container.invalidate()` leaves a binding made with `registerInstance()` in place: there is nothing to build it again from, and on an isolated container (or with `{ persist: false }`) it used to clear the value, so the next `resolve()` built an empty object from its constructor.
+
+### Patch Changes
+
+- [#1156](https://github.com/forinda/kick-js/pull/1156) [`50327cb`](https://github.com/forinda/kick-js/commit/50327cb6c988bf6bc5a58d927ffc823d9749993e) Thanks [@forinda](https://github.com/forinda)! - JSDoc for the remaining public exports, shown on hover in editors.
+
+- [#1152](https://github.com/forinda/kick-js/pull/1152) [`0656616`](https://github.com/forinda/kick-js/commit/0656616a5c4c67f01a11d10f3507cd78762d09da) Thanks [@forinda](https://github.com/forinda)! - JSDoc and messages now link https://kickjs.app instead of repo files and design-note sections.
+  
+  - Every public decorator and adapter has JSDoc with a `@see` link to its guide, shown on hover. New JSDoc for `@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`, `@Cacheable`, `@CacheResponse`, `KickCronAdapter`, `InertiaAdapter`, `StorageAdapter`, `KickView` and `SocketIoAdapter`.
+  - JSDoc that a statement had separated from its export is back on it, so editors show it: `session`, `DevToolsAdapter`, `defineTenancy`, `ContextMetaKey`, `VIEW_RENDERER`, `ResolvedRelation`, `useFileLoader`, `useStripTypes`, `useClientFiles`.
+  - Messages that pointed at design-note sections or `guide/…` paths now give the page's URL: `defineModule` and `defineContextDecorator` option errors, kick-lint's token suggestion, and `kick` runtime swap's manual-step note.
+
 ## 0.3.1
 
 ### Patch Changes
