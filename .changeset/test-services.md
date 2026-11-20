@@ -16,3 +16,5 @@ Shared, named, reusable test services, with a database per test file on them.
   - `createPgTestDb` copies a template database migrated once, makes an empty database when given no schema, reads `KICK_TEST_POSTGRES_URL`, refuses a server whose database name lacks `test` (`allowNonTestDatabase` overrides), and sweeps old leftovers.
   - New `createMysqlTestDb`.
   - New `useTestDb()` from `@forinda/kickjs-db/testing/vitest`.
+
+**Behaviour change:** `createPgTestDb` now refuses a server URL whose database name doesn't contain `test`. A CI service URL like `postgres://…/postgres` throws until you point it at a `test` database, or pass `allowNonTestDatabase: true`.

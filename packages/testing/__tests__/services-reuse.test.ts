@@ -53,8 +53,14 @@ vi.mock('testcontainers', () => {
     withTmpFs(...a: unknown[]) {
       return this.rec('withTmpFs', a)
     }
+    private used = false
     async start() {
       fake.starts++
+      // Like Testcontainers: start() changes the builder's labels (the reuse
+      // hash), so starting the same builder again never finds the container.
+      if (this.used)
+        throw new Error('(HTTP code 409) Conflict. The container name "/x" is already in use')
+      this.used = true
       if (fake.startError) {
         const e = fake.startError
         fake.startError = undefined
@@ -189,7 +195,19 @@ describe('startContainer — names and reuse', () => {
     )
     const s = await startContainer({ ...spec, name: 'x' })
     expect(fake.starts).toBe(2)
+    expect(fake.builders).toHaveLength(2) // a fresh builder: the first one's hash changed
     expect(s.reused).toBe(true)
+  })
+
+  it('keys the config on the Testcontainers version too', async () => {
+    const { configOf } = await import('../src/services')
+    expect(configOf(spec, '12.2.1')).not.toBe(configOf(spec, '13.0.0'))
+    await startContainer({ ...spec, name: 'x' })
+    const { createRequire } = await import('node:module')
+    const version = createRequire(import.meta.url)('testcontainers/package.json').version
+    expect(called('withLabels')[0]![0]).toMatchObject({
+      'kickjs.test.config': configOf(spec, version),
+    })
   })
 })
 

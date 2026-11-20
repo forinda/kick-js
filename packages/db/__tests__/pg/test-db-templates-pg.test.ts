@@ -195,3 +195,45 @@ describe('useTestDb on the shared Postgres', () => {
     expect(await t.db.selectFrom('notes').select('body').execute()).toEqual([{ body: 'x' }])
   })
 })
+
+describe('createPgTestDb — review fixes', () => {
+  it('rebuilds a template a killed run left half-built', async () => {
+    const fresh = await mkdtemp(path.join(here, '../fixtures/tmp-test-db-half-'))
+    const copy = path.join(fresh, 'migrations')
+    const { cp } = await import('node:fs/promises')
+    await cp(migrationsDir, copy, { recursive: true })
+    const id = (await readdir(copy)).find((f) => !f.startsWith('_') && !f.endsWith('.json'))!
+    await appendFile(path.join(copy, id, 'up.sql'), '\n-- half\n')
+    const key = await templateKey({ migrationsDir: copy })
+    // What a killed first build leaves: the database, and no "built" note.
+    const admin = new pg.Client({ connectionString: server })
+    await admin.connect()
+    await admin.query(`create database kick_tpl_${key}`)
+    await admin.end()
+    const t = await createPgTestDb({ migrationsDir: copy, connectionString: server })
+    expect(await tables(t.connectionString)).toEqual(expect.arrayContaining(['users']))
+    await t.drop()
+    await rm(fresh, { recursive: true, force: true })
+  })
+
+  it('leaves an old template another file holds the lock on, and drops a free one', async () => {
+    const admin = new pg.Client({ connectionString: server })
+    await admin.connect()
+    for (const n of ['kick_tpl_oldheld', 'kick_tpl_oldfree']) {
+      await admin.query(`create database ${n}`)
+      await admin.query(`comment on database ${n} is 'kick_tpl created 2000-01-01T00:00:00.000Z'`)
+    }
+    const holder = new pg.Client({ connectionString: server })
+    await holder.connect()
+    await holder.query('select pg_advisory_lock(hashtext($1))', ['kick_tpl_oldheld'])
+
+    vi.resetModules()
+    const fresh = await import('@forinda/kickjs-db/testing')
+    const e = await fresh.createPgTestDb({ connectionString: server })
+    const left = await names('kick_tpl_old%')
+    expect(left).toEqual(['kick_tpl_oldheld'])
+    await holder.end()
+    await admin.end()
+    await e.drop()
+  })
+})

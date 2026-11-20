@@ -18,6 +18,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 
 /** A running container and how to reach it. */
 export interface StartedService {
@@ -174,11 +175,26 @@ async function loadTestcontainers(): Promise<Testcontainers> {
   }
 }
 
-/** What a container is, for "is the one with this name the same?" — a short hash. */
-function configOf(spec: ContainerSpec): string {
+/**
+ * What a container is, for "is the one with this name the same?" — a short
+ * hash. The Testcontainers version is part of it: its own reuse hash changes
+ * with the version, so an upgrade must count as a new config.
+ */
+export function configOf(spec: ContainerSpec, testcontainersVersion: string): string {
   const { image, port, env, entrypoint, command, tmpfs, hostPort } = spec
   return createHash('sha256')
-    .update(JSON.stringify({ image, port, env, entrypoint, command, tmpfs, hostPort }))
+    .update(
+      JSON.stringify({
+        image,
+        port,
+        env,
+        entrypoint,
+        command,
+        tmpfs,
+        hostPort,
+        testcontainersVersion,
+      }),
+    )
     .digest('hex')
     .slice(0, 16)
 }
@@ -216,8 +232,9 @@ async function clearName(tc: Testcontainers, name: string, config: string): Prom
   console.warn(`@forinda/kickjs-testing: replacing ${name} (config changed)`)
 }
 
+/** Another run holds the name, or started the container a moment ago (Docker's 409 / 304). */
 const isNameConflict = (err: unknown) =>
-  /already in use|Conflict/i.test(String((err as Error)?.message))
+  /already in use|Conflict|already started|304/i.test(String((err as Error)?.message))
 
 /**
  * Start any container and return how to reach it. With a `name` it's reused:
@@ -227,35 +244,35 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
   const tc = await loadTestcontainers()
   const { GenericContainer, Wait } = tc
   const reused = reuseEnabled(spec.reuse, spec.name)
-  const config = configOf(spec)
-  let container = new GenericContainer(spec.image)
-    .withExposedPorts(spec.hostPort ? { container: spec.port, host: spec.hostPort } : spec.port)
-    .withLabels({
-      [TEST_LABEL]: 'true',
-      [CONFIG_LABEL]: config,
-      ...(reused ? { [NAME_LABEL]: spec.name! } : {}),
-    })
-  if (spec.env) container = container.withEnvironment(spec.env)
-  if (spec.entrypoint) container = container.withEntrypoint(spec.entrypoint)
-  if (spec.command) container = container.withCommand(spec.command)
-  if (spec.tmpfs) container = container.withTmpFs(spec.tmpfs)
-  if (reused) {
-    // A restarted container's old logs already say "ready": wait for its port.
-    container = container
-      .withName(spec.name!)
-      .withReuse()
-      .withWaitStrategy(Wait.forListeningPorts())
-    await clearName(tc, spec.name!, config)
-  } else if (spec.waitFor) {
-    container = container.withWaitStrategy(
-      Wait.forLogMessage(spec.waitFor.log, spec.waitFor.times ?? 1),
-    )
+  const config = configOf(spec, testcontainersVersion())
+  // A fresh builder per attempt: start() changes a builder (it adds the reuse
+  // hash to its labels), so a second start() on it would never find the
+  // container another run just created.
+  const build = () => {
+    let container = new GenericContainer(spec.image)
+      .withExposedPorts(spec.hostPort ? { container: spec.port, host: spec.hostPort } : spec.port)
+      .withLabels({
+        [TEST_LABEL]: 'true',
+        [CONFIG_LABEL]: config,
+        ...(reused ? { [NAME_LABEL]: spec.name! } : {}),
+      })
+    if (spec.env) container = container.withEnvironment(spec.env)
+    if (spec.entrypoint) container = container.withEntrypoint(spec.entrypoint)
+    if (spec.command) container = container.withCommand(spec.command)
+    if (spec.tmpfs) container = container.withTmpFs(spec.tmpfs)
+    if (reused) {
+      // A restarted container's old logs already say "ready": wait for its port.
+      return container.withName(spec.name!).withReuse().withWaitStrategy(Wait.forListeningPorts())
+    }
+    if (spec.waitFor) {
+      container = container.withWaitStrategy(
+        Wait.forLogMessage(spec.waitFor.log, spec.waitFor.times ?? 1),
+      )
+    }
+    return container
   }
-  const started = await container.start().catch((err: unknown) => {
-    // Two runs raced to create the name: the other won, so attach to it.
-    if (reused && isNameConflict(err)) return container.start()
-    throw err
-  })
+  if (reused) await clearName(tc, spec.name!, config)
+  const started = await startWithRetry(build, reused)
   const host = started.getHost()
   const port = started.getMappedPort(spec.port)
   return {
@@ -266,6 +283,36 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
     stop: async () => {
       if (!reused) await started.stop()
     },
+  }
+}
+
+/**
+ * Start, and when another run is creating (or starting) the same named
+ * container at that moment, try again with a fresh builder — which then
+ * finds that container and attaches to it.
+ */
+async function startWithRetry(
+  build: () => InstanceType<Testcontainers['GenericContainer']>,
+  reused: boolean,
+  attempts = 3,
+): Promise<import('testcontainers').StartedTestContainer> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await build().start()
+    } catch (err) {
+      if (!reused || attempt >= attempts || !isNameConflict(err)) throw err
+      await new Promise((r) => setTimeout(r, 250 * attempt))
+    }
+  }
+}
+
+/** The installed Testcontainers' version (`'unknown'` when it can't be read). */
+function testcontainersVersion(): string {
+  try {
+    return (createRequire(import.meta.url)('testcontainers/package.json') as { version: string })
+      .version
+  } catch {
+    return 'unknown'
   }
 }
 

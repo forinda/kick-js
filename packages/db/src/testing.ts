@@ -79,7 +79,19 @@ export interface ServerTestDbOptions<S> extends Partial<TestDbOptions<S>> {
   connectionString?: string
   /** Allow a server URL whose database name doesn't contain `test`. */
   allowNonTestDatabase?: boolean
+  /**
+   * How long a file waits for another file building the same template
+   * (default 120 s). Keep your test runner's hook timeout above it.
+   */
+  lockWaitSeconds?: number
 }
+
+/** Waiting for the template lock took too long: say what it was waiting for. */
+const lockTimedOut = (template: string, seconds: number) =>
+  new Error(
+    `@forinda/kickjs-db/testing: waited ${seconds}s for the lock on ${template} — another test file is ` +
+      'building that template. Raise lockWaitSeconds (and your hook timeout) if your migrations take longer.',
+  )
 
 /**
  * A short key for what a template holds: the migrations' files, or the
@@ -176,12 +188,25 @@ export async function createPgTestDb<S>(opts: ServerTestDbOptions<S>): Promise<P
       const template = `kick_tpl_${key}`
       // One process builds a template; the rest wait for it, then copy.
       // Copies wait too: Postgres won't copy a database someone is in.
-      await admin.query('select pg_advisory_lock(hashtext($1))', [template])
+      const wait = opts.lockWaitSeconds ?? 120
+      await admin.query(`SET lock_timeout = '${Math.max(1, Math.floor(wait))}s'`)
+      await admin.query('select pg_advisory_lock(hashtext($1))', [template]).catch((err) => {
+        if ((err as { code?: string }).code === '55P03') throw lockTimedOut(template, wait)
+        throw err
+      })
+      await admin.query('RESET lock_timeout')
       try {
-        const { rowCount } = await admin.query('select 1 from pg_database where datname = $1', [
-          template,
-        ])
-        if (!rowCount) await buildPgTemplate(pg, admin, template, urlOf(template), opts)
+        const { rows } = await admin.query<{ note: string | null }>(
+          `select shobj_description(oid, 'pg_database') as note from pg_database where datname = $1`,
+          [template],
+        )
+        // A template is finished once its note is written — last, after the
+        // migrations. One without it is what a killed build left: rebuild.
+        const finished = rows[0]?.note?.startsWith('kick_tpl created ') ?? false
+        if (!finished) {
+          if (rows.length) await admin.query(`DROP DATABASE IF EXISTS "${template}" WITH (FORCE)`)
+          await buildPgTemplate(pg, admin, template, urlOf(template), opts)
+        }
         await admin.query(`CREATE DATABASE "${name}" TEMPLATE "${template}"`)
       } finally {
         await admin.query('select pg_advisory_unlock(hashtext($1))', [template])
@@ -285,6 +310,20 @@ async function sweepPg(admin: import('pg').Client): Promise<void> {
     if (!m) continue
     const at = Date.parse(m[2]!)
     if (Number.isNaN(at) || now - at < SWEEP_AFTER[m[1] as 'kick_test' | 'kick_tpl']) continue
+    if (m[1] === 'kick_tpl') {
+      // A template only under its lock: another file may be about to copy it.
+      const { rows: got } = await admin.query<{ ok: boolean }>(
+        'select pg_try_advisory_lock(hashtext($1)) as ok',
+        [datname],
+      )
+      if (!got[0]?.ok) continue
+      try {
+        await admin.query(`DROP DATABASE IF EXISTS "${datname}"`).catch(() => {})
+      } finally {
+        await admin.query('select pg_advisory_unlock(hashtext($1))', [datname])
+      }
+      continue
+    }
     // No FORCE: one still in use (another run's) fails, and is left alone.
     await admin.query(`DROP DATABASE IF EXISTS "${datname}"`).catch(() => {})
   }
@@ -341,14 +380,22 @@ export async function createMysqlTestDb<S>(opts: ServerTestDbOptions<S>): Promis
         dialect: 'mysql',
       })
       const template = `kick_tpl_${key}`
-      await admin.query('SELECT GET_LOCK(?, 120)', [template])
+      const wait = opts.lockWaitSeconds ?? 120
+      const [locked] = await admin.query('SELECT GET_LOCK(?, ?) AS got', [template, wait])
+      // 1: ours. 0: timed out. NULL: an error. Only 1 may go on.
+      if (Number((locked as Array<{ got: number | null }>)[0]?.got) !== 1) {
+        throw lockTimedOut(template, wait)
+      }
       try {
-        const [found] = await admin.query(
-          'SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
-          [template],
-        )
-        if (!(found as unknown[]).length)
+        // Finished once its registry row is written — last, after the
+        // migrations. A schema without one is what a killed build left.
+        const [done] = await admin.query(`SELECT 1 FROM \`${MYSQL_META}\`.dbs WHERE name = ?`, [
+          template,
+        ])
+        if (!(done as unknown[]).length) {
+          await admin.query(`DROP DATABASE IF EXISTS \`${template}\``)
           await buildMysql(mysql, admin, template, urlOf(template), opts, true)
+        }
         if (await mysqlHasProgrammables(admin, template)) {
           // Views, triggers and routines don't copy with CREATE TABLE … LIKE.
           await buildMysql(mysql, admin, name, urlOf(name), opts, false)
@@ -530,8 +577,18 @@ async function sweepMysql(admin: MysqlConnection): Promise<void> {
   for (const { name, created_at } of rows as Array<{ name: string; created_at: number }>) {
     const kind = name.startsWith('kick_tpl_') ? 'kick_tpl' : 'kick_test'
     if (now - Number(created_at) < SWEEP_AFTER[kind] || inUse.has(name)) continue
-    await admin.query(`DROP DATABASE IF EXISTS \`${name}\``).catch(() => {})
-    await admin.query(`DELETE FROM \`${MYSQL_META}\`.dbs WHERE name = ?`, [name])
+    // A template only under its lock: a copy reads it over another
+    // connection, which PROCESSLIST doesn't show as using it.
+    if (kind === 'kick_tpl') {
+      const [got] = await admin.query('SELECT GET_LOCK(?, 0) AS got', [name])
+      if (Number((got as Array<{ got: number | null }>)[0]?.got) !== 1) continue
+    }
+    try {
+      await admin.query(`DROP DATABASE IF EXISTS \`${name}\``).catch(() => {})
+      await admin.query(`DELETE FROM \`${MYSQL_META}\`.dbs WHERE name = ?`, [name])
+    } finally {
+      if (kind === 'kick_tpl') await admin.query('SELECT RELEASE_LOCK(?)', [name])
+    }
   }
 }
 

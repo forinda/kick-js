@@ -95,6 +95,7 @@ it('…', () =>
 - **Empty databases.** With neither `migrationsDir` nor `schema`, the file gets an empty database, for tests that run migrations or `push` themselves.
 - **MySQL** works the same way: `dialect: 'mysql'`, or `createMysqlTestDb`, with `KICK_TEST_MYSQL_URL` / `inject('mysql')`. MySQL has no template databases, so each copy re-creates the template's tables, rows and foreign keys. A template with views, triggers or routines is migrated per file instead.
 - **Only test servers.** The helpers refuse a server URL whose database name doesn't contain `test`, so they can't create databases next to your development data. Pass `allowNonTestDatabase: true` to override.
+- **The first file builds the template.** The other files wait for it, up to `lockWaitSeconds` (default 120). Keep Vitest's `hookTimeout` above how long your migrations take: `test: { hookTimeout: 60_000 }`. A build that's interrupted (Ctrl-C, a timed-out hook) is detected and rebuilt by the next run.
 - **Leftovers clean themselves up.** A crashed run's databases are dropped by a later run: `kick_test_*` after 6 hours, templates after 24. A database still in use is left alone.
 
 Without Vitest, or to manage the lifecycle yourself, use the functions underneath:

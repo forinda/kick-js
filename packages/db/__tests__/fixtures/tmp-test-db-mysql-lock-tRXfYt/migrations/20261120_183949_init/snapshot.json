@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "dialect": "mysql",
+  "tables": {
+    "posts": {
+      "name": "posts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "nullable": false,
+          "default": null,
+          "primaryKey": true
+        },
+        "authorId": {
+          "name": "authorId",
+          "type": "integer",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        }
+      },
+      "indexes": [],
+      "foreignKeys": [
+        {
+          "name": "posts_authorId_fk",
+          "columns": [
+            "authorId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "nullable": false,
+          "default": null,
+          "primaryKey": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        }
+      },
+      "indexes": [],
+      "foreignKeys": [],
+      "checks": []
+    }
+  }
+}

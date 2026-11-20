@@ -1,6 +1,6 @@
 /** createMysqlTestDb: per-file databases on a shared MySQL, from a template migrated once. */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, cp, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
@@ -19,7 +19,7 @@ vi.mock('../../src/migrate/runner', async (orig) => {
   }
 })
 
-const { createMysqlTestDb } = await import('@forinda/kickjs-db/testing')
+const { createMysqlTestDb, templateKey } = await import('@forinda/kickjs-db/testing')
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 let container: StartedMySqlContainer
@@ -152,5 +152,36 @@ describe('createMysqlTestDb', () => {
     expect(left).toContain('kick_test_recent')
     await holder.end()
     await e.drop()
+  })
+})
+
+describe('createMysqlTestDb — review fixes', () => {
+  async function variant(tag: string) {
+    const fresh = await mkdtemp(path.join(here, `../fixtures/tmp-test-db-mysql-${tag}-`))
+    const copy = path.join(fresh, 'migrations')
+    await cp(migrationsDir, copy, { recursive: true })
+    const id = (await readdir(copy)).find((f) => !f.startsWith('_') && !f.endsWith('.json'))!
+    await appendFile(path.join(copy, id, 'up.sql'), `\n-- ${tag}\n`)
+    return { fresh, copy, key: await templateKey({ migrationsDir: copy, dialect: 'mysql' }) }
+  }
+
+  it('rebuilds a template a killed run left half-built', async () => {
+    const { fresh, copy, key } = await variant('half')
+    await query(`create database kick_tpl_${key}`) // no registry row: never finished
+    const t = await createMysqlTestDb({ migrationsDir: copy, connectionString: server })
+    expect(await tablesIn(schemaOf(t.connectionString))).toEqual(expect.arrayContaining(['users']))
+    await t.drop()
+    await rm(fresh, { recursive: true, force: true })
+  })
+
+  it('fails, naming the lock, when the template lock times out', async () => {
+    const { fresh, copy, key } = await variant('lock')
+    const holder = await createConnection({ uri: server })
+    await holder.query('select get_lock(?, 0)', [`kick_tpl_${key}`])
+    await expect(
+      createMysqlTestDb({ migrationsDir: copy, connectionString: server, lockWaitSeconds: 1 }),
+    ).rejects.toThrow(/lock.*kick_tpl_/i)
+    await holder.end()
+    await rm(fresh, { recursive: true, force: true })
   })
 })
