@@ -17,7 +17,7 @@ beforeAll(async () => (db = await createTestDb({ schema })))
 afterAll(() => db.destroy())
 ```
 
-Each call is a separate database, so test files never see each other's rows. It needs `better-sqlite3` installed. This works for any schema SQLite can express; Postgres-only column types (`tsvector`, `vector`, enums, …) need a real Postgres — see [below](#against-real-postgres).
+Each call is a separate database, so test files never see each other's rows. It needs `better-sqlite3` installed. This works for any schema SQLite can express; Postgres-only column types (`tsvector`, `vector`, enums, …) need a real Postgres — see [below](#against-a-real-server).
 
 If your app runs on SQLite, apply your actual migrations instead, so tests run the same SQL production does:
 
@@ -66,32 +66,50 @@ const res = await request(app.handle.bind(app)).get('/api/v1/users')
 
 Use the entries form (`[[TOKEN, value]]`) — see [Replace a dependency](../testing/http.md#replace-a-dependency-overrides).
 
-## Against real Postgres
+## Against a real server
 
-Integration tests that need Postgres behaviour — Postgres types, `serializable` conflicts, row-level security — need a Postgres server: a CI service container, a local Docker Postgres, or [Testcontainers](https://node.testcontainers.org/). Point `createPgTestDb` at it and each test file gets its own throwaway database on that server, with your schema or migrations applied — well under a second, no container per file:
+Integration tests that need Postgres or MySQL behaviour (Postgres types, `serializable` conflicts, row-level security) need a real server. The fastest setup is one shared container for the whole run, with a throwaway database per test file on it:
 
 ```ts
-import { afterAll, beforeAll } from 'vitest'
-import { createPgTestDb, type PgTestDb } from '@forinda/kickjs-db/testing'
-import * as schema from '@/db/schema'
+// tests/global-setup.ts — one Postgres for the run, reused by the next local run
+import { kickTestServices } from '@forinda/kickjs-testing/vitest'
 
-let pg: PgTestDb<typeof schema>
+export default kickTestServices({ postgres: { name: 'myapp-test-pg' } })
+```
 
-beforeAll(async () => {
-  pg = await createPgTestDb({
-    schema, // or migrationsDir: 'db/migrations'
-    connectionString: process.env.TEST_DATABASE_URL!, // a database you may CREATE DATABASE from
-  })
-})
-afterAll(() => pg.drop()) // closes the client and drops the database
+```ts
+// any test file
+import { useTestDb } from '@forinda/kickjs-db/testing/vitest'
+
+const t = useTestDb({ migrationsDir: 'db/migrations' }) // or { schema }
 
 it('…', () =>
-  rolledBack(pg.db, async () => {
+  rolledBack(t.db, async () => {
     /* … */
   }))
 ```
 
-`pg.connectionString` points at the throwaway database, for code that opens its own pool. It needs `pg` installed. In GitHub Actions, a `services: postgres:` entry gives you the server — see [CI and Deployment](./ci-deploy.md).
+`useTestDb` creates the file's database before its tests and drops it after. It finds the server through `kickTestServices` (`inject('postgres')`), or `KICK_TEST_POSTGRES_URL`. With no server it uses in-memory SQLite. See [Large Suites](../testing/large-suites.md#reused-containers) for the services side.
+
+- **Migrations run once.** The first file migrates a template database (`kick_tpl_<hash of your migrations>`). Every file's database is a copy of it, so creating one stays well under a second however many migrations you have. A change to the migrations makes a new template.
+- **Empty databases.** With neither `migrationsDir` nor `schema`, the file gets an empty database, for tests that run migrations or `push` themselves.
+- **MySQL** works the same way: `dialect: 'mysql'`, or `createMysqlTestDb`, with `KICK_TEST_MYSQL_URL` / `inject('mysql')`. MySQL has no template databases, so each copy re-creates the template's tables, rows and foreign keys. A template with views, triggers or routines is migrated per file instead.
+- **Only test servers.** The helpers refuse a server URL whose database name doesn't contain `test`, so they can't create databases next to your development data. Pass `allowNonTestDatabase: true` to override.
+- **Leftovers clean themselves up.** A crashed run's databases are dropped by a later run: `kick_test_*` after 6 hours, templates after 24. A database still in use is left alone.
+
+Without Vitest, or to manage the lifecycle yourself, use the functions underneath:
+
+```ts
+import { createPgTestDb, type PgTestDb } from '@forinda/kickjs-db/testing'
+
+let pg: PgTestDb<typeof schema>
+beforeAll(async () => {
+  pg = await createPgTestDb({ migrationsDir: 'db/migrations' }) // connectionString defaults to KICK_TEST_POSTGRES_URL
+})
+afterAll(() => pg.drop()) // closes the client and drops the database
+```
+
+`pg.connectionString` points at the throwaway database, for code that opens its own pool. You need `pg` installed (or `mysql2` for MySQL). In GitHub Actions, a `services: postgres:` entry gives you the server; see [CI and Deployment](./ci-deploy.md).
 
 ## Asserting database errors
 
