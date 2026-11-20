@@ -9,6 +9,7 @@ import type { SchemaToTypes } from './client/schema-types'
 import { diff } from './diff/engine'
 import { emitPg } from './emit/pg'
 import { emitSqlite } from './emit/sqlite'
+import { CODE_MIGRATION_FILES } from './migrate/code-migration'
 import { migrateLatest } from './migrate/runner'
 import { extractSnapshot } from './snapshot/extract'
 import type { SchemaSnapshot } from './snapshot/types'
@@ -94,6 +95,20 @@ const lockTimedOut = (template: string, seconds: number) =>
   )
 
 /**
+ * The files a migration run reads. Others (meta.json, whose review flag flips,
+ * editor and OS files) would rebuild the template for nothing. Code a
+ * migration.ts imports from outside the folder isn't hashed: change the
+ * migration itself, or drop the template (`kick_tpl_*`), when it changes.
+ */
+const MIGRATION_INPUTS = new Set([
+  'up.sql',
+  'down.sql',
+  'snapshot.json',
+  '_journal.json',
+  ...CODE_MIGRATION_FILES,
+])
+
+/**
  * A short key for what a template holds: the migrations' files, or the
  * schema's snapshot when there are none — so a change makes a new template.
  */
@@ -116,7 +131,7 @@ export async function templateKey(input: {
       })) {
         const child = rel ? `${rel}/${e.name}` : e.name
         if (e.isDirectory()) await walk(child)
-        else if (e.isFile()) files.push(child)
+        else if (e.isFile() && MIGRATION_INPUTS.has(e.name)) files.push(child)
       }
     }
     await walk('')

@@ -135,9 +135,9 @@ Both helpers need Docker and the `testcontainers` package (`pnpm add -D testcont
 A named service is **reused**: the next local run attaches to the running container instead of starting a new one, so a repeated run starts in well under a second. It also means your machine keeps one container per name, not one per run.
 
 - **It stays up between runs.** `stop()` and the setup's teardown leave a reused container running.
-- **One per name.** If you change its config (image, env, command, port, tmpfs), the old container is replaced next run, if it's stopped. If it's running, the run fails with a message instead: it may belong to another checkout using the same name, so it's never removed automatically. Stop it, or give your suite another name.
+- **One per name.** If you change its config (image, env, command, port, tmpfs), the old container is replaced next run, if it's stopped. If it's running, the run fails with a message instead: it may belong to another checkout using the same name, so it's never removed automatically. Stop it, or give your suite another name. Upgrading `@forinda/kickjs-testing` can change the config too, so after an upgrade a still-running container needs one `kick test:services down`.
 - **CI starts clean.** When `CI` is set, reuse (and naming) are off: each CI run starts fresh containers and removes them afterwards. `reuse: true` forces reuse anyway, `reuse: false` turns it off locally too, and `TESTCONTAINERS_REUSE_ENABLE=false` turns it off for everything.
-- **Cleaning up.** `kick test:services ls` shows the test containers, and `kick test:services down [names…]` stops and removes them. Both only ever touch containers these helpers started (labelled `kickjs.test`). Add the commands to your CLI:
+- **Cleaning up.** `kick test:services ls` shows the test containers, and `kick test:services down [names…]` stops and removes them. Both only ever touch containers these helpers started (labelled `kickjs.test`). With no names, `down` also removes the unnamed containers of a run still going, so don't run it while tests do. Add the commands to your CLI:
 
 ```ts
 // kick.config.ts

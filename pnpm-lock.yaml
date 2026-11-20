@@ -748,14 +748,13 @@ importers:
         version: 4.6.7
 
   packages/testing:
-    dependencies:
-      '@forinda/kickjs-cli-kit':
-        specifier: workspace:*
-        version: link:../cli-kit
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../kickjs
+      '@forinda/kickjs-cli-kit':
+        specifier: workspace:*
+        version: link:../cli-kit
       '@swc/core':
         specifier: ^1.16.22
         version: 1.16.22
