@@ -36,6 +36,7 @@ import { readValidatorExports, VALIDATORS_TAG } from './validators'
 const VALIDATE_TAG = 'kick-validate'
 const VALIDATE_HASH = fnv1a(VALIDATE_RUNTIME)
 import { parse } from './parse/template'
+import { createTranslator, readCatalogs, type Messages } from './i18n'
 import { BUILTIN_PIPES, OVERRIDABLE_PIPES, type PipeEnv } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
 import { render, RenderError, type Pipe } from './render/render'
@@ -103,6 +104,13 @@ export interface ViewsOptions {
   validatorsFile?: string
   pipes?: Record<string, Pipe | EnvPipe>
   /**
+   * Message catalogues for `t`: locale → dot key → message. Default: read from
+   * `<viewsDir>/locales/*.json` (the Vite plugin bundles them as `messages`).
+   */
+  messages?: Messages
+  /** The locale a message falls back to. Default: `locale`, else `en-US`. */
+  messagesLocale?: string
+  /**
    * The layout a page gets when it declares none: one name, or folder prefix →
    * layout (`{ admin: 'layouts/admin', '': 'layouts/main' }`; the longest prefix wins).
    */
@@ -163,6 +171,8 @@ export interface Views {
   readonly clientScriptPath: string
   /** Whether `name` is one of these views — `ctx.render` falls through to another engine when not. */
   has(name: string): Promise<boolean>
+  /** A message from the catalogues, as `t` prints it: for controllers, emails and flash messages. */
+  t(key: string, params?: Record<string, unknown>, opts?: { locale?: string }): Promise<string>
 }
 
 /** A loader over a build's bundle; throws when the bundle's format version doesn't match this runtime. */
@@ -329,6 +339,31 @@ export function createViews(options: ViewsOptions = {}): Views {
       () => (loader = undefined),
     ))
 
+  const defaultLocale = options.messagesLocale ?? options.locale ?? 'en-US'
+  const readMessages = async (): Promise<Messages> =>
+    options.messages ??
+    (bundle ? {} : ((await readCatalogs(`${options.viewsDir ?? 'src/views'}/locales`)) ?? {}))
+  let translator: Promise<{ json: string; t: ReturnType<typeof createTranslator> }> | undefined
+  /** The message lookup; in dev the catalogues are re-read, keeping the translator while they're unchanged. */
+  const getTranslator = async (): Promise<ReturnType<typeof createTranslator>> => {
+    const make = async () => {
+      const messages = await readMessages()
+      return {
+        json: JSON.stringify(messages),
+        t: createTranslator(messages, { defaultLocale, warn }),
+      }
+    }
+    translator ??= settle(make(), () => (translator = undefined))
+    const current = await translator
+    if (!dev || options.messages) return current.t
+    const messages = await readMessages()
+    const json = JSON.stringify(messages)
+    if (json === current.json) return current.t
+    const next = { json, t: createTranslator(messages, { defaultLocale, warn }) }
+    translator = Promise.resolve(next)
+    return next.t
+  }
+
   const getPipes = (): Promise<Record<string, Pipe | EnvPipe>> =>
     (appPipes ??= settle(
       options.pipes || bundle
@@ -429,6 +464,8 @@ export function createViews(options: ViewsOptions = {}): Views {
 
   const views: Views = {
     has,
+    t: async (key, params = {}, o = {}) =>
+      (await getTranslator())(o.locale ?? options.locale ?? 'en-US', key, params),
     async render(name: string, data: object = {}, opts: RenderOptions & { ctx?: unknown } = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
       if (!(await has(name))) throw new Error(`template '${name}' not found`)
@@ -446,6 +483,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       const shared = options.share ? await options.share(opts.ctx as ShareContext | undefined) : {}
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
+      const tr = await getTranslator()
       const used = new Map<string, CheckedTemplate>()
       let validation = false
       // A controller's own `$errors` / `$old` (a re-render) win over the session's.
@@ -465,7 +503,12 @@ export function createViews(options: ViewsOptions = {}): Views {
           locale,
           timeZone,
           strict: options.strict ?? false,
-          pipes: pipesFor(await getPipes(), { locale, timeZone, urlFor: urlForOf(opts.ctx) }),
+          pipes: pipesFor(await getPipes(), {
+            locale,
+            timeZone,
+            urlFor: urlForOf(opts.ctx),
+            translate: (key, params) => tr(locale, key, params),
+          }),
           warn,
           resolve,
           layoutFor,

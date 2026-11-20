@@ -53,6 +53,8 @@ export interface PipeEnv {
   timeZone: string
   /** The request's `ctx.urlFor` (params in path order), for `kvRoute`. Absent outside a request. */
   urlFor?: (name: string, params: Array<string | number>) => string
+  /** The render's message lookup, for `t`; absent outside `createViews` (then `t` prints the key). */
+  translate?: (key: string, params: Record<string, unknown>) => string
 }
 
 const DATE_FORMATS: Record<string, Intl.DateTimeFormatOptions> = {
@@ -246,6 +248,12 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
             maximumFractionDigits: 1,
           }),
       ).format(n)
+    },
+    // `{{ 'cart.items' | t:'count':n }}`: name/value pairs; a dangling name is ignored.
+    t: (key, ...pairs) => {
+      const params: Record<string, unknown> = {}
+      for (let i = 0; i + 1 < pairs.length; i += 2) params[str(pairs[i])] = pairs[i + 1]
+      return env.translate ? env.translate(str(key), params) : str(key)
     },
     // ── reserved (BUILTIN_PIPES) ──
     uppercase: (v) => str(v).toUpperCase(),

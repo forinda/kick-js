@@ -116,6 +116,8 @@ export function createTranslator(
     }
     if (!found) {
       if (!warned.has(`${locale}\0${key}`)) {
+        // Locales and keys can come from requests: a capped set, like the Intl caches.
+        if (warned.size >= 1024) warned.clear()
         warned.add(`${locale}\0${key}`)
         opts.warn?.(`no message '${key}' for ${locale}`)
       }
