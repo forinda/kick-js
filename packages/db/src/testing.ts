@@ -290,6 +290,251 @@ async function sweepPg(admin: import('pg').Client): Promise<void> {
   }
 }
 
+/** A throwaway MySQL database: the same shape as {@link PgTestDb}. */
+export type MysqlTestDb<S> = PgTestDb<S>
+
+/** Where creation times live for the MySQL sweep (MySQL keeps no comment on a database). */
+const MYSQL_META = 'kicktest_meta'
+let mysqlSwept = false
+
+type MysqlConnection = import('mysql2/promise').Connection
+
+/**
+ * A throwaway database on an existing MySQL server — a shared test container
+ * (`kickTestServices`), a CI service, a local Docker MySQL — with the same
+ * options as {@link createPgTestDb}. MySQL has no template databases, so the
+ * migrations run once into one and each file's database copies its tables,
+ * rows and foreign keys; a template with views, triggers or routines is
+ * migrated per file instead. Needs `mysql2`.
+ */
+export async function createMysqlTestDb<S>(opts: ServerTestDbOptions<S>): Promise<MysqlTestDb<S>> {
+  const server = opts.connectionString ?? process.env.KICK_TEST_MYSQL_URL
+  if (!server) {
+    throw new Error(
+      '@forinda/kickjs-db/testing: createMysqlTestDb needs a connectionString (or KICK_TEST_MYSQL_URL, set by kickTestServices)',
+    )
+  }
+  guardTestServer(server, opts.allowNonTestDatabase)
+  const mysql = await import('mysql2/promise')
+  const name = `kick_test_${randomBytes(6).toString('hex')}`
+  const urlOf = (db: string) => {
+    const url = new URL(server)
+    url.pathname = `/${db}`
+    return url.toString()
+  }
+
+  const admin = await mysql.createConnection({ uri: server, multipleStatements: true })
+  try {
+    await admin.query(`CREATE DATABASE IF NOT EXISTS \`${MYSQL_META}\``)
+    await admin.query(
+      `CREATE TABLE IF NOT EXISTS \`${MYSQL_META}\`.dbs (name varchar(64) PRIMARY KEY, created_at bigint NOT NULL)`,
+    )
+    if (!mysqlSwept) {
+      mysqlSwept = true
+      await sweepMysql(admin)
+    }
+    if (opts.migrationsDir || opts.schema) {
+      const key = await templateKey({
+        migrationsDir: opts.migrationsDir,
+        schema: opts.schema,
+        casing: opts.casing,
+        dialect: 'mysql',
+      })
+      const template = `kick_tpl_${key}`
+      await admin.query('SELECT GET_LOCK(?, 120)', [template])
+      try {
+        const [found] = await admin.query(
+          'SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
+          [template],
+        )
+        if (!(found as unknown[]).length)
+          await buildMysql(mysql, admin, template, urlOf(template), opts, true)
+        if (await mysqlHasProgrammables(admin, template)) {
+          // Views, triggers and routines don't copy with CREATE TABLE … LIKE.
+          await buildMysql(mysql, admin, name, urlOf(name), opts, false)
+        } else {
+          await copyMysql(admin, template, name)
+        }
+      } finally {
+        await admin.query('SELECT RELEASE_LOCK(?)', [template])
+      }
+    } else {
+      await admin.query(`CREATE DATABASE \`${name}\``)
+    }
+    await admin.query(`INSERT INTO \`${MYSQL_META}\`.dbs VALUES (?, ?)`, [name, Date.now()])
+  } finally {
+    await admin.end()
+  }
+
+  const connectionString = urlOf(name)
+  const { mysqlDialect } = await import('./mysql')
+  const pool = mysql.createPool({ uri: connectionString })
+  const db = createDbClient({
+    schema: opts.schema ?? {},
+    dialect: mysqlDialect({ pool }),
+    casing: opts.casing,
+    events: true,
+  }) as never as KickDbClient<SchemaToTypes<S>>
+  return {
+    db,
+    connectionString,
+    async drop() {
+      await db.destroy()
+      const admin = await mysql.createConnection({ uri: server })
+      try {
+        await admin.query(`DROP DATABASE IF EXISTS \`${name}\``)
+        await admin.query(`DELETE FROM \`${MYSQL_META}\`.dbs WHERE name = ?`, [name])
+      } finally {
+        await admin.end()
+      }
+    },
+  }
+}
+
+/** Create `db` and apply the migrations (or the schema); a failed template is dropped. */
+async function buildMysql<S>(
+  mysql: typeof import('mysql2/promise'),
+  admin: MysqlConnection,
+  db: string,
+  url: string,
+  opts: ServerTestDbOptions<S>,
+  template: boolean,
+): Promise<void> {
+  await admin.query(`CREATE DATABASE \`${db}\``)
+  try {
+    const pool = mysql.createPool({ uri: url, multipleStatements: true })
+    try {
+      if (opts.migrationsDir) {
+        const { mysqlAdapter } = await import('./mysql')
+        await migrateLatest({
+          adapter: mysqlAdapter({ pool }),
+          migrationsDir: opts.migrationsDir,
+          requireReviewed: false,
+          driftCheck: 'ignore',
+        })
+      } else {
+        const { emitMysql } = await import('./emit/mysql')
+        const empty: SchemaSnapshot = { version: 1, dialect: 'mysql', tables: {} }
+        await pool.query(
+          emitMysql(
+            diff(
+              empty,
+              extractSnapshot(opts.schema as Record<string, unknown>, 'mysql', {
+                casing: opts.casing,
+              }),
+            ),
+          ),
+        )
+      }
+    } finally {
+      await pool.end()
+    }
+    if (template)
+      await admin.query(`INSERT INTO \`${MYSQL_META}\`.dbs VALUES (?, ?)`, [db, Date.now()])
+  } catch (err) {
+    await admin.query(`DROP DATABASE IF EXISTS \`${db}\``).catch(() => {})
+    throw err
+  }
+}
+
+async function mysqlHasProgrammables(admin: MysqlConnection, db: string): Promise<boolean> {
+  const [rows] = await admin.query(
+    `SELECT (SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA = ?)
+          + (SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ?)
+          + (SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ?) AS n`,
+    [db, db, db],
+  )
+  return Number((rows as Array<{ n: number }>)[0]!.n) > 0
+}
+
+/** `to` as a copy of `from`: each table's structure and rows, then the foreign keys LIKE leaves out. */
+async function copyMysql(admin: MysqlConnection, from: string, to: string): Promise<void> {
+  await admin.query(`CREATE DATABASE \`${to}\``)
+  const [tables] = await admin.query(
+    "SELECT TABLE_NAME AS t FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
+    [from],
+  )
+  const names = (tables as Array<{ t: string }>).map((r) => r.t)
+  await admin.query('SET FOREIGN_KEY_CHECKS = 0')
+  try {
+    for (const t of names) {
+      await admin.query(`CREATE TABLE \`${to}\`.\`${t}\` LIKE \`${from}\`.\`${t}\``)
+      await admin.query(`INSERT INTO \`${to}\`.\`${t}\` SELECT * FROM \`${from}\`.\`${t}\``)
+    }
+    const [fks] = await admin.query(
+      `SELECT k.TABLE_NAME AS t, k.CONSTRAINT_NAME AS c, k.COLUMN_NAME AS col,
+              k.REFERENCED_TABLE_NAME AS rt, k.REFERENCED_COLUMN_NAME AS rcol,
+              r.DELETE_RULE AS del, r.UPDATE_RULE AS upd
+         FROM information_schema.KEY_COLUMN_USAGE k
+         JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+           ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+        WHERE k.TABLE_SCHEMA = ? AND k.REFERENCED_TABLE_NAME IS NOT NULL
+        ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`,
+      [from],
+    )
+    const byKey = new Map<
+      string,
+      {
+        t: string
+        c: string
+        cols: string[]
+        rt: string
+        rcols: string[]
+        del: string
+        upd: string
+      }
+    >()
+    for (const f of fks as Array<{
+      t: string
+      c: string
+      col: string
+      rt: string
+      rcol: string
+      del: string
+      upd: string
+    }>) {
+      const k = `${f.t}\0${f.c}`
+      const e = byKey.get(k) ?? {
+        t: f.t,
+        c: f.c,
+        cols: [],
+        rt: f.rt,
+        rcols: [],
+        del: f.del,
+        upd: f.upd,
+      }
+      e.cols.push(f.col)
+      e.rcols.push(f.rcol)
+      byKey.set(k, e)
+    }
+    const q = (c: string[]) => c.map((x) => `\`${x}\``).join(', ')
+    for (const f of byKey.values()) {
+      await admin.query(
+        `ALTER TABLE \`${to}\`.\`${f.t}\` ADD CONSTRAINT \`${f.c}\` FOREIGN KEY (${q(f.cols)})
+           REFERENCES \`${to}\`.\`${f.rt}\` (${q(f.rcols)}) ON DELETE ${f.del} ON UPDATE ${f.upd}`,
+      )
+    }
+  } finally {
+    await admin.query('SET FOREIGN_KEY_CHECKS = 1')
+  }
+}
+
+/** Drop old test databases and templates, once per process; skip any with a connection. */
+async function sweepMysql(admin: MysqlConnection): Promise<void> {
+  const [rows] = await admin.query(`SELECT name, created_at FROM \`${MYSQL_META}\`.dbs`)
+  const [busy] = await admin.query(
+    'SELECT DISTINCT DB AS db FROM information_schema.PROCESSLIST WHERE DB IS NOT NULL',
+  )
+  const inUse = new Set((busy as Array<{ db: string }>).map((r) => r.db))
+  const now = Date.now()
+  for (const { name, created_at } of rows as Array<{ name: string; created_at: number }>) {
+    const kind = name.startsWith('kick_tpl_') ? 'kick_tpl' : 'kick_test'
+    if (now - Number(created_at) < SWEEP_AFTER[kind] || inUse.has(name)) continue
+    await admin.query(`DROP DATABASE IF EXISTS \`${name}\``).catch(() => {})
+    await admin.query(`DELETE FROM \`${MYSQL_META}\`.dbs WHERE name = ?`, [name])
+  }
+}
+
 const ROLLBACK = Symbol('kickjs-db rolled back')
 
 /**
