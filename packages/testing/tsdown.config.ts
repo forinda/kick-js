@@ -7,6 +7,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     vitest: 'src/vitest.ts',
+    cli: 'src/cli.ts',
   },
   format: ['esm'],
   platform: 'node',
@@ -19,6 +20,8 @@ export default defineConfig({
     'supertest',
     'vitest',
     'testcontainers',
+    '@forinda/kickjs-cli-kit',
+    'commander',
     /^node:/,
   ],
   banner: { js: createBanner(pkg.name, pkg.version) },
