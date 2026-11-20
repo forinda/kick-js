@@ -142,6 +142,9 @@ const PRESETS = {
 /** A preset service for {@link startService}: `'postgres'`, `'redis'` or `'minio'`. */
 export type ServiceKind = keyof typeof PRESETS
 
+/** The preset services, by kind. */
+export const SERVICE_PRESETS: Readonly<Record<ServiceKind, ContainerSpec>> = PRESETS
+
 type Testcontainers = typeof import('testcontainers')
 
 async function loadTestcontainers(): Promise<Testcontainers> {
