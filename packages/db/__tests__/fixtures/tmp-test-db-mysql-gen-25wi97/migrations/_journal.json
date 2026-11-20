@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "dialect": "mysql",
+  "entries": [
+    {
+      "id": "20261120_191616_init",
+      "tag": "init",
+      "hash": "sha256:87f16c7a616a2ee67a4860040501f0c5f4e1fa8f37703ee9b697c08be331ec62",
+      "createdAt": "2026-11-20T19:16:16.892Z"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { PostgresDialect, type Generated } from 'kysely'
 
@@ -11,12 +11,12 @@ interface DB {
   users: { id: Generated<number>; email: string }
 }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 let db: KickDbClient<DB>
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({
     host: container.getHost(),
     port: container.getMappedPort(5432),

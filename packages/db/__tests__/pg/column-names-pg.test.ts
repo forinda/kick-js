@@ -1,17 +1,17 @@
 /** D.21 `.colName()` on Postgres. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { createDbClient, pushSchema } from '@forinda/kickjs-db'
 import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import * as schema from '../setup/column-names-schema'
 import { columnNamesFlow } from '../setup/column-names-flow'
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
   await pushSchema({ adapter: pgAdapter({ pool }), schema })

@@ -6,16 +6,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { appendJournalEntry, computeMigrationHash, migrateLatest } from '@forinda/kickjs-db'
 import { pgAdapter } from '@forinda/kickjs-db/pg'
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
 }, 120_000)

@@ -11,16 +11,16 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 
 import { detectCompositeReferences } from '@forinda/kickjs-db'
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let client: pg.Client
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   client = new pg.Client({
     host: container.getHost(),
     port: container.getMappedPort(5432),

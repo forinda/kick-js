@@ -25,18 +25,18 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 
 import { diff, emitPg, introspectPg, invertChanges } from '@forinda/kickjs-db'
 import type { SchemaSnapshot, TableSnapshot } from '@forinda/kickjs-db'
 import { FIXTURES } from './migration-replay-fixtures'
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let client: pg.Client
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   client = new pg.Client({
     host: container.getHost(),
     port: container.getMappedPort(5432),

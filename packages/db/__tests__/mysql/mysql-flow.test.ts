@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
+import { sharedMysql, type SharedServer } from '../setup/shared-server'
 import { createPool, type Pool } from 'mysql2/promise'
 
 import {
@@ -78,12 +78,12 @@ async function writeMigration(dir: string, id: string, from: SchemaSnapshot, to:
   })
 }
 
-let container: StartedMySqlContainer
+let container: SharedServer
 let pool: Pool
 let migrationsDir: string
 
 beforeAll(async () => {
-  container = await new MySqlContainer('mysql:8.0').start()
+  container = await sharedMysql()
   pool = createPool({
     host: container.getHost(),
     port: container.getPort(),

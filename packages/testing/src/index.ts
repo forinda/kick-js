@@ -604,3 +604,4 @@ export {
   type ServiceOptions,
   type StartedService,
 } from './services'
+export { kickTestServices, type KickTestServices, type TestServiceSetup } from './test-services'

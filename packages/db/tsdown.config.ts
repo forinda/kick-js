@@ -12,6 +12,7 @@ export default defineConfig({
     mysql: 'src/mysql.ts',
     schema: 'src/schema.ts',
     testing: 'src/testing.ts',
+    'testing-vitest': 'src/testing-vitest.ts',
     cli: 'src/cli.ts',
     'devtools-events': 'src/devtools-events.ts',
   },
@@ -21,6 +22,7 @@ export default defineConfig({
   dts: true,
   external: [
     '@forinda/kickjs',
+    'vitest',
     '@forinda/kickjs-devtools-kit',
     '@forinda/kickjs-devtools-kit/bus',
     'kysely',

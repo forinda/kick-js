@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "dialect": "postgres",
+  "tables": {
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "nullable": false,
+          "default": null,
+          "primaryKey": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        }
+      },
+      "indexes": [],
+      "foreignKeys": [],
+      "checks": []
+    }
+  }
+}

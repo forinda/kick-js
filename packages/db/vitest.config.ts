@@ -61,6 +61,11 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'src/mysql.ts'),
       },
       {
+        // Before ./testing: aliases match by prefix.
+        find: '@forinda/kickjs-db/testing/vitest',
+        replacement: path.resolve(__dirname, 'src/testing-vitest.ts'),
+      },
+      {
         find: '@forinda/kickjs-db/testing',
         replacement: path.resolve(__dirname, 'src/testing.ts'),
       },
@@ -90,8 +95,8 @@ export default defineConfig({
     },
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
-    // A client terminated as its container stops mustn't fail the run.
-    setupFiles: ['__tests__/setup/pg-teardown.ts'],
+    // One Postgres and one MySQL for every file (reused locally across runs).
+    globalSetup: ['__tests__/setup/services.ts'],
     globals: false,
     pool: 'threads',
     maxConcurrency: 1,

@@ -96,32 +96,64 @@ export default function setup() {
 
 Give the test database its own credentials too, so a missed override fails at login instead of silently using your development database.
 
-## Containers in CI
+## One container per service: `kickTestServices`
 
-Start real services (Postgres, Redis, a message broker) once per run in Vitest's `globalSetup`, and pass their addresses through `process.env` before any test file imports the app:
+Start each real service (Postgres, MySQL, Redis, MinIO) once for the whole run in Vitest's `globalSetup`, not once per file:
 
 ```ts
 // tests/global-setup.ts
-import { PostgreSqlContainer } from '@testcontainers/postgresql'
+import { kickTestServices } from '@forinda/kickjs-testing'
 
-export default async function setup() {
-  const pg = await new PostgreSqlContainer('postgres:17-alpine').withDatabase('app_test').start()
-  process.env.DATABASE_URL = pg.getConnectionUri()
-  // migrate once, here — not per file
-  return async () => pg.stop()
-}
+export default kickTestServices({
+  postgres: { name: 'myapp-test-pg' },
+  redis: { name: 'myapp-test-redis' },
+})
 ```
 
-Values set here reach the workers, which haven't imported anything yet. That's what makes a run-time value (a random port) work with config that's read once, at import ([Test Environment](./environment.md#how-config-is-read)).
+```ts
+// vitest.config.ts
+export default defineConfig({ test: { globalSetup: ['tests/global-setup.ts'] } })
+```
+
+- **Every service starts at once.** Each URL reaches the test files as `inject('postgres')`, and as `process.env.KICK_TEST_POSTGRES_URL`. The env var works for config read at import ([Test Environment](./environment.md#how-config-is-read)).
+- **Each file needs its own data.** A database per file on the shared server is the usual answer: `useTestDb()` from `@forinda/kickjs-db/testing/vitest` ([Testing with kick/db](../database/testing.md#against-a-real-server)).
+- **Presets:** `postgres` (`postgres:17-alpine`), `mysql` (`mysql:8.4`, as `root`), `redis` (`redis:7-alpine`) and `minio` (an S3-compatible store with an empty `test` bucket). Postgres and MySQL keep their data in memory with disk syncing off, since test data never has to survive a crash.
+- **Overriding a preset:**
+  - `image` picks another tag.
+  - `env` is merged over the preset's, and the URL follows it (`env: { POSTGRES_DB: 'app_test' }` gives `…/app_test`).
+  - `command` replaces the preset's flags.
+  - `tmpfs: false` keeps data on disk.
+  - `hostPort` fixes the host port instead of a random one. Use it only when a tool outside the tests needs a known port: two runs at once then clash on it.
+- **Anything else:** `{ container: { image, port, env, command, waitFor: { log }, url: (host, port, env) => … } }`.
+- **Typing `inject`:** your own keys need declaring: `declare module '@forinda/kickjs-testing' { interface KickTestServices { search: string } }`. Importing `@forinda/kickjs-testing/vitest` anywhere in your tests (`useTestApp` lives there) makes `inject()` know them.
+- **Import it from the package root** in a global setup, as above. A global setup runs outside Vitest's workers, and the root entry doesn't load `vitest`.
+
+Both helpers need Docker and the `testcontainers` package (`pnpm add -D testcontainers`), an optional peer loaded only when you call them.
+
+## Reused containers
+
+A named service is **reused**: the next local run attaches to the running container instead of starting a new one, so a repeated run starts in well under a second. It also means your machine keeps one container per name, not one per run.
+
+- **It stays up between runs.** `stop()` and the setup's teardown leave a reused container running.
+- **One per name.** If you change its config (image, env, command, port, tmpfs), the old container is replaced next run, if it's stopped. If it's running, the run fails with a message instead: it may belong to another checkout using the same name, so it's never removed automatically. Stop it, or give your suite another name.
+- **CI starts clean.** When `CI` is set, reuse (and naming) are off: each CI run starts fresh containers and removes them afterwards. `reuse: true` forces reuse anyway, `reuse: false` turns it off locally too, and `TESTCONTAINERS_REUSE_ENABLE=false` turns it off for everything.
+- **Cleaning up.** `kick test:services ls` shows the test containers, and `kick test:services down [names…]` stops and removes them. Both only ever touch containers these helpers started (labelled `kickjs.test`). Add the commands to your CLI:
+
+```ts
+// kick.config.ts
+import { testServicesCliPlugin } from '@forinda/kickjs-testing/cli'
+
+export default defineConfig({ plugins: [testServicesCliPlugin] })
+```
 
 ## A service per file: `startService()`
 
-When a file needs its own Postgres or Redis — or config read once per run doesn't suit — start it in the file and give the app its address through a [settings section](../configuration.md#supplying-the-value-provide):
+When a file needs its own server (one it changes server-wide, say, with roles or extensions), start it in the file and give the app its address through a [settings section](../configuration.md#supplying-the-value-provide):
 
 ```ts
 import { createTestApp, startService } from '@forinda/kickjs-testing'
 
-const pg = await startService('postgres') // postgres:17-alpine, user/password/db "test"
+const pg = await startService('postgres') // unnamed: a fresh container, stopped by stop()
 afterAll(() => pg.stop())
 
 const { app } = await createTestApp({
@@ -130,9 +162,7 @@ const { app } = await createTestApp({
 })
 ```
 
-`startService('redis')` starts `redis:7-alpine`, and `startService('minio')` starts an S3-compatible MinIO with an empty `test` bucket and the credentials `minioadmin` / `minioadmin` (see [File Storage](../file-storage.md#in-tests)). `{ image }` picks another tag. For anything else, use `startContainer({ image, port, env, entrypoint, command, waitFor: { log }, url: (host, port) => … })`. Each returns `{ url, host, port, stop() }`.
-
-Both need Docker and the `testcontainers` package (`pnpm add -D testcontainers`); it's an optional peer, loaded only when you call them. A container takes seconds to start — for many files, prefer one per run in `globalSetup` (above).
+`startService` takes the same options as a `kickTestServices` entry (`name`, `reuse`, `image`, `env`, `command`, `tmpfs`, `hostPort`). `startContainer({ image, port, … })` starts anything else. Each returns `{ url, host, port, reused, stop() }`. A container takes seconds to start, so prefer one per run (above) when you can.
 
 ## Keep tests independent
 

@@ -3,7 +3,7 @@
  * applies and enforces, and introspection reads it back without drift.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
+import { sharedMysql, type SharedServer } from '../setup/shared-server'
 import { createPool, type Pool } from 'mysql2/promise'
 import {
   checkDrift,
@@ -23,11 +23,11 @@ const users = table('users', { id: serial().primaryKey(), email: varchar(255).no
   hashed: index('users_email_hash').on(t.email).using('hash'),
 }))
 
-let container: StartedMySqlContainer
+let container: SharedServer
 let pool: Pool
 
 beforeAll(async () => {
-  container = await new MySqlContainer('mysql:8.0').start()
+  container = await sharedMysql()
   pool = createPool({
     host: container.getHost(),
     port: container.getPort(),

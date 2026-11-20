@@ -4,7 +4,7 @@
  * the top level — `timestamptz`, `timestamp` and `date` alike.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import {
   createDbClient,
@@ -38,11 +38,11 @@ const eventRelations = relations(events, ({ one }) => ({
 }))
 const schema = { users, events, userRelations, eventRelations }
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
   const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }

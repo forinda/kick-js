@@ -41,6 +41,10 @@
       "import": "./dist/mysql.mjs",
       "types": "./dist/mysql.d.mts"
     },
+    "./testing/vitest": {
+      "import": "./dist/testing-vitest.mjs",
+      "types": "./dist/testing-vitest.d.mts"
+    },
     "./testing": {
       "import": "./dist/testing.mjs",
       "types": "./dist/testing.d.mts"
@@ -84,7 +88,8 @@
     "@forinda/kickjs-devtools-kit": ">=7.0.0",
     "better-sqlite3": ">=12.0.0",
     "mysql2": ">=3.0.0",
-    "pg": ">=8.11.0"
+    "pg": ">=8.11.0",
+    "vitest": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "@electric-sql/pglite": {
@@ -101,6 +106,9 @@
     },
     "pg": {
       "optional": true
+    },
+    "vitest": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -108,6 +116,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@forinda/kickjs-schema": "workspace:*",
+    "@forinda/kickjs-testing": "workspace:*",
     "@libsql/client": "^0.18.0",
     "@libsql/kysely-libsql": "^0.4.1",
     "@testcontainers/mysql": "^12.2.1",

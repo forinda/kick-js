@@ -91,3 +91,32 @@ describe.skipIf(!enabled)('startService', () => {
     expect(redis.url).toBe(`redis://${redis.host}:${redis.port}`)
   })
 })
+
+describe.skipIf(!enabled)('startService — named and reused', () => {
+  const name = `kick-testing-reuse-${process.pid}`
+  const query = async (url: string) => {
+    const client = new pg.Client({ connectionString: url })
+    await client.connect()
+    try {
+      return (await client.query('select 1 as one')).rows[0].one
+    } finally {
+      await client.end()
+    }
+  }
+  afterAll(async () => {
+    const { execFileSync } = await import('node:child_process')
+    execFileSync('docker', ['rm', '-f', '-v', name], { stdio: 'ignore' })
+  })
+
+  it('attaches the second time, and after the container was stopped', async () => {
+    const first = await startService('postgres', { name, reuse: true })
+    expect(await query(first.url)).toBe(1)
+    const second = await startService('postgres', { name, reuse: true })
+    expect(second.reused).toBe(true)
+    expect(second.port).toBe(first.port)
+    const { execFileSync } = await import('node:child_process')
+    execFileSync('docker', ['stop', name], { stdio: 'ignore' })
+    const third = await startService('postgres', { name, reuse: true })
+    expect(await query(third.url)).toBe(1)
+  }, 180_000)
+})

@@ -36,7 +36,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { sharedPostgres, type SharedServer } from '../setup/shared-server'
 import pg from 'pg'
 import { SafeNullComparisonPlugin } from 'kysely'
 
@@ -50,7 +50,7 @@ import {
 } from '@forinda/kickjs-db'
 import { pgDialect } from '@forinda/kickjs-db/pg'
 
-let container: StartedPostgreSqlContainer
+let container: SharedServer
 let pool: pg.Pool
 
 const users = table('users', {
@@ -61,7 +61,7 @@ const users = table('users', {
 const schema = { users }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await sharedPostgres()
   pool = new pg.Pool({
     host: container.getHost(),
     port: container.getMappedPort(5432),

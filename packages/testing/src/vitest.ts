@@ -13,6 +13,13 @@ import type { Application, Container } from '@forinda/kickjs'
 import { createTestApp, type CreateTestAppOptions } from './index'
 import type { TestClient, TestClientOptions } from './client'
 import { resetTestState } from './reset'
+import type { KickTestServices } from './test-services'
+
+export { kickTestServices, type KickTestServices, type TestServiceSetup } from './test-services'
+
+declare module 'vitest' {
+  interface ProvidedContext extends KickTestServices {}
+}
 
 export interface UseTestAppOptions {
   /**
