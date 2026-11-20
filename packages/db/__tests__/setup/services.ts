@@ -4,7 +4,7 @@
  * fresh and removed afterwards in CI. Each test file makes its own database
  * on them (`./shared-server.ts`).
  */
-import { kickTestServices } from '@forinda/kickjs-testing/vitest'
+import { kickTestServices } from '@forinda/kickjs-testing'
 
 const start = kickTestServices({
   postgres: { name: 'kick-db-test-pg' },

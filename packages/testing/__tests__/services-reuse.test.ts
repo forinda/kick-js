@@ -272,3 +272,41 @@ describe('preset overrides', () => {
     expect(fake.removed).toEqual(['old'])
   })
 })
+
+describe('PR review', () => {
+  it('encodes credentials in preset URLs', async () => {
+    const s = await startService('postgres', {
+      env: { POSTGRES_PASSWORD: 'p#ss/w@rd', POSTGRES_DB: 'a b' },
+    })
+    expect(s.url).toBe('postgres://test:p%23ss%2Fw%40rd@h:1/a%20b')
+    expect(called('withEnvironment')[0]![0]).toMatchObject({ POSTGRES_PASSWORD: 'p#ss/w@rd' })
+  })
+
+  it('treats TESTCONTAINERS_REUSE_ENABLE=false as no reuse: unnamed, and stopped', async () => {
+    expect(reuseEnabled('local', 'x', { TESTCONTAINERS_REUSE_ENABLE: 'false' })).toBe(false)
+    expect(reuseEnabled(true, 'x', { TESTCONTAINERS_REUSE_ENABLE: 'false' })).toBe(false)
+  })
+
+  it("keeps a named service's ready log on a fresh start, and waits on the port when attaching", async () => {
+    const waitFor = { log: /ready/ }
+    await startContainer({ ...spec, name: 'x', waitFor })
+    expect(called('withWaitStrategy')[0]![0]).toMatchObject({ kind: 'log' })
+    fake.containers.push({
+      Id: 'live',
+      Names: ['/x'],
+      Labels: {
+        'kickjs.test': 'true',
+        'kickjs.test.name': 'x',
+        'kickjs.test.config': (await import('../src/services')).configOf(
+          { ...spec, name: 'x', waitFor },
+          (await import('node:module')).createRequire(import.meta.url)(
+            'testcontainers/package.json',
+          ).version,
+        ),
+      },
+      State: 'running',
+    })
+    await startContainer({ ...spec, name: 'x', waitFor })
+    expect(called('withWaitStrategy')[0]![0]).toEqual({ kind: 'ports' })
+  })
+})

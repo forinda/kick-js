@@ -59,6 +59,8 @@ export function reuseEnabled(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (!name) return false
+  // Testcontainers itself won't reuse then: a named container would only clash.
+  if (env.TESTCONTAINERS_REUSE_ENABLE === 'false') return false
   if (reuse === undefined || reuse === 'local') return !env.CI
   return reuse
 }
@@ -105,6 +107,9 @@ export interface ServiceOptions extends ReuseOptions {
   hostPort?: number
 }
 
+/** A URL part: `p#ss` mustn't end the password. */
+const enc = (v: string | undefined) => encodeURIComponent(v ?? '')
+
 const PRESETS = {
   postgres: {
     image: 'postgres:17-alpine',
@@ -113,7 +118,7 @@ const PRESETS = {
     // Postgres logs this once for its init run and again when really ready.
     waitFor: { log: /database system is ready to accept connections/, times: 2 },
     url: (host: string, port: number, env: Record<string, string>) =>
-      `postgres://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@${host}:${port}/${env.POSTGRES_DB}`,
+      `postgres://${enc(env.POSTGRES_USER)}:${enc(env.POSTGRES_PASSWORD)}@${host}:${port}/${enc(env.POSTGRES_DB)}`,
     // Test data never has to survive a crash: memory, and no waiting on disk.
     tmpfs: { '/var/lib/postgresql/data': 'rw' },
     command: [
@@ -134,7 +139,7 @@ const PRESETS = {
     // The init run logs "ready for connections" on port 0; the real server on 3306.
     waitFor: { log: /ready for connections.*port: 3306/ },
     url: (host: string, port: number, env: Record<string, string>) =>
-      `mysql://root:${env.MYSQL_ROOT_PASSWORD}@${host}:${port}/${env.MYSQL_DATABASE}`,
+      `mysql://root:${enc(env.MYSQL_ROOT_PASSWORD)}@${host}:${port}/${enc(env.MYSQL_DATABASE)}`,
     tmpfs: { '/var/lib/mysql': 'rw' },
     command: ['--innodb-flush-log-at-trx-commit=0', '--sync-binlog=0'],
   },
@@ -204,7 +209,7 @@ export function configOf(spec: ContainerSpec, testcontainersVersion: string): st
  * Testcontainers to attach to; a stopped one with another config is removed;
  * a running one with another config may be another run's, so it's an error.
  */
-async function clearName(tc: Testcontainers, name: string, config: string): Promise<void> {
+async function clearName(tc: Testcontainers, name: string, config: string): Promise<boolean> {
   const client = await tc.getContainerRuntimeClient()
   const docker = (
     client.container as unknown as {
@@ -221,7 +226,8 @@ async function clearName(tc: Testcontainers, name: string, config: string): Prom
     all: true,
     filters: { label: [`${NAME_LABEL}=${name}`] },
   })
-  if (!found || found.Labels?.[CONFIG_LABEL] === config) return
+  if (!found) return false
+  if (found.Labels?.[CONFIG_LABEL] === config) return true
   if (found.State === 'running') {
     throw new Error(
       `@forinda/kickjs-testing: ${name} is running with another config (image ${found.Image ?? '?'}): ` +
@@ -230,6 +236,7 @@ async function clearName(tc: Testcontainers, name: string, config: string): Prom
   }
   await client.container.remove(client.container.getById(found.Id), { removeVolumes: true })
   console.warn(`@forinda/kickjs-testing: replacing ${name} (config changed)`)
+  return false
 }
 
 /** Another run holds the name, or started the container a moment ago (Docker's 409 / 304). */
@@ -260,18 +267,20 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
     if (spec.entrypoint) container = container.withEntrypoint(spec.entrypoint)
     if (spec.command) container = container.withCommand(spec.command)
     if (spec.tmpfs) container = container.withTmpFs(spec.tmpfs)
-    if (reused) {
-      // A restarted container's old logs already say "ready": wait for its port.
-      return container.withName(spec.name!).withReuse().withWaitStrategy(Wait.forListeningPorts())
-    }
+    if (reused) container = container.withName(spec.name!).withReuse()
+    // Attaching to one a previous run left: its old logs already say "ready",
+    // so wait for its port. A fresh one waits for its ready line, as unnamed ones do.
+    if (attaching) return container.withWaitStrategy(Wait.forListeningPorts())
     if (spec.waitFor) {
       container = container.withWaitStrategy(
         Wait.forLogMessage(spec.waitFor.log, spec.waitFor.times ?? 1),
       )
+    } else if (reused) {
+      container = container.withWaitStrategy(Wait.forListeningPorts())
     }
     return container
   }
-  if (reused) await clearName(tc, spec.name!, config)
+  const attaching = reused ? await clearName(tc, spec.name!, config) : false
   const started = await startWithRetry(build, reused)
   const host = started.getHost()
   const port = started.getMappedPort(spec.port)

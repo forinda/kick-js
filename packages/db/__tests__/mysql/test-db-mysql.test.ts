@@ -185,3 +185,28 @@ describe('createMysqlTestDb — review fixes', () => {
     await rm(fresh, { recursive: true, force: true })
   })
 })
+
+describe('createMysqlTestDb — generated columns', () => {
+  it('copies a template table with a generated column and seeded rows', async () => {
+    const fresh = await mkdtemp(path.join(here, '../fixtures/tmp-test-db-mysql-gen-'))
+    const copy = path.join(fresh, 'migrations')
+    await cp(migrationsDir, copy, { recursive: true })
+    const id = (await readdir(copy)).find((f) => !f.startsWith('_') && !f.endsWith('.json'))!
+    await appendFile(
+      path.join(copy, id, 'up.sql'),
+      [
+        '',
+        'CREATE TABLE `prices` (`id` int PRIMARY KEY, `net` int NOT NULL, `gross` int AS (`net` * 2) STORED);',
+        'INSERT INTO `prices` (`id`, `net`) VALUES (1, 10);',
+        '',
+      ].join('\n'),
+    )
+    const t = await createMysqlTestDb({ migrationsDir: copy, connectionString: server })
+    const rows = await query<{ gross: number }>(
+      `select gross from \`${schemaOf(t.connectionString)}\`.prices`,
+    )
+    expect(rows.map((r) => Number(r.gross))).toEqual([20])
+    await t.drop()
+    await rm(fresh, { recursive: true, force: true })
+  })
+})

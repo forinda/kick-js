@@ -21,8 +21,11 @@ const pools: pg.Pool[] = []
 beforeAll(async () => {
   central = await createPgTestDb({ schema })
   // All at once: they race for the same template, as parallel test files do.
-  const made = await Promise.all(TENANTS.map(() => createPgTestDb({ schema })))
-  TENANTS.forEach((id, i) => tenantDbs.set(id, made[i]!))
+  // Settled, not all(): the ones that made it are dropped in afterAll either way.
+  const made = await Promise.allSettled(TENANTS.map(() => createPgTestDb({ schema })))
+  made.forEach((r, i) => r.status === 'fulfilled' && tenantDbs.set(TENANTS[i]!, r.value))
+  const failed = made.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+  if (failed) throw failed.reason
 }, 60_000)
 
 afterAll(async () => {

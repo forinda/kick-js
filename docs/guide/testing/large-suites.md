@@ -102,7 +102,7 @@ Start each real service (Postgres, MySQL, Redis, MinIO) once for the whole run i
 
 ```ts
 // tests/global-setup.ts
-import { kickTestServices } from '@forinda/kickjs-testing/vitest'
+import { kickTestServices } from '@forinda/kickjs-testing'
 
 export default kickTestServices({
   postgres: { name: 'myapp-test-pg' },
@@ -125,7 +125,8 @@ export default defineConfig({ test: { globalSetup: ['tests/global-setup.ts'] } }
   - `tmpfs: false` keeps data on disk.
   - `hostPort` fixes the host port instead of a random one. Use it only when a tool outside the tests needs a known port: two runs at once then clash on it.
 - **Anything else:** `{ container: { image, port, env, command, waitFor: { log }, url: (host, port, env) => … } }`.
-- **Typing `inject`:** your own keys need declaring: `declare module '@forinda/kickjs-testing/vitest' { interface KickTestServices { search: string } }`.
+- **Typing `inject`:** your own keys need declaring: `declare module '@forinda/kickjs-testing' { interface KickTestServices { search: string } }`. Importing `@forinda/kickjs-testing/vitest` anywhere in your tests (`useTestApp` lives there) makes `inject()` know them.
+- **Import it from the package root** in a global setup, as above. A global setup runs outside Vitest's workers, and the root entry doesn't load `vitest`.
 
 Both helpers need Docker and the `testcontainers` package (`pnpm add -D testcontainers`), an optional peer loaded only when you call them.
 

@@ -72,7 +72,7 @@ Integration tests that need Postgres or MySQL behaviour (Postgres types, `serial
 
 ```ts
 // tests/global-setup.ts — one Postgres for the run, reused by the next local run
-import { kickTestServices } from '@forinda/kickjs-testing/vitest'
+import { kickTestServices } from '@forinda/kickjs-testing'
 
 export default kickTestServices({ postgres: { name: 'myapp-test-pg' } })
 ```

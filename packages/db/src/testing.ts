@@ -108,11 +108,19 @@ export async function templateKey(input: {
   if (input.migrationsDir) {
     const { readdir, readFile } = await import('node:fs/promises')
     const path = await import('node:path')
-    const files = (await readdir(input.migrationsDir, { recursive: true, withFileTypes: true }))
-      .filter((e) => e.isFile())
-      .map((e) => path.relative(input.migrationsDir!, path.join(e.parentPath, e.name)))
-      .toSorted()
-    for (const f of files) {
+    // Walked by hand: recursive readdir and Dirent.parentPath need Node 20.12+.
+    const files: string[] = []
+    const walk = async (rel: string): Promise<void> => {
+      for (const e of await readdir(path.join(input.migrationsDir!, rel), {
+        withFileTypes: true,
+      })) {
+        const child = rel ? `${rel}/${e.name}` : e.name
+        if (e.isDirectory()) await walk(child)
+        else if (e.isFile()) files.push(child)
+      }
+    }
+    await walk('')
+    for (const f of files.toSorted()) {
       h.update(f)
         .update('\0')
         .update(await readFile(path.join(input.migrationsDir, f)))
@@ -318,7 +326,14 @@ async function sweepPg(admin: import('pg').Client): Promise<void> {
       )
       if (!got[0]?.ok) continue
       try {
-        await admin.query(`DROP DATABASE IF EXISTS "${datname}"`).catch(() => {})
+        // Read again under the lock: another file may have rebuilt it since.
+        const { rows: now2 } = await admin.query<{ note: string | null }>(
+          `select shobj_description(oid, 'pg_database') as note from pg_database where datname = $1`,
+          [datname],
+        )
+        const again = /^kick_tpl created (.+)$/.exec(now2[0]?.note ?? '')
+        const stillOld = again && Date.now() - Date.parse(again[1]!) >= SWEEP_AFTER.kick_tpl
+        if (stillOld) await admin.query(`DROP DATABASE IF EXISTS "${datname}"`).catch(() => {})
       } finally {
         await admin.query('select pg_advisory_unlock(hashtext($1))', [datname])
       }
@@ -497,6 +512,16 @@ async function mysqlHasProgrammables(admin: MysqlConnection, db: string): Promis
 /** `to` as a copy of `from`: each table's structure and rows, then the foreign keys LIKE leaves out. */
 async function copyMysql(admin: MysqlConnection, from: string, to: string): Promise<void> {
   await admin.query(`CREATE DATABASE \`${to}\``)
+  try {
+    await copyMysqlInto(admin, from, to)
+  } catch (err) {
+    // Not registered yet, so no sweep would ever find it: drop it here.
+    await admin.query(`DROP DATABASE IF EXISTS \`${to}\``).catch(() => {})
+    throw err
+  }
+}
+
+async function copyMysqlInto(admin: MysqlConnection, from: string, to: string): Promise<void> {
   const [tables] = await admin.query(
     "SELECT TABLE_NAME AS t FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
     [from],
@@ -506,7 +531,20 @@ async function copyMysql(admin: MysqlConnection, from: string, to: string): Prom
   try {
     for (const t of names) {
       await admin.query(`CREATE TABLE \`${to}\`.\`${t}\` LIKE \`${from}\`.\`${t}\``)
-      await admin.query(`INSERT INTO \`${to}\`.\`${t}\` SELECT * FROM \`${from}\`.\`${t}\``)
+      // Named columns: a generated one can't be written, and `SELECT *` skips
+      // invisible ones (they're listed here).
+      const [cols] = await admin.query(
+        `SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND EXTRA NOT LIKE '%GENERATED%'
+          ORDER BY ORDINAL_POSITION`,
+        [from, t],
+      )
+      const list = (cols as Array<{ c: string }>).map((r) => `\`${r.c}\``).join(', ')
+      if (list) {
+        await admin.query(
+          `INSERT INTO \`${to}\`.\`${t}\` (${list}) SELECT ${list} FROM \`${from}\`.\`${t}\``,
+        )
+      }
     }
     const [fks] = await admin.query(
       `SELECT k.TABLE_NAME AS t, k.CONSTRAINT_NAME AS c, k.COLUMN_NAME AS col,
@@ -584,6 +622,15 @@ async function sweepMysql(admin: MysqlConnection): Promise<void> {
       if (Number((got as Array<{ got: number | null }>)[0]?.got) !== 1) continue
     }
     try {
+      if (kind === 'kick_tpl') {
+        // Read again under the lock: another file may have rebuilt it since.
+        const [again] = await admin.query(
+          `SELECT created_at FROM \`${MYSQL_META}\`.dbs WHERE name = ?`,
+          [name],
+        )
+        const at = (again as Array<{ created_at: number }>)[0]?.created_at
+        if (at === undefined || Date.now() - Number(at) < SWEEP_AFTER.kick_tpl) continue
+      }
       await admin.query(`DROP DATABASE IF EXISTS \`${name}\``).catch(() => {})
       await admin.query(`DELETE FROM \`${MYSQL_META}\`.dbs WHERE name = ?`, [name])
     } finally {

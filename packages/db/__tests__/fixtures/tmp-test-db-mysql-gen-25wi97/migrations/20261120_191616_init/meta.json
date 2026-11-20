@@ -1,0 +1,10 @@
+{
+  "id": "20261120_191616_init",
+  "name": "init",
+  "createdAt": "2026-11-20T19:16:16.892Z",
+  "reviewed": false,
+  "dialect": "mysql",
+  "previousId": null,
+  "downIsDraft": false,
+  "empty": false
+}

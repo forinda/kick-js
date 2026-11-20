@@ -80,3 +80,20 @@ describe('kickTestServices', () => {
     await expect(kickTestServices({ nosuch: {} } as never)(project())).rejects.toThrow(/nosuch/)
   })
 })
+
+describe('kickTestServices — PR review', () => {
+  it('checks every key before starting anything', async () => {
+    await expect(
+      kickTestServices({ postgres: {}, nosuch: {} } as never)(project()),
+    ).rejects.toThrow(/nosuch/)
+    expect(started.order).toEqual([])
+  })
+
+  it("is reachable from the package root, which doesn't load vitest", async () => {
+    const { readFile } = await import('node:fs/promises')
+    const src = await readFile(new URL('../src/test-services.ts', import.meta.url), 'utf8')
+    expect(src).not.toMatch(/^import(?! type)[^\n]*from 'vitest'/m)
+    const root = await import('../src/index')
+    expect(typeof root.kickTestServices).toBe('function')
+  })
+})

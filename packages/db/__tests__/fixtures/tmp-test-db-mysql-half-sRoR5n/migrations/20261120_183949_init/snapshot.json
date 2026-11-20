@@ -24,13 +24,9 @@
       "foreignKeys": [
         {
           "name": "posts_authorId_fk",
-          "columns": [
-            "authorId"
-          ],
+          "columns": ["authorId"],
           "refTable": "users",
-          "refColumns": [
-            "id"
-          ],
+          "refColumns": ["id"],
           "onDelete": "no_action",
           "onUpdate": "no_action"
         }
