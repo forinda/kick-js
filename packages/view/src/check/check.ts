@@ -256,12 +256,17 @@ class Checker {
       case 'literal':
         return { k: 'l', v: e.value }
       case 'unary':
-        return { k: 'u', o: e.op, a: this.expr(e.arg) }
+        return { k: 'u', o: e.op, a: this.expr(e.arg, where) }
       case 'binary':
       case 'logical':
-        return { k: 'b', o: e.op, l: this.expr(e.left), r: this.expr(e.right) }
+        return { k: 'b', o: e.op, l: this.expr(e.left, where), r: this.expr(e.right, where) }
       case 'conditional':
-        return { k: 'c', t: this.expr(e.test), y: this.expr(e.whenTrue), n: this.expr(e.whenFalse) }
+        return {
+          k: 'c',
+          t: this.expr(e.test, where),
+          y: this.expr(e.whenTrue, where),
+          n: this.expr(e.whenFalse, where),
+        }
       case 'pipe': {
         if (!this.project.pipes.has(e.name)) this.err(e.span, `unknown pipe '${e.name}'`)
         if (e.name === 't' && this.project.messages) this.checkT(e)
@@ -280,11 +285,16 @@ class Checker {
                 : `raw isn't allowed inside <${where === 'rcdata' ? 'title> or <textarea' : 'script'}>`,
           )
         }
-        return { k: 'p', n: e.name, i: this.expr(e.input), a: e.args.map((a) => this.expr(a)) }
+        return {
+          k: 'p',
+          n: e.name,
+          i: this.expr(e.input, where),
+          a: e.args.map((a) => this.expr(a, where)),
+        }
       }
       case 'path': {
         const p: CSeg[] = e.segments.map((s) => {
-          const seg: CSeg = s.computed ? { e: this.expr(s.computed) } : { n: s.name! }
+          const seg: CSeg = s.computed ? { e: this.expr(s.computed, where) } : { n: s.name! }
           if (s.optional) seg.o = 1
           return seg
         })

@@ -60,6 +60,10 @@ describe('pipes and translations follow-ups', () => {
       'warning: nl2br makes HTML, which an attribute shows as text — use it in text: <p>{{ a | nl2br }}</p>',
     ])
     expect(diags('<p>{{ a | nl2br }}</p>')).toEqual([])
+    // Nested under another pipe, still in the attribute.
+    expect(diags(`<p title="{{ a | nl2br | default:'' }}"></p>`)).toEqual([
+      'warning: nl2br makes HTML, which an attribute shows as text — use it in text: <p>{{ a | nl2br }}</p>',
+    ])
   })
 
   it('plural and ago reuse their Intl objects', () => {
@@ -82,6 +86,10 @@ describe('pipes and translations follow-ups', () => {
     expect(read).toHaveBeenCalledTimes(1)
     await v.render('page')
     expect(read).toHaveBeenCalledTimes(2)
+    // An edit: detected by one read, which the reload reuses.
+    writeFileSync(join(dir, 'locales/en.json'), '{ "hi": "Hello" }')
+    expect(await v.render('page')).toBe('Hello')
+    expect(read).toHaveBeenCalledTimes(3)
   })
 
   it('warns about missing keys in dev only', async () => {

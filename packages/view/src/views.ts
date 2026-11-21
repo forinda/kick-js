@@ -406,7 +406,8 @@ export function createViews(options: ViewsOptions = {}): Views {
     ))
 
   /** A fresh load, forgotten if it fails. */
-  const reload = (): Promise<State> => (state = settle(load(), () => (state = undefined)))
+  const reload = (known?: Catalogues): Promise<State> =>
+    (state = settle(load(known), () => (state = undefined)))
 
   /** `validators.ts`'s source, read without a bundle and where there's a file system. */
   const readValidators = async (): Promise<string | undefined> =>
@@ -414,7 +415,8 @@ export function createViews(options: ViewsOptions = {}): Views {
       ? undefined
       : (await fileLoaderModule()).readTextFile(validatorsFile)
 
-  async function load(): Promise<State> {
+  /** `known`: catalogues the caller has just read, so they aren't read again. */
+  async function load(known?: Catalogues): Promise<State> {
     const l = await getLoader()
     const pipes = await getPipes()
     const validators = await readValidators()
@@ -435,10 +437,10 @@ export function createViews(options: ViewsOptions = {}): Views {
         if (dev && l.version) versions.set(name, await l.version(name))
       }),
     )
-    const messages = await readMessages()
+    const { messages, json } = known ?? (await readCatalogues())
     return {
       messages,
-      messagesJson: JSON.stringify(messages),
+      messagesJson: json,
       project: {
         templates,
         pipes: new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES, ...Object.keys(pipes)]),
@@ -481,13 +483,11 @@ export function createViews(options: ViewsOptions = {}): Views {
     }
     // An edited validators.ts changes which names check and what's served.
     // So does an edited catalogue: `t` keys are checked against it.
-    if (
-      !stale &&
-      (await readValidators()) === s.validators &&
-      JSON.stringify(await readMessages()) === s.messagesJson
-    )
+    // The catalogues read here are handed to the reload, not read twice.
+    const catalogues = await readCatalogues()
+    if (!stale && (await readValidators()) === s.validators && catalogues.json === s.messagesJson)
       return s
-    return reload()
+    return reload(catalogues)
   }
 
   function checked(s: State, name: string): CheckedTemplate {
