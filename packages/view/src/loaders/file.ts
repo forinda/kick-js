@@ -29,7 +29,6 @@ export function fileLoader(viewsDir: string): Loader {
   }
 }
 
-/** The app's pipes file, if there is one, imported as a module. */
 /**
  * The app's views folder plus named roots: a root's templates are listed and
  * read as `root::path`.
@@ -80,6 +79,7 @@ export function multiRootLoader(appDir: string, roots: Record<string, string>): 
   }
 }
 
+/** The app's pipes file, if there is one, imported as a module. */
 export async function loadPipesFile(file: string): Promise<Record<string, unknown> | undefined> {
   const path = resolve(file)
   try {

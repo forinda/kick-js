@@ -94,6 +94,27 @@ const lockTimedOut = (template: string, seconds: number) =>
   )
 
 /**
+ * A migration file's bytes for the template key. Every file counts (a
+ * migration.ts may read a sibling seed.json), except dotfiles (`.DS_Store`,
+ * editor files) and meta.json's review flag, which a review flips without
+ * changing what runs. Code a migration.ts imports from outside the folder
+ * isn't hashed: change the migration itself, or drop the template
+ * (`kick_tpl_*`), when it changes.
+ */
+function keyBytes(name: string, bytes: Buffer): Buffer | string {
+  if (name !== 'meta.json') return bytes
+  try {
+    const { reviewed: _reviewed, ...rest } = JSON.parse(bytes.toString('utf8')) as Record<
+      string,
+      unknown
+    >
+    return JSON.stringify(rest)
+  } catch {
+    return bytes
+  }
+}
+
+/**
  * A short key for what a template holds: the migrations' files, or the
  * schema's snapshot when there are none — so a change makes a new template.
  */
@@ -116,14 +137,14 @@ export async function templateKey(input: {
       })) {
         const child = rel ? `${rel}/${e.name}` : e.name
         if (e.isDirectory()) await walk(child)
-        else if (e.isFile()) files.push(child)
+        else if (e.isFile() && !e.name.startsWith('.')) files.push(child)
       }
     }
     await walk('')
     for (const f of files.toSorted()) {
       h.update(f)
         .update('\0')
-        .update(await readFile(path.join(input.migrationsDir, f)))
+        .update(keyBytes(path.basename(f), await readFile(path.join(input.migrationsDir, f))))
     }
   } else {
     h.update(

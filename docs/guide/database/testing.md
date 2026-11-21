@@ -89,7 +89,7 @@ it('…', () =>
   }))
 ```
 
-`useTestDb` creates the file's database before its tests and drops it after. It finds the server through `kickTestServices` (`inject('postgres')`), or `KICK_TEST_POSTGRES_URL`. With no server it uses in-memory SQLite. See [Large Suites](../testing/large-suites.md#reused-containers) for the services side.
+`useTestDb` creates the file's database before its tests and drops it after. It finds the server through `kickTestServices` (`inject('postgres')`), or `KICK_TEST_POSTGRES_URL`. With no server it uses in-memory SQLite, unless you pass a `migrationsDir`: migrations are written for one dialect, so it throws instead. Pass `dialect: 'sqlite'` when they're SQLite migrations. See [Large Suites](../testing/large-suites.md#reused-containers) for the services side.
 
 - **Migrations run once.** The first file migrates a template database (`kick_tpl_<hash of your migrations>`). Every file's database is a copy of it, so creating one stays well under a second however many migrations you have. A change to the migrations makes a new template.
 - **Empty databases.** With neither `migrationsDir` nor `schema`, the file gets an empty database, for tests that run migrations or `push` themselves.

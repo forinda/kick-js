@@ -13,8 +13,26 @@ export function configFileOf(
   opts: { config?: string },
   env: Record<string, string | undefined> = process.env,
 ): string | undefined {
+  // `--config ""` (an unset shell variable) must not quietly mean the db block.
+  if (opts.config === '') throw new Error('kickjs-db: --config needs a file path')
   return opts.config || env.KICK_DB_CONFIG || undefined
 }
+
+/** Keys a db config may set; a file with none of them (and no `db` block) is the wrong file. */
+const DB_KEYS = new Set([
+  'schemaPath',
+  'migrationsDir',
+  'migrationsDirs',
+  'seedsDir',
+  'dialect',
+  'connectionString',
+  'adapter',
+  'driftCheck',
+  'driftIgnore',
+  'casing',
+  'migrationsTable',
+  'tenants',
+])
 
 /**
  * A db config file's contents: its default export, or that export's `db` block
@@ -32,13 +50,19 @@ export async function loadDbConfigFile(
       `kickjs-db: ${file} must export a db config (export default defineKickDbConfig({ … }))`,
     )
   const config = mod as KickDbConfigInput & { db?: KickDbConfigInput }
-  return config.db && typeof config.db === 'object' ? config.db : config
+  if (config.db && typeof config.db === 'object') return config.db
+  const keys = Object.keys(config)
+  if (keys.length > 0 && !keys.some((k) => DB_KEYS.has(k)))
+    throw new Error(
+      `kickjs-db: ${file} has no db block and no db settings (found ${keys.join(', ')})`,
+    )
+  return config
 }
 
 /** A config file's default export, as is (`.ts` via jiti, `.json` parsed). */
 export async function readConfigModule(file: string, cwd = process.cwd()): Promise<unknown> {
   const abs = path.resolve(cwd, file)
-  if (!existsSync(abs)) throw new Error(`kickjs-db: no config file at ${file}`)
+  if (!existsSync(abs)) throw new Error(`kickjs-db: no config file at ${abs}`)
   const mod = await importConfig(abs)
   // No default export: the module namespace isn't a config, however it looks.
   if (!('default' in mod))

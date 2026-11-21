@@ -136,3 +136,36 @@ describe('view roots — PR review', () => {
     ).rejects.toThrow()
   })
 })
+
+describe('view roots — edges', () => {
+  it('refuses a bad root name when the views are made, not at first render', () => {
+    expect(() => createViews({ roots: { Billing: tmpdir() }, warn: () => {} })).toThrow(
+      /'Billing' isn't a valid root name/,
+    )
+  })
+
+  it("gives an app page the app's layout, not a root's of the same name", async () => {
+    const v = views(
+      { 'layouts/main': '<main><slot /></main>', page: "@layout('layouts/main')\n<p>x</p>" },
+      { ui: { 'layouts/main': '<div class="ui"><slot /></div>' } },
+    )
+    expect(await v.render('page')).toBe('<main><p>x</p></main>')
+  })
+
+  it('refuses a name with two roots', async () => {
+    const v = views({}, { a: { 'b/c': '<p>x</p>' } })
+    await expect(v.render('a::b::c')).rejects.toThrow(/a::b::c/)
+  })
+})
+
+describe('layout map and roots', () => {
+  it("maps a whole root with 'name::'", async () => {
+    const v = views(
+      { 'layouts/main': '<main><slot /></main>', 'layouts/bill': '<b><slot /></b>' },
+      { billing: { index: '<p>x</p>', 'invoices/show': '<p>y</p>' } },
+      { layout: { '': 'layouts/main', 'billing::': 'layouts/bill' } },
+    )
+    expect(await v.render('billing::index')).toBe('<b><p>x</p></b>')
+    expect(await v.render('billing::invoices/show')).toBe('<b><p>y</p></b>')
+  })
+})

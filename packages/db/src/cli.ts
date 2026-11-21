@@ -471,7 +471,7 @@ export function registerDbCommands(parent: Command, fallback: DbConfigResolver):
       'Allow migrations carrying the `-- KICK ENUM REMOVE` header to apply',
       false,
     )
-    .option('--tenants', "Migrate every tenant's schema or database (db.tenants in kick.config)")
+    .option('--tenants', "Migrate every tenant's schema or database (the db config's tenants)")
     .action(async (opts: { confirmEnumDrop?: boolean; tenants?: boolean }) => {
       const config = await getConfig()
       if (opts.tenants) {
