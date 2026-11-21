@@ -28,7 +28,10 @@ export function layoutResolver(
   if (typeof layouts === 'string') return () => layouts
   const prefixes = Object.keys(layouts).toSorted((a, b) => b.length - a.length)
   return (page) => {
-    const hit = prefixes.find((p) => p === '' || page === p || page.startsWith(`${p}/`))
+    // `billing::` maps a whole view root.
+    const hit = prefixes.find(
+      (p) => p === '' || page === p || page.startsWith(p.endsWith('::') ? p : `${p}/`),
+    )
     return hit === undefined ? undefined : layouts[hit]
   }
 }

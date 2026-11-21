@@ -27,7 +27,10 @@ export interface StartedService {
   host: string
   /** The host port mapped to the service's port. */
   port: number
-  /** Attached to a container a previous run left up (it stays up: `stop()` leaves it). */
+  /**
+   * Kept for later runs (named, with reuse on): `stop()` leaves it up. True for
+   * a container this run created as well as one it attached to.
+   */
   reused: boolean
   /** Stop and remove the container; a no-op for a reused one. Call it in `afterAll`. */
   stop(): Promise<void>

@@ -657,6 +657,33 @@ describe('named view roots', () => {
 })
 
 describe('named view roots — review fixes', () => {
+  it("warns when kick.config can't be loaded, then uses the defaults", async () => {
+    const root = project({ 'src/views/home.kick': '<p>hi</p>' })
+    const warnings: string[] = []
+    const logger = {
+      info() {},
+      warn: (m: string) => void warnings.push(m),
+      warnOnce: (m: string) => void warnings.push(m),
+      error() {},
+      clearScreen() {},
+      hasErrorLogged: () => false,
+      hasWarned: false,
+    }
+    await build({
+      root,
+      configFile: false,
+      customLogger: logger,
+      plugins: [
+        kickViewsPlugin({
+          clientFiles: 'bundle',
+          loadConfig: () => Promise.reject(new Error('Unexpected token in kick.config.ts')),
+        }),
+      ],
+      build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
+    })
+    expect(warnings.join('\n')).toMatch(/kick\.config.*Unexpected token in kick\.config\.ts/s)
+  })
+
   it("finds pipes.ts beside kick.config's views folder", async () => {
     const root = project({
       'app/views/home.kick': '<p>{{ name | shout }}</p>',

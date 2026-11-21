@@ -67,7 +67,7 @@ function kickConfigDir(start: string): string {
 /** kick.config through the project's CLI, or `null` when it isn't installed. */
 async function loadConfigWithCli(dir: string): Promise<unknown> {
   const cli = await loadCliFromProject(dir)
-  return cli ? cli.loadKickConfig(dir).catch(() => null) : null
+  return cli ? cli.loadKickConfig(dir) : null
 }
 
 const ID = 'virtual:kick-views'
@@ -290,7 +290,13 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       const configDir = kickConfigDir(config.root)
       // Always read: the plugin's `roots` / `viewsDir` override only their own field.
       const fromConfig = (
-        (await (options.loadConfig ?? loadConfigWithCli)(configDir)) as {
+        (await (options.loadConfig ?? loadConfigWithCli)(configDir).catch((err: unknown) => {
+          // A broken kick.config is the project's bug: say so, then go on with the defaults.
+          config.logger.warn(
+            `kickjs:views: couldn't load kick.config (${(err as Error).message}); using the default views folder`,
+          )
+          return null
+        })) as {
           views?: { dir?: string; roots?: Record<string, string> }
         } | null
       )?.views

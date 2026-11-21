@@ -41,7 +41,7 @@ A reference in a root's template looks in that root first, then in the app's. In
 
 `layouts/main` is `billing::layouts/main` when the billing folder has one, otherwise the app's `layouts/main`. A qualified name, such as `@layout('ui::layouts/card')`, goes exactly there. The app's own templates reach a root only by its prefix.
 
-A root page without `@layout` gets the app's layout, as any page does (the `layout` and `baseLayout` options).
+A root page without `@layout` gets the app's layout, as any page does (the `layout` and `baseLayout` options). In a `layout` map, `'billing::'` covers every page of the root and `'billing::invoices'` one of its folders.
 
 Two roots can both have an `index`: `a::index` and `b::index` never meet.
 

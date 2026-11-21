@@ -53,9 +53,18 @@ describe('loadDbConfigFile', () => {
     expect(await loadDbConfigFile(p)).toEqual({ migrationsDir: 'from-db' })
   })
 
+  it('refuses a kick.config-style file with no db block', async () => {
+    const p = await file('kick.config.mjs', "export default { modules: { dir: 'src/modules' } }")
+    await expect(loadDbConfigFile(p)).rejects.toThrow(/no db block/)
+    // An empty export is still a config: every default.
+    expect(await loadDbConfigFile(await file('empty.mjs', 'export default {}'))).toEqual({})
+  })
+
   it('names the path when the file is missing or exports no config', async () => {
     const missing = path.join(dir, 'nope.ts')
     await expect(loadDbConfigFile(missing)).rejects.toThrow(missing)
+    // A relative path: the error shows where it looked.
+    await expect(loadDbConfigFile('nope.ts', dir)).rejects.toThrow(missing)
     const bad = await file('bad.mjs', 'export default 42')
     await expect(loadDbConfigFile(bad)).rejects.toThrow(bad)
     // No default export at all: not the module namespace, read as an empty config.
@@ -72,6 +81,10 @@ describe('configFileOf', () => {
     expect(configFileOf({}, { KICK_DB_CONFIG: 'b' })).toBe('b')
     expect(configFileOf({}, { KICK_DB_CONFIG: '' })).toBeUndefined()
     expect(configFileOf({}, {})).toBeUndefined()
+  })
+
+  it('refuses an explicit empty --config', () => {
+    expect(() => configFileOf({ config: '' }, { KICK_DB_CONFIG: 'b' })).toThrow(/--config/)
   })
 })
 

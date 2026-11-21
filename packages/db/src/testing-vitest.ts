@@ -19,12 +19,14 @@ import {
   createTestDb,
   type ServerTestDbOptions,
 } from './testing'
+import { testDbDialect } from './test-db-dialect'
 
 export interface UseTestDbOptions<S> extends ServerTestDbOptions<S> {
   /**
    * Default: `'postgres'` when a Postgres server is known (`connectionString`,
    * `inject('postgres')` or `KICK_TEST_POSTGRES_URL`), else `'mysql'` when a
-   * MySQL one is (`inject('mysql')` / `KICK_TEST_MYSQL_URL`), else `'sqlite'`.
+   * MySQL one is (`inject('mysql')` / `KICK_TEST_MYSQL_URL`), else `'sqlite'` —
+   * but with a `migrationsDir` and no server it throws: set `'sqlite'` for SQLite migrations.
    */
   dialect?: 'postgres' | 'mysql' | 'sqlite'
 }
@@ -57,8 +59,7 @@ export function useTestDb<S>(opts: UseTestDbOptions<S>): TestDbHandle<S> {
   beforeAll(async () => {
     const pgUrl = provided('postgres') ?? process.env.KICK_TEST_POSTGRES_URL
     const mysqlUrl = provided('mysql') ?? process.env.KICK_TEST_MYSQL_URL
-    const dialect =
-      opts.dialect ?? (opts.connectionString || pgUrl ? 'postgres' : mysqlUrl ? 'mysql' : 'sqlite')
+    const dialect = testDbDialect(opts, { pg: pgUrl, mysql: mysqlUrl })
     if (dialect === 'sqlite') {
       db = await createTestDb({ ...opts, schema: opts.schema ?? ({} as S) })
       drop = () => db!.destroy()

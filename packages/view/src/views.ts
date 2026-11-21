@@ -17,6 +17,7 @@ import {
   componentTag,
   isComponent,
   layoutResolver,
+  ROOT_NAME,
   templateName,
   type Project,
 } from './check/project'
@@ -244,6 +245,12 @@ export function createViews(options: ViewsOptions = {}): Views {
   // `kick dev` hands over `bundle: null`: the sources change under us there.
   const dev = options.dev ?? options.bundle === null
   if (bundle) bundleLoader(bundle) // version check
+  // A bad root name fails here, not at the first render that lists the views.
+  for (const name of Object.keys(options.roots ?? {}))
+    if (!ROOT_NAME.test(name))
+      throw new Error(
+        `createViews roots: '${name}' isn't a valid root name (lowercase letters, digits and -, starting with a letter)`,
+      )
   const componentsDir = options.componentsDir ?? 'components'
   const disk = new Set(bundle?.client?.disk)
   const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
