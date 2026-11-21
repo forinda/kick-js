@@ -11,7 +11,9 @@ export const PLURAL_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'] as co
 export type PluralForm = (typeof PLURAL_FORMS)[number]
 
 /** A message: text, or one text per plural form (`other` required). */
-export type Message = string | Partial<Record<PluralForm, string>>
+export type Message =
+  | string
+  | ({ other: string } & Partial<Record<Exclude<PluralForm, 'other'>, string>>)
 /** Locale → dot key → message. */
 export type Messages = Record<string, Record<string, Message>>
 
@@ -22,7 +24,8 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 /** A catalogue file's JSON as dot keys. An object whose keys are all plural forms is one message. */
 export function flattenCatalog(json: unknown, file: string): Record<string, Message> {
   if (!isObject(json)) throw new Error(`${file}: a catalogue is a JSON object of messages`)
-  const out: Record<string, Message> = {}
+  // No prototype: a `__proto__` key is a message like any other.
+  const out: Record<string, Message> = Object.create(null)
   const walk = (obj: Record<string, unknown>, prefix: string): void => {
     for (const [k, v] of Object.entries(obj)) {
       const key = prefix ? `${prefix}.${k}` : k
@@ -38,6 +41,14 @@ export function flattenCatalog(json: unknown, file: string): Record<string, Mess
     }
   }
   walk(json, '')
+  return out
+}
+
+/** Inline `createViews({ messages })` checked as catalogue files are. */
+export function checkMessages(messages: Messages): Messages {
+  const out: Messages = Object.create(null)
+  for (const [locale, catalog] of Object.entries(messages))
+    out[locale] = flattenCatalog(catalog, `messages.${locale}`)
   return out
 }
 
@@ -131,7 +142,7 @@ export function createTranslator(
         count === 0 && m.zero !== undefined
           ? 'zero'
           : of(plurals, found.locale, (l) => new Intl.PluralRules(l)).select(count)
-      text = m[form] ?? m.other!
+      text = m[form] ?? m.other
     }
     return text.replace(/\{(\w+)\}/g, (whole, name: string) => {
       if (!Object.hasOwn(params, name)) return whole

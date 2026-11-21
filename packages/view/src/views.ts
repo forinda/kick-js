@@ -37,7 +37,7 @@ import { readValidatorExports, VALIDATORS_TAG } from './validators'
 const VALIDATE_TAG = 'kick-validate'
 const VALIDATE_HASH = fnv1a(VALIDATE_RUNTIME)
 import { parse } from './parse/template'
-import { catalogIndex, createTranslator, type Messages } from './i18n'
+import { catalogIndex, checkMessages, createTranslator, type Messages } from './i18n'
 import { BUILTIN_PIPES, OVERRIDABLE_PIPES, type PipeEnv } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
 import { render, RenderError, type Pipe } from './render/render'
@@ -349,8 +349,9 @@ export function createViews(options: ViewsOptions = {}): Views {
     ))
 
   const defaultLocale = options.messagesLocale ?? options.locale ?? 'en-US'
+  const inlineMessages = options.messages && checkMessages(options.messages)
   const readMessages = async (): Promise<Messages> =>
-    options.messages ??
+    inlineMessages ??
     // No file system (the edge), or templates from a custom loader with no
     // views folder named: nothing to read, rather than the cwd's src/views.
     (bundle || !fileLoaderModule || (options.loader && !options.viewsDir)
@@ -370,7 +371,7 @@ export function createViews(options: ViewsOptions = {}): Views {
     }
     translator ??= settle(make(), () => (translator = undefined))
     const current = await translator
-    if (!dev || options.messages) return current.t
+    if ((!dev && options.cache !== false) || options.messages) return current.t
     const messages = await readMessages()
     const json = JSON.stringify(messages)
     if (json === current.json) return current.t
@@ -450,13 +451,16 @@ export function createViews(options: ViewsOptions = {}): Views {
     const s = await (state ?? reload())
     if (!dev) return s
     const l = await getLoader()
-    if (!l.version) return s
-    const names = await l.list()
-    const stale =
-      names.length !== s.project.templates.size ||
-      (await Promise.all(names.map(async (n) => (await l.version!(n)) !== s.versions.get(n)))).some(
-        Boolean,
-      )
+    // Without version() templates aren't re-checked; validators and catalogues still are.
+    let stale = false
+    if (l.version) {
+      const names = await l.list()
+      stale =
+        names.length !== s.project.templates.size ||
+        (
+          await Promise.all(names.map(async (n) => (await l.version!(n)) !== s.versions.get(n)))
+        ).some(Boolean)
+    }
     // An edited validators.ts changes which names check and what's served.
     // So does an edited catalogue: `t` keys are checked against it.
     if (

@@ -10,9 +10,11 @@
  * ```
  */
 declare module 'virtual:kick-views' {
-  import type { EnvPipe, Pipe, ViewsBundle } from '@forinda/kickjs-view'
+  import type { EnvPipe, Messages, Pipe, ViewsBundle } from '@forinda/kickjs-view'
   export const bundle: ViewsBundle | null
   export const pipes: Record<string, Pipe | EnvPipe>
+  /** The build's message catalogues; `undefined` in dev, where they're read from disk. */
+  export const messages: Messages | undefined
   /** Where component scripts are served: the Vite plugin's `clientScriptPath`. */
   export const clientScriptPath: string
   /** A `file:` URL of the folder `kick build` wrote client files to; `undefined` in dev. */
@@ -22,6 +24,7 @@ declare module 'virtual:kick-views' {
   const views: {
     bundle: ViewsBundle | null
     pipes: Record<string, Pipe | EnvPipe>
+    messages: Messages | undefined
     clientScriptPath: string
     clientDir: string | undefined
     validatorsFile?: string

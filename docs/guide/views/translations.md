@@ -59,7 +59,7 @@ const subject = await views.t('mail.welcome.subject', { name: user.name }, { loc
 
 ## Where catalogues come from
 
-- **`kick dev` and file mode:** read from `<viewsDir>/locales/*.json`; edits show on the next render.
+- **`kick dev` and file mode:** read from `<viewsDir>/locales/*.json`. In dev (`kick dev`, or `createViews({ dev: true })`) edits show on the next render; otherwise they're read once, like the templates.
 - **A Vite build:** bundled into `virtual:kick-views` as `messages`, so `createViews({ ...kickViews })` needs no file system (the edge works too).
 - **Your own:** `createViews({ messages: { en: { 'cart.title': 'Cart' } } })`.
 
