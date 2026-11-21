@@ -1,5 +1,17 @@
 # @forinda/kickjs-view-language-server
 
+## 0.5.1
+
+### Patch Changes
+
+- [#1168](https://github.com/forinda/kick-js/pull/1168) [`3323b16`](https://github.com/forinda/kick-js/commit/3323b16e5039fad1c84110c0b10fcc5526cdeb79) Thanks [@forinda](https://github.com/forinda)! - Translations and more built-in pipes for `.kick` views.
+  
+  - `t` prints a message from `src/views/locales/<locale>.json`: `{{ 'cart.items' | t:'count':n }}`. Plural forms, locale fallback (`sw-KE` → `sw` → the default), and `views.t(key, params, { locale })` for controllers and emails. The build checks literal keys and their placeholders; the Vite plugin bundles the catalogues as `messages`.
+  - New pipes: `truncate`, `default`, `nl2br`, `striptags`, `first`, `last`, `length`, `sort`, `groupBy`, `sum`, `plural`, `ago`, `filesize`.
+  - The new pipes and `t` can be replaced: an app pipe of the same name wins, so existing `pipes.ts` files that define `ago` or `truncate` keep working.
+- Updated dependencies [[`82cf48f`](https://github.com/forinda/kick-js/commit/82cf48ff22fb94aba67a5120922d12c6bfc5d52c), [`3323b16`](https://github.com/forinda/kick-js/commit/3323b16e5039fad1c84110c0b10fcc5526cdeb79)]:
+  - @forinda/kickjs-view@0.7.0
+
 ## 0.5.0
 
 ### Minor Changes
