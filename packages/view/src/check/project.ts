@@ -1,3 +1,4 @@
+import type { CatalogIndex } from '../i18n'
 import type { TemplateAst } from '../ast'
 
 /** Everything `check` knows about an app's views — built the same way by the runtime, the build and the editor. */
@@ -14,6 +15,8 @@ export interface Project {
   layouts?: string | Record<string, string>
   /** The shell around every page's outermost layout. */
   baseLayout?: string
+  /** The catalogues `t` calls are checked against; absent when the app has its own `t`, or there are none to check. */
+  messages?: CatalogIndex
 }
 
 /**

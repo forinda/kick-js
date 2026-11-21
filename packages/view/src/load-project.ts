@@ -5,11 +5,13 @@
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
-import type { Diagnostic } from './diagnostics'
+import { error, START, type Diagnostic } from './diagnostics'
+import { catalogIndex } from './i18n'
+import { readCatalogs } from './loaders/file'
 import { qualify, splitName, type Project } from './check/project'
 import type { ViewRoot } from './roots'
 import { parse } from './parse/template'
-import { BUILTIN_PIPES } from './pipes/builtins'
+import { BUILTIN_PIPES, OVERRIDABLE_PIPES } from './pipes/builtins'
 import { readPipeExports } from './pipes/read-exports'
 import { readValidatorExports } from './validators'
 
@@ -94,11 +96,27 @@ export async function loadViewsProject(loc: ViewsLocation): Promise<{
   const pipesFile = resolve(loc.root, loc.pipesFile ?? join(dir, 'pipes.ts'))
   const validatorsFile = resolve(loc.root, loc.validatorsFile ?? join(dir, 'validators.ts'))
   const diagnostics: Array<{ d: Diagnostic; prefix: string }> = []
-  const pipes = new Set(BUILTIN_PIPES)
+  const pipes = new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES])
+  let ownT = false
   if (existsSync(pipesFile)) {
     const read = readPipeExports(await readFile(pipesFile, 'utf8'), relative(loc.root, pipesFile))
+    ownT = read.names.includes('t')
     for (const n of read.names) pipes.add(n)
     for (const d of read.diagnostics) diagnostics.push({ d, prefix: '' })
+  }
+  // The app's own `t` (i18next, FormatJS…) isn't checked against catalogues.
+  let messages: Project['messages']
+  if (!ownT) {
+    const localesDir = join(viewsDir, 'locales')
+    const where = relative(loc.root, localesDir).split(sep).join('/')
+    try {
+      messages = catalogIndex((await readCatalogs(localesDir)) ?? {}, where)
+    } catch (err) {
+      diagnostics.push({
+        d: error(where, { start: START, end: START }, (err as Error).message),
+        prefix: '',
+      })
+    }
   }
   const validators = new Set<string>()
   if (existsSync(validatorsFile)) {
@@ -116,6 +134,7 @@ export async function loadViewsProject(loc: ViewsLocation): Promise<{
     componentsDir: loc.componentsDir ?? 'components',
     layouts: loc.layouts,
     baseLayout: loc.baseLayout,
+    messages,
   }
   const rootDirs = new Map((loc.roots ?? []).map((r) => [r.name, r.dir]))
   const absOf = (name: string) => {

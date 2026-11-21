@@ -21,6 +21,24 @@
 | `kvQuery:key:value…`                  | `href="{{ 'UsersController.list' \| kvRoute \| kvQuery:'page':page }}"` — query parameters, see [Links to routes](#links-to-routes)          |
 | `raw`                                 | `{{ html \| raw }}`                                                                                                                          |
 
+More pipes, for text, lists and formatting:
+
+| pipe                 | example                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| `truncate:n:suffix?` | `{{ post.body \| truncate:120 }}` — at most `n` characters, then `…` (or the suffix you give)     |
+| `default:value`      | `{{ user.bio \| default:'No bio yet' }}` — for `null`, `undefined` and `''`; keeps `0`, `false`   |
+| `nl2br`              | `{{ comment \| nl2br }}` — escapes the text, then turns line breaks into `<br>`                   |
+| `striptags`          | `{{ html \| striptags \| truncate:80 }}` — drops tags; the rest is still escaped                  |
+| `first`, `last`      | `{{ items \| first }}` — of a list, a Set or a string                                             |
+| `length`             | `{{ items \| length }}` — of a list, string, Set, Map or object (its keys); `0` for nothing       |
+| `sort:key?`          | `@for (u of users \| sort:'name') { … }` — a sorted copy; text by the render's locale             |
+| `groupBy:key`        | `@for ([status, list] of orders \| groupBy:'status') { … }` — `[group, items]` pairs, in order    |
+| `sum:key?`           | `{{ lines \| sum:'total' \| currency:'KES' }}`                                                    |
+| `plural:one:other`   | `{{ count \| plural:'item':'items' }}` — `1 item`, `1,024 items`                                  |
+| `ago`                | `{{ post.at \| ago }}` — `3 hours ago`, `in 2 days`                                               |
+| `filesize`           | `{{ file.size \| filesize }}` — `1.5 kB`, `2 MB`                                                  |
+| `t:name:value…`      | `{{ 'cart.items' \| t:'count':n }}` — a translated message, see [Translations](./translations.md) |
+
 Dates and numbers use `locale` (default `en-US`) and `timeZone` (default `UTC`, never the server's zone). Set them in `createViews`, or per call: `ctx.render(name, data, { locale: 'sw-KE', timeZone: 'Africa/Nairobi' })` (for a per-request choice, pass the user's here). `share` adds data, not settings, so it doesn't change them.
 
 ## Links to routes
@@ -75,7 +93,7 @@ export const ago = withEnv(
 Some rules, because the build and the editor read this file without running it:
 
 - Export each pipe by name: `export const`, `export function`, or `export { a, b as c }`. `export *`, default exports and re-exports aren't allowed.
-- A pipe can't reuse a built-in's name.
+- A pipe can't reuse the name of a pipe in the first table. The pipes in the second table (and `t`) can be replaced: export your own `ago` or `truncate` and yours is used.
 - Pipes are synchronous. Load data in the controller.
 
 ::::

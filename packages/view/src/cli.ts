@@ -190,6 +190,7 @@ export function kickViewsCli(options: KickViewsCliOptions = {}): KickCliPlugin {
 /** The plugin with default folders — `kickViewsCli()`. */
 export const viewCliPlugin: KickCliPlugin = kickViewsCli()
 
+export { readCatalogs } from './loaders/file'
 export {
   packageDir,
   resolveViewRoots,

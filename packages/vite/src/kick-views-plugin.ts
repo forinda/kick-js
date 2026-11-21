@@ -127,6 +127,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   /** Folders whose `.kick` files may back a client-script module. */
   const viewDirs = () => [viewsDir, ...roots.map((r) => r.dir)]
   let pipesFile = ''
+  /** The catalogues as JSON, filled by the build's check. */
+  let messagesJson = '{}'
   let validatorsFile = ''
   /** The module that registers validators.ts's exports: a namespace import keeps every one. */
   const validatorsEntry = () => join(dirname(validatorsFile), VALIDATORS_TAG)
@@ -160,12 +162,36 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     const view = await import('@forinda/kickjs-view')
     const names = await allNames()
     const errors: string[] = []
-    const pipeNames = [...view.BUILTIN_PIPES]
+    // OVERRIDABLE_PIPES: absent from a view package older than group D.
+    const pipeNames = [...view.BUILTIN_PIPES, ...(view.OVERRIDABLE_PIPES ?? [])]
+    let ownT = false
     if (hasPipes) {
       const read = view.readPipeExports(await readFile(pipesFile, 'utf8'), pipesFile)
       pipeNames.push(...read.names)
+      ownT = read.names.includes('t')
       for (const d of read.diagnostics) {
         errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
+      }
+    }
+    // Message catalogues for `t`: checked here, bundled as `messages`. The
+    // app's own `t` isn't checked; an older view package has no catalogues.
+    let messagesIndex: ReturnType<typeof view.catalogIndex> | undefined
+    messagesJson = '{}'
+    const viewCli = await import('@forinda/kickjs-view/cli')
+    if ('readCatalogs' in viewCli && 'catalogIndex' in view) {
+      const localesDir = join(viewsDir, 'locales')
+      for (const f of existsSync(localesDir) ? await readdir(localesDir) : [])
+        if (f.endsWith('.json')) ctx.addWatchFile(join(localesDir, f))
+      try {
+        const messages = (await viewCli.readCatalogs(localesDir)) ?? {}
+        messagesJson = JSON.stringify(messages)
+        if (!ownT)
+          messagesIndex = view.catalogIndex(
+            messages,
+            relative(root, localesDir).split(sep).join('/'),
+          )
+      } catch (err) {
+        errors.push((err as Error).message)
       }
     }
     const validators = new Set<string>()
@@ -201,6 +227,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       pipes: new Set(pipeNames),
       validators,
       componentsDir: options.componentsDir ?? 'components',
+      messages: messagesIndex,
     }
     const checked: Record<string, unknown> = {}
     for (const name of names) {
@@ -448,6 +475,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         pipes,
         `const bundle = ${bundle};`,
         `const clientScriptPath = ${JSON.stringify(scriptPath)};`,
+        // kick dev reads the catalogues from disk, as it does the templates.
+        `const messages = ${build ? messagesJson : 'undefined'};`,
         // The folder beside this bundle; the edge may have no usable `import.meta.url`.
         // The folder beside this bundle (`renderChunk` fills the path); the
         // edge may have no usable `import.meta.url`.
@@ -456,8 +485,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
           : 'const clientDir = undefined;',
         // kick dev: the views read the validators file this plugin serves, wherever it's configured.
         `export const validatorsFile = ${build ? 'undefined' : JSON.stringify(validatorsFile)};`,
-        'export { bundle, pipes, clientScriptPath, clientDir }',
-        `export default { bundle, pipes, clientScriptPath, clientDir${build ? '' : `, validatorsFile${devFolders()}`} }`,
+        'export { bundle, pipes, messages, clientScriptPath, clientDir }',
+        `export default { bundle, pipes, messages, clientScriptPath, clientDir${build ? '' : `, validatorsFile${devFolders()}`} }`,
       ].join('\n')
     },
   }

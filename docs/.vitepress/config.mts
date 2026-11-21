@@ -120,6 +120,7 @@ const guideSidebar = [
           { text: 'Components with a Script', link: '/guide/views/client-scripts' },
           { text: 'Snippets', link: '/guide/views/snippets' },
           { text: 'Pipes', link: '/guide/views/pipes' },
+          { text: 'Translations', link: '/guide/views/translations' },
           { text: 'Shared Data', link: '/guide/views/shared-data' },
           { text: 'Typed Render Data', link: '/guide/views/typed-render-data' },
           { text: 'Forms', link: '/guide/views/forms' },

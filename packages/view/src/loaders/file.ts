@@ -6,6 +6,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import { qualify, splitName } from '../check/project'
 import type { Loader } from '../views'
+import { flattenCatalog, type Messages } from '../i18n'
 
 export function fileLoader(viewsDir: string): Loader {
   const root = resolve(viewsDir)
@@ -103,4 +104,27 @@ export async function readTextFile(file: string): Promise<string | undefined> {
 /** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */
 function direntDir(e: { parentPath?: string; path?: string }): string {
   return e.parentPath ?? e.path ?? ''
+}
+
+/** Every `<locale>.json` in `dir`; `undefined` when there's no such folder. */
+export async function readCatalogs(dir: string): Promise<Messages | undefined> {
+  let files: string[]
+  try {
+    files = (await readdir(dir)).filter((f) => f.endsWith('.json')).toSorted()
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw err
+  }
+  const out: Messages = {}
+  for (const f of files) {
+    const file = join(dir, f)
+    let json: unknown
+    try {
+      json = JSON.parse(await readFile(file, 'utf8'))
+    } catch (err) {
+      throw new Error(`${file}: ${(err as Error).message}`, { cause: err })
+    }
+    out[f.slice(0, -'.json'.length)] = flattenCatalog(json, file)
+  }
+  return out
 }

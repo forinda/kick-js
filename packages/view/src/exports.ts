@@ -51,6 +51,7 @@ export {
 export { render, RenderError, MAX_DEPTH, type RenderEnv, type Pipe } from './render/render'
 export {
   BUILTIN_PIPES,
+  OVERRIDABLE_PIPES,
   builtinPipes,
   pipesFor,
   safeHtml,
@@ -58,6 +59,7 @@ export {
   type EnvPipe,
   type PipeEnv,
 } from './pipes/env'
+export { catalogIndex, type Message, type Messages } from './i18n'
 export { readPipeExports } from './pipes/read-exports'
 export { BUILTIN_VALIDATORS, readValidatorExports, VALIDATORS_TAG } from './validators'
 export { VALIDATORS_REGISTER } from './validate-runtime'

@@ -333,7 +333,12 @@ export class Workspace {
   // ── what check sees ───────────────────────────────────────────────────
 
   pipeNames(): string[] {
-    return [...this.opts.view.BUILTIN_PIPES, ...this.pipes]
+    return [
+      ...this.opts.view.BUILTIN_PIPES,
+      // Absent from a view package older than group D.
+      ...(this.opts.view.OVERRIDABLE_PIPES ?? []),
+      ...this.pipes,
+    ]
   }
 
   /** Where an app pipe is declared in `pipes.ts`, and its parameters. */

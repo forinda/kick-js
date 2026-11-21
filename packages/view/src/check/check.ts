@@ -185,6 +185,34 @@ class Checker {
     }
   }
 
+  /** A `t` call against the catalogues: the key (when literal), its locales and its placeholders. */
+  private checkT(e: Extract<Expr, { kind: 'pipe' }>): void {
+    const messages = this.project.messages!
+    if (e.args.length % 2) {
+      this.err(e.span, "t takes name/value pairs: t:'count':n")
+      return
+    }
+    if (e.input.kind !== 'literal' || typeof e.input.value !== 'string') return
+    const key = e.input.value
+    if (!messages.locales.length) {
+      this.err(e.span, `t needs message catalogues: ${messages.where}/<locale>.json`)
+      return
+    }
+    const entry = messages.keys.get(key)
+    if (!entry) {
+      this.err(e.span, `unknown message '${key}'`)
+      return
+    }
+    const missing = messages.locales.filter((l) => !entry.locales.has(l))
+    if (missing.length) this.warn(e.span, `'${key}' is missing from ${missing.join(', ')}`)
+    const names = e.args.filter((_, i) => i % 2 === 0)
+    // A computed param name could be anything: only literal names are checked.
+    if (!names.every((n) => n.kind === 'literal' && typeof n.value === 'string')) return
+    const passed = new Set(names.map((n) => (n as { value: string }).value))
+    for (const p of entry.params)
+      if (!passed.has(p)) this.err(e.span, `message '${key}' needs '${p}': t:'${p}':value`)
+  }
+
   private err(span: Span, message: string): void {
     this.diagnostics.push(error(this.ast.file, span, message))
   }
@@ -236,6 +264,7 @@ class Checker {
         return { k: 'c', t: this.expr(e.test), y: this.expr(e.whenTrue), n: this.expr(e.whenFalse) }
       case 'pipe': {
         if (!this.project.pipes.has(e.name)) this.err(e.span, `unknown pipe '${e.name}'`)
+        if (e.name === 't' && this.project.messages) this.checkT(e)
         if (e.name === 'raw' && !(whole && (where === 'text' || where === 'css'))) {
           this.err(
             e.span,
