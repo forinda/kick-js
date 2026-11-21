@@ -73,7 +73,7 @@ function direct(name: string, src: string) {
         ...parsed.diagnostics,
         ...view.check(name, {
           templates,
-          pipes: new Set([...view.BUILTIN_PIPES, ...pipes]),
+          pipes: new Set([...view.BUILTIN_PIPES, ...view.OVERRIDABLE_PIPES, ...pipes]),
           componentsDir: 'components',
         }).diagnostics,
       ]
