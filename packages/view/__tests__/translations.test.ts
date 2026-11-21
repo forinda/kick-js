@@ -47,9 +47,9 @@ describe('t pipe', () => {
     expect(builtinPipes({ locale: 'en', timeZone: 'UTC' }).t!('x.y')).toBe('x.y')
   })
 
-  it('prints the key, and warns, for a key no catalogue has', async () => {
+  it('prints the key, and warns in dev, for a key no catalogue has', async () => {
     const warn = vi.fn()
-    const v = views({ page: '{{ key | t }}' }, { warn })
+    const v = views({ page: '{{ key | t }}' }, { warn, dev: true })
     expect(await v.render('page', { key: 'x.y' })).toBe('x.y')
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/x\.y/))
   })

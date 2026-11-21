@@ -88,15 +88,20 @@ function digits(info: unknown): Intl.NumberFormatOptions {
  * is capped — past the limit it starts over rather than growing.
  */
 export const FORMATTER_CACHE_LIMIT = 256
-const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>()
+type Formatter =
+  | Intl.NumberFormat
+  | Intl.DateTimeFormat
+  | Intl.PluralRules
+  | Intl.RelativeTimeFormat
+const formatters = new Map<string, Formatter>()
 export const formatterCacheSize = (): number => formatters.size
-function remember<T extends Intl.NumberFormat | Intl.DateTimeFormat>(key: string, f: T): T {
+function remember<T extends Formatter>(key: string, f: T): T {
   if (formatters.size >= FORMATTER_CACHE_LIMIT) formatters.clear()
   formatters.set(key, f)
   return f
 }
 /** The formatter cached under `key`, built by `make` on a miss. Keys are cheap strings, not serialised options. */
-function cached<T extends Intl.NumberFormat | Intl.DateTimeFormat>(key: string, make: () => T): T {
+function cached<T extends Formatter>(key: string, make: () => T): T {
   return (formatters.get(key) as T | undefined) ?? remember(key, make())
 }
 
@@ -108,7 +113,7 @@ const toNumber = (v: unknown): number | undefined => {
 
 const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
 
-/** A list pipe's input as an array: arrays and Sets as is, anything else empty. */
+/** A list pipe's input as an array: arrays as is, Sets and strings spread, anything else empty. */
 const list = (v: unknown): unknown[] =>
   Array.isArray(v) ? v : v instanceof Set ? [...v] : typeof v === 'string' ? [...v] : []
 
@@ -220,7 +225,7 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
     sum: (v, key) => list(v).reduce<number>((t, item) => t + (toNumber(pick(item, key)) ?? 0), 0),
     plural: (v, one, other) => {
       const n = toNumber(v) ?? 0
-      const form = new Intl.PluralRules(env.locale).select(n)
+      const form = cached(`pr|${env.locale}`, () => new Intl.PluralRules(env.locale)).select(n)
       const nf = cached(`n|${env.locale}|`, () => new Intl.NumberFormat(env.locale))
       return `${nf.format(n)} ${str(form === 'one' ? one : other)}`
     },
@@ -230,7 +235,10 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
       if (Number.isNaN(+at)) return ''
       const secs = (+at - Date.now()) / 1000
       const [unit, size] = AGO_UNITS.find(([, s]) => Math.abs(secs) >= s) ?? AGO_UNITS.at(-1)!
-      return new Intl.RelativeTimeFormat(env.locale).format(Math.round(secs / size), unit)
+      return cached(`rt|${env.locale}`, () => new Intl.RelativeTimeFormat(env.locale)).format(
+        Math.round(secs / size),
+        unit,
+      )
     },
     filesize: (v) => {
       let n = toNumber(v) ?? 0

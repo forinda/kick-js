@@ -93,7 +93,7 @@ export const ago = withEnv(
 Some rules, because the build and the editor read this file without running it:
 
 - Export each pipe by name: `export const`, `export function`, or `export { a, b as c }`. `export *`, default exports and re-exports aren't allowed.
-- A pipe can't reuse the name of a pipe in the first table. The pipes in the second table (and `t`) can be replaced: export your own `ago` or `truncate` and yours is used.
+- A pipe can't reuse the name of a pipe in the first table. The pipes in the second table (and `t`) can be replaced: export your own `ago` or `truncate` and yours is used. `default` is a keyword, so name yours something else and export it as `export { fallback as default }`.
 - Pipes are synchronous. Load data in the controller.
 
 ::::

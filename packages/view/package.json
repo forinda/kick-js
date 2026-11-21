@@ -53,10 +53,12 @@
       "optional": true
     }
   },
+  "dependencies": {
+    "@forinda/kickjs-cli-kit": "workspace:*"
+  },
   "devDependencies": {
     "@fastify/middie": "^9.3.6",
     "@forinda/kickjs": "workspace:*",
-    "@forinda/kickjs-cli-kit": "workspace:*",
     "@swc/core": "^1.16.22",
     "@types/ejs": "^3.1.5",
     "@types/node": "^26.6.6",

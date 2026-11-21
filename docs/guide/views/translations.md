@@ -36,7 +36,7 @@ src/views/locales/
 
 ## Which locale
 
-A render uses the `locale` it's given: `ctx.render(name, data, { locale: user.locale })`, else `createViews({ locale })`, else `en-US`. A message is looked up in that locale (`sw-KE`), then its language (`sw`), then the default locale (`messagesLocale`, else `locale`) and its language. A key no catalogue has prints as the key itself, with a warning.
+A render uses the `locale` it's given: `ctx.render(name, data, { locale: user.locale })`, else `createViews({ locale })`, else `en-US`. A message is looked up in that locale (`sw-KE`), then its language (`sw`), then the default locale (`messagesLocale`, else `locale`) and its language. A key no catalogue has prints as the key itself, with a warning in dev.
 
 ## Checked by the build
 
@@ -60,7 +60,7 @@ const subject = await views.t('mail.welcome.subject', { name: user.name }, { loc
 ## Where catalogues come from
 
 - **`kick dev` and file mode:** read from `<viewsDir>/locales/*.json`. In dev (`kick dev`, or `createViews({ dev: true })`) edits show on the next render; otherwise they're read once, like the templates.
-- **A Vite build:** bundled into `virtual:kick-views` as `messages`, so `createViews({ ...kickViews })` needs no file system (the edge works too).
+- **A Vite build:** bundled into `virtual:kick-views` as `messages`, so `createViews({ ...kickViews })` needs no file system (the edge works too). Upgrade `@forinda/kickjs-vite` with `@forinda/kickjs-view`: an older plugin doesn't know `t` and the new pipes.
 - **Your own:** `createViews({ messages: { en: { 'cart.title': 'Cart' } } })`.
 
 ## Using another i18n library

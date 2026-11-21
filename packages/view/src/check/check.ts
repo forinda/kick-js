@@ -265,6 +265,11 @@ class Checker {
       case 'pipe': {
         if (!this.project.pipes.has(e.name)) this.err(e.span, `unknown pipe '${e.name}'`)
         if (e.name === 't' && this.project.messages) this.checkT(e)
+        if (e.name === 'nl2br' && where === 'attr')
+          this.warn(
+            e.span,
+            'nl2br makes HTML, which an attribute shows as text — use it in text: <p>{{ a | nl2br }}</p>',
+          )
         if (e.name === 'raw' && !(whole && (where === 'text' || where === 'css'))) {
           this.err(
             e.span,
