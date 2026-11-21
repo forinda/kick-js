@@ -1,5 +1,11 @@
 # @forinda/kickjs-view
 
+## 0.7.1
+
+### Patch Changes
+
+- [#1172](https://github.com/forinda/kick-js/pull/1172) [`4957770`](https://github.com/forinda/kick-js/commit/49577708cdbf7f051df2b96bbf26255d5071c910) Thanks [@forinda](https://github.com/forinda)! - The `./file-loader` and `./cli` exports list `types` before `import`, so TypeScript finds their types under the resolution modes that read `exports` (`node16`, `nodenext`, `bundler`).
+
 ## 0.7.0
 
 ### Minor Changes
