@@ -21,15 +21,15 @@
       "import": "./dist/index.js"
     },
     "./file-loader": {
-      "import": "./dist/file-loader.js",
-      "types": "./dist/file-loader.d.ts"
+      "types": "./dist/file-loader.d.ts",
+      "import": "./dist/file-loader.js"
     },
     "./virtual": {
       "types": "./virtual.d.ts"
     },
     "./cli": {
-      "import": "./dist/cli.js",
-      "types": "./dist/cli.d.ts"
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     }
   },
   "files": [
