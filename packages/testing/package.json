@@ -52,7 +52,6 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@forinda/kickjs-cli-kit": "workspace:*",
     "@swc/core": "^1.16.22",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -99,5 +98,8 @@
     "vitest": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "@forinda/kickjs-cli-kit": "workspace:*"
   }
 }

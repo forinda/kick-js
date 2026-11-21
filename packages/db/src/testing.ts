@@ -9,7 +9,6 @@ import type { SchemaToTypes } from './client/schema-types'
 import { diff } from './diff/engine'
 import { emitPg } from './emit/pg'
 import { emitSqlite } from './emit/sqlite'
-import { CODE_MIGRATION_FILES } from './migrate/code-migration'
 import { migrateLatest } from './migrate/runner'
 import { extractSnapshot } from './snapshot/extract'
 import type { SchemaSnapshot } from './snapshot/types'
@@ -95,18 +94,25 @@ const lockTimedOut = (template: string, seconds: number) =>
   )
 
 /**
- * The files a migration run reads. Others (meta.json, whose review flag flips,
- * editor and OS files) would rebuild the template for nothing. Code a
- * migration.ts imports from outside the folder isn't hashed: change the
- * migration itself, or drop the template (`kick_tpl_*`), when it changes.
+ * A migration file's bytes for the template key. Every file counts (a
+ * migration.ts may read a sibling seed.json), except dotfiles (`.DS_Store`,
+ * editor files) and meta.json's review flag, which a review flips without
+ * changing what runs. Code a migration.ts imports from outside the folder
+ * isn't hashed: change the migration itself, or drop the template
+ * (`kick_tpl_*`), when it changes.
  */
-const MIGRATION_INPUTS = new Set([
-  'up.sql',
-  'down.sql',
-  'snapshot.json',
-  '_journal.json',
-  ...CODE_MIGRATION_FILES,
-])
+function keyBytes(name: string, bytes: Buffer): Buffer | string {
+  if (name !== 'meta.json') return bytes
+  try {
+    const { reviewed: _reviewed, ...rest } = JSON.parse(bytes.toString('utf8')) as Record<
+      string,
+      unknown
+    >
+    return JSON.stringify(rest)
+  } catch {
+    return bytes
+  }
+}
 
 /**
  * A short key for what a template holds: the migrations' files, or the
@@ -131,14 +137,14 @@ export async function templateKey(input: {
       })) {
         const child = rel ? `${rel}/${e.name}` : e.name
         if (e.isDirectory()) await walk(child)
-        else if (e.isFile() && MIGRATION_INPUTS.has(e.name)) files.push(child)
+        else if (e.isFile() && !e.name.startsWith('.')) files.push(child)
       }
     }
     await walk('')
     for (const f of files.toSorted()) {
       h.update(f)
         .update('\0')
-        .update(await readFile(path.join(input.migrationsDir, f)))
+        .update(keyBytes(path.basename(f), await readFile(path.join(input.migrationsDir, f))))
     }
   } else {
     h.update(
