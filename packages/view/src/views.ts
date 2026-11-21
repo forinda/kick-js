@@ -193,7 +193,8 @@ interface State {
   project: Project
   /** `validators.ts`'s source, when there's one and no bundle. */
   validators?: string
-  /** The catalogues the check used, as JSON: in dev, a change re-checks. */
+  /** The catalogues the check used, and as JSON: in dev, a change re-checks. */
+  messages: Messages
   messagesJson: string
   /** Syntax errors from parsing, raised when the template is first used. */
   parseErrors: Map<string, Diagnostic>
@@ -359,23 +360,37 @@ export function createViews(options: ViewsOptions = {}): Views {
       : ((await (
           await fileLoaderModule()
         ).readCatalogs(`${options.viewsDir ?? 'src/views'}/locales`)) ?? {}))
+  type Catalogues = { json: string; messages: Messages }
   let translator: Promise<{ json: string; t: ReturnType<typeof createTranslator> }> | undefined
-  /** The message lookup; in dev the catalogues are re-read, keeping the translator while they're unchanged. */
-  const getTranslator = async (): Promise<ReturnType<typeof createTranslator>> => {
-    const make = async () => {
-      const messages = await readMessages()
-      return {
-        json: JSON.stringify(messages),
-        t: createTranslator(messages, { defaultLocale, warn }),
-      }
-    }
-    translator ??= settle(make(), () => (translator = undefined))
-    const current = await translator
-    if ((!dev && options.cache !== false) || options.messages) return current.t
+  // Missing keys are a dev aid: production returns the key quietly.
+  const translatorFor = ({ json, messages }: Catalogues) => ({
+    json,
+    t: createTranslator(messages, { defaultLocale, warn: dev ? warn : undefined }),
+  })
+  const readCatalogues = async (): Promise<Catalogues> => {
     const messages = await readMessages()
-    const json = JSON.stringify(messages)
-    if (json === current.json) return current.t
-    const next = { json, t: createTranslator(messages, { defaultLocale, warn }) }
+    return { json: JSON.stringify(messages), messages }
+  }
+  /**
+   * The message lookup. A render passes the catalogues its state was checked
+   * with (`known`), so they aren't read again; `views.t` re-reads them in dev
+   * and with `cache: false`. The translator is kept while they're unchanged.
+   */
+  const getTranslator = async (
+    known?: Catalogues,
+  ): Promise<ReturnType<typeof createTranslator>> => {
+    if (!translator) {
+      translator = settle(
+        (known ? Promise.resolve(known) : readCatalogues()).then(translatorFor),
+        () => (translator = undefined),
+      )
+      return (await translator).t
+    }
+    const current = await translator
+    if (inlineMessages || (!known && !dev && options.cache !== false)) return current.t
+    const latest = known ?? (await readCatalogues())
+    if (latest.json === current.json) return current.t
+    const next = translatorFor(latest)
     translator = Promise.resolve(next)
     return next.t
   }
@@ -391,7 +406,8 @@ export function createViews(options: ViewsOptions = {}): Views {
     ))
 
   /** A fresh load, forgotten if it fails. */
-  const reload = (): Promise<State> => (state = settle(load(), () => (state = undefined)))
+  const reload = (known?: Catalogues): Promise<State> =>
+    (state = settle(load(known), () => (state = undefined)))
 
   /** `validators.ts`'s source, read without a bundle and where there's a file system. */
   const readValidators = async (): Promise<string | undefined> =>
@@ -399,7 +415,8 @@ export function createViews(options: ViewsOptions = {}): Views {
       ? undefined
       : (await fileLoaderModule()).readTextFile(validatorsFile)
 
-  async function load(): Promise<State> {
+  /** `known`: catalogues the caller has just read, so they aren't read again. */
+  async function load(known?: Catalogues): Promise<State> {
     const l = await getLoader()
     const pipes = await getPipes()
     const validators = await readValidators()
@@ -420,9 +437,10 @@ export function createViews(options: ViewsOptions = {}): Views {
         if (dev && l.version) versions.set(name, await l.version(name))
       }),
     )
-    const messages = await readMessages()
+    const { messages, json } = known ?? (await readCatalogues())
     return {
-      messagesJson: JSON.stringify(messages),
+      messages,
+      messagesJson: json,
       project: {
         templates,
         pipes: new Set([...BUILTIN_PIPES, ...OVERRIDABLE_PIPES, ...Object.keys(pipes)]),
@@ -448,7 +466,9 @@ export function createViews(options: ViewsOptions = {}): Views {
   /** The current state, reloaded in dev when a source changed. */
   async function current(): Promise<State> {
     if (options.cache === false) return reload()
-    const s = await (state ?? reload())
+    // A fresh load is current: no need to compare it with the sources it just read.
+    if (!state) return reload()
+    const s = await state
     if (!dev) return s
     const l = await getLoader()
     // Without version() templates aren't re-checked; validators and catalogues still are.
@@ -463,13 +483,11 @@ export function createViews(options: ViewsOptions = {}): Views {
     }
     // An edited validators.ts changes which names check and what's served.
     // So does an edited catalogue: `t` keys are checked against it.
-    if (
-      !stale &&
-      (await readValidators()) === s.validators &&
-      JSON.stringify(await readMessages()) === s.messagesJson
-    )
+    // The catalogues read here are handed to the reload, not read twice.
+    const catalogues = await readCatalogues()
+    if (!stale && (await readValidators()) === s.validators && catalogues.json === s.messagesJson)
       return s
-    return reload()
+    return reload(catalogues)
   }
 
   function checked(s: State, name: string): CheckedTemplate {
@@ -502,8 +520,10 @@ export function createViews(options: ViewsOptions = {}): Views {
       (await getTranslator())(o.locale ?? options.locale ?? 'en-US', key, params),
     async render(name: string, data: object = {}, opts: RenderOptions & { ctx?: unknown } = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
-      if (!(await has(name))) throw new Error(`template '${name}' not found`)
+      // One state for the whole render: has(), checks and messages agree.
       const st = bundle ? undefined : await current()
+      if (!(st ? st.project.templates.has(name) : Object.hasOwn(bundle!.templates, name)))
+        throw new Error(`template '${name}' not found`)
       const resolve = bundle
         ? (n: string) => {
             const t = Object.hasOwn(bundle.templates, n) ? bundle.templates[n] : undefined
@@ -517,7 +537,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       const shared = options.share ? await options.share(opts.ctx as ShareContext | undefined) : {}
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
-      const tr = await getTranslator()
+      const tr = await getTranslator(st && { json: st.messagesJson, messages: st.messages })
       const used = new Map<string, CheckedTemplate>()
       let validation = false
       // A controller's own `$errors` / `$old` (a re-render) win over the session's.

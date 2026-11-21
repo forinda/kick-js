@@ -77,6 +77,8 @@ export function catalogIndex(messages: Messages, where: string): CatalogIndex {
       if (!entry) keys.set(key, (entry = { locales: new Set(), params: new Set() }))
       entry.locales.add(locale)
       for (const p of placeholders(m)) entry.params.add(p)
+      // Plural forms are picked by count, whether or not the text shows it.
+      if (typeof m === 'object') entry.params.add('count')
     }
   }
   return { where, locales: Object.keys(messages), keys }
