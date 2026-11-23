@@ -57,7 +57,7 @@
     "@forinda/kickjs-cli-kit": "workspace:*"
   },
   "devDependencies": {
-    "@fastify/middie": "^9.3.6",
+    "@fastify/middie": "^9.3.7",
     "@forinda/kickjs": "workspace:*",
     "@swc/core": "^1.16.22",
     "@types/ejs": "^3.1.5",
@@ -72,7 +72,7 @@
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.3.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "publishConfig": {
     "access": "public"
