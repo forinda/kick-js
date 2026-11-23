@@ -48,8 +48,8 @@
     "commander": "^15.1.0",
     "glob": "^14.0.6",
     "jiti": "^2.7.0",
-    "oxc-parser": "^0.158.0",
-    "oxfmt": "^0.78.0",
+    "oxc-parser": "^0.159.0",
+    "oxfmt": "^0.79.0",
     "picocolors": "^1.1.1",
     "pluralize": "^8.0.0"
   },
