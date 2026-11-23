@@ -538,7 +538,7 @@
     "sharp": "^0.35.5",
     "tm-grammars": "^1.32.22",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0",
+    "vitest": "^5.1.1",
     "vscode-tmlanguage-snapshot": "^2.0.0"
   },
   "private": true,

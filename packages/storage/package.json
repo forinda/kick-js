@@ -78,11 +78,11 @@
     "@types/node": "^26.6.6",
     "@types/supertest": "^7.2.1",
     "supertest": "^7.3.2",
-    "testcontainers": "12.2.1",
+    "testcontainers": "12.2.2",
     "tus-js-client": "^4.3.1",
     "typescript": "^7.0.2",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "publishConfig": {
     "access": "public"

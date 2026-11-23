@@ -45,7 +45,7 @@
     "@swc/core": "^1.16.22",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.0.0",
